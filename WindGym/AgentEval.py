@@ -15,6 +15,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from wetb.gtsdf import gtsdf
+from wetb.fatigue_tools.fatigue import eq_load
+
+
 # from pathos.pools import ProcessPool
 
 """
@@ -50,6 +54,7 @@ def eval_single_fast(
     name="NoName",
     debug=False,
     deterministic=False,
+    return_loads=False,
 ):
     """
     This function evaluates the agent for a single wind direction, and then saves the results in a xarray dataset.
@@ -341,7 +346,11 @@ def eval_single_fast(
                 verticalalignment="top",
                 horizontalalignment="left",
                 transform=ax1.transAxes,
-                color="white",
+                color="white
+                        text_plot = f" Agent observations scaled: \n Turbine level wind speed: {turb_ws} \n Turbine level wind direction: {turb_wd} \n Turbine level yaw: {turb_yaw} \n Turbine level TI: {turb_TI} \n Farm level wind speed: {farm_ws} \n Farm level wind direction: {farm_wd} \n Farm level TI: {farm_TI} "
+                        ax1.text(
+                            1.1,
+                            1.3,
             )
 
             plt.savefig(
@@ -504,10 +513,62 @@ def eval_single_fast(
         "model_step": np.array([model_step]),
     }
 
+
     # Create the dataset
     ds = xr.Dataset(data_vars=data_vars, coords=coords)
 
-    return ds
+    if not return_loads:
+        return ds
+
+
+    # Do this if we have the HTC and want the loads as well.
+    if env.HTC_path is not None:
+        # If the HTC_path is not None, then ill assume we also want to include the loads
+        
+        # First make sure we have written the lates results 
+        # env.wts.h2.write_output() # I am not sure this is needed tho
+
+        all_data = []
+        # For each turbine read the data and put in into an array
+        for i in range(n_turb):
+            file_name = env.wts.htc_lst[i].output.filename.values[0] + ".hdf5"
+            test_string = env.wts.htc_lst[i].modelpath + file_name
+            time, data, info = gtsdf.load(test_string)
+
+            # Store each turbine's data in a dictionary
+            all_data.append({
+                "Blade_Mx": data[:, 19],
+                "Blade_My": data[:, 20],
+                "Tower_Mx": data[:, 28],
+                "Tower_My": data[:, 29],
+                "time": time
+            })
+
+        # Assuming all turbines share the same time vector
+        time = all_data[0]["time"]
+
+        # Stack data into arrays with shape (turbine, time)
+        blade_mx = np.stack([d["Blade_Mx"] for d in all_data])
+        blade_my = np.stack([d["Blade_My"] for d in all_data])
+        tower_mx = np.stack([d["Tower_Mx"] for d in all_data])
+        tower_my = np.stack([d["Tower_My"] for d in all_data])
+
+        # Create xarray dataset with 'turb' and 'time' dimensions
+        ds_load = xr.Dataset(
+            data_vars={
+                'Blade_Mx': (('turb', 'time'), blade_mx),
+                'Blade_My': (('turb', 'time'), blade_my),
+                'Tower_Mx': (('turb', 'time'), tower_mx),
+                'Tower_My': (('turb', 'time'), tower_my),
+            },
+            coords={
+                'time': time,
+                'turb': np.arange(n_turb),
+            }
+        )
+                
+
+    return ds, ds_load
 
 
 class AgentEval:
