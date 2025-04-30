@@ -373,106 +373,139 @@ def eval_single_fast(
         ws_b = ws_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
         pct_inc = pct_inc.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
 
-    # Then create a xarray dataset with the results
-    if not baseline_comp:
-        ds = xr.Dataset(
-            data_vars={
-                # For agent:
-                # Power for the farm: [time, turbine, ws, wd, TI, turbbox]
-                "powerF_a": (
-                    ("time", "ws", "wd", "TI", "turbbox", "model_step"),
-                    powerF_a,
-                ),
-                # Power pr turbine [time, ws, wd, TI, turbbox]
-                "powerT_a": (
-                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-                    powerT_a,
-                ),
-                # yaw is array of: [time, turbine, ws, wd, TI, turbbox]
-                "yaw_a": (
-                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-                    yaw_a,
-                ),
-                # Ws at each turbine: [time, turbine, ws, wd, TI, turbbox]
-                "ws_a": (
-                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-                    ws_a,
-                ),
-                # For environment
-                # Reward
-                "reward": (
-                    ("time", "ws", "wd", "TI", "turbbox", "model_step"),
-                    rew_plot,
-                ),
-            },
-            coords={
-                "ws": np.array([ws]),
-                "wd": np.array([wd]),
-                "turb": np.arange(env.n_turb),
-                "time": time_plot,
-                "TI": np.array([ti]),
-                "turbbox": [turbbox],
-                "model_step": np.array([model_step]),
-            },
-        )
+    # # Then create a xarray dataset with the results
+    # if not baseline_comp:
+    #     ds = xr.Dataset(
+    #         data_vars={
+    #             # For agent:
+    #             # Power for the farm: [time, turbine, ws, wd, TI, turbbox]
+    #             "powerF_a": (
+    #                 ("time", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 powerF_a,
+    #             ),
+    #             # Power pr turbine [time, ws, wd, TI, turbbox]
+    #             "powerT_a": (
+    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 powerT_a,
+    #             ),
+    #             # yaw is array of: [time, turbine, ws, wd, TI, turbbox]
+    #             "yaw_a": (
+    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 yaw_a,
+    #             ),
+    #             # Ws at each turbine: [time, turbine, ws, wd, TI, turbbox]
+    #             "ws_a": (
+    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 ws_a,
+    #             ),
+    #             # For environment
+    #             # Reward
+    #             "reward": (
+    #                 ("time", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 rew_plot,
+    #             ),
+    #         },
+    #         coords={
+    #             "ws": np.array([ws]),
+    #             "wd": np.array([wd]),
+    #             "turb": np.arange(env.n_turb),
+    #             "time": time_plot,
+    #             "TI": np.array([ti]),
+    #             "turbbox": [turbbox],
+    #             "model_step": np.array([model_step]),
+    #         },
+    #     )
 
-    else:
-        ds = xr.Dataset(
-            data_vars={
-                # For agent:
-                "powerF_a": (
-                    ("time", "ws", "wd", "TI", "turbbox", "model_step"),
-                    powerF_a,
-                ),  # Power for the farm: [time, turbine, ws, wd, TI, turbbox]
-                "powerT_a": (
-                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-                    powerT_a,
-                ),  # Power pr turbine [time, ws, wd, TI, turbbox]
-                "yaw_a": (
-                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-                    yaw_a,
-                ),  # yaw is array of: [time, turbine, ws, wd, TI, turbbox]
-                "ws_a": (
-                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-                    ws_a,
-                ),  # Ws at each turbine: [time, turbine, ws, wd, TI, turbbox]
-                # #For baseline
-                "powerF_b": (
-                    ("time", "ws", "wd", "TI", "turbbox", "model_step"),
-                    powerF_b,
-                ),  # Power for the farm: [time, turbine, ws, wd, TI, turbbox]
-                "powerT_b": (
-                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-                    powerT_b,
-                ),  # Power pr turbine [time, ws, wd, TI, turbbox]
-                "yaw_b": (
-                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-                    yaw_b,
-                ),  # yaw is array of: [time, turbine, ws, wd, TI, turbbox]
-                "ws_b": (
-                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-                    ws_b,
-                ),  # Ws at each turbine: [time, turbine, ws, wd, TI, turbbox]
-                # For environment
-                "reward": (
-                    ("time", "ws", "wd", "TI", "turbbox", "model_step"),
-                    rew_plot,
-                ),  # Reward
-                "pct_inc": (
-                    ("time", "ws", "wd", "TI", "turbbox", "model_step"),
-                    pct_inc,
-                ),  # Percentage increase in power output
-            },
-            coords={
-                "ws": np.array([ws]),
-                "wd": np.array([wd]),
-                "turb": np.arange(n_turb),
-                "time": time_plot,
-                "TI": np.array([ti]),
-                "turbbox": [turbbox],
-                "model_step": np.array([model_step]),
-            },
-        )
+    # else:
+    #     ds = xr.Dataset(
+    #         data_vars={
+    #             # For agent:
+    #             "powerF_a": (
+    #                 ("time", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 powerF_a,
+    #             ),  # Power for the farm: [time, turbine, ws, wd, TI, turbbox]
+    #             "powerT_a": (
+    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 powerT_a,
+    #             ),  # Power pr turbine [time, ws, wd, TI, turbbox]
+    #             "yaw_a": (
+    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 yaw_a,
+    #             ),  # yaw is array of: [time, turbine, ws, wd, TI, turbbox]
+    #             "ws_a": (
+    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 ws_a,
+    #             ),  # Ws at each turbine: [time, turbine, ws, wd, TI, turbbox]
+    #             # #For baseline
+    #             "powerF_b": (
+    #                 ("time", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 powerF_b,
+    #             ),  # Power for the farm: [time, turbine, ws, wd, TI, turbbox]
+    #             "powerT_b": (
+    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 powerT_b,
+    #             ),  # Power pr turbine [time, ws, wd, TI, turbbox]
+    #             "yaw_b": (
+    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 yaw_b,
+    #             ),  # yaw is array of: [time, turbine, ws, wd, TI, turbbox]
+    #             "ws_b": (
+    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 ws_b,
+    #             ),  # Ws at each turbine: [time, turbine, ws, wd, TI, turbbox]
+    #             # For environment
+    #             "reward": (
+    #                 ("time", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 rew_plot,
+    #             ),  # Reward
+    #             "pct_inc": (
+    #                 ("time", "ws", "wd", "TI", "turbbox", "model_step"),
+    #                 pct_inc,
+    #             ),  # Percentage increase in power output
+    #         },
+    #         coords={
+    #             "ws": np.array([ws]),
+    #             "wd": np.array([wd]),
+    #             "turb": np.arange(n_turb),
+    #             "time": time_plot,
+    #             "TI": np.array([ti]),
+    #             "turbbox": [turbbox],
+    #             "model_step": np.array([model_step]),
+    #         },
+    #     )
+
+    # Common data variables
+    data_vars = {
+        "powerF_a": (("time", "ws", "wd", "TI", "turbbox", "model_step"), powerF_a),
+        "powerT_a": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), powerT_a),
+        "yaw_a":    (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), yaw_a),
+        "ws_a":     (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), ws_a),
+        "reward":   (("time", "ws", "wd", "TI", "turbbox", "model_step"), rew_plot),
+    }
+
+    # Add baseline variables if applicable
+    if baseline_comp:
+        data_vars.update({
+            "powerF_b": (("time", "ws", "wd", "TI", "turbbox", "model_step"), powerF_b),
+            "powerT_b": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), powerT_b),
+            "yaw_b":    (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), yaw_b),
+            "ws_b":     (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), ws_b),
+            "pct_inc":  (("time", "ws", "wd", "TI", "turbbox", "model_step"), pct_inc),
+        })
+
+    # Common coordinates
+    coords = {
+        "ws": np.array([ws]),
+        "wd": np.array([wd]),
+        "turb": np.arange(n_turb),
+        "time": time_plot,
+        "TI": np.array([ti]),
+        "turbbox": [turbbox],
+        "model_step": np.array([model_step]),
+    }
+
+    # Create the dataset
+    ds = xr.Dataset(data_vars=data_vars, coords=coords)
 
     return ds
 
