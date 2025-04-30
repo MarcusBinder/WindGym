@@ -11,6 +11,7 @@ import gc
 from dynamiks.dwm import DWMFlowSimulation
 from dynamiks.dwm.particle_deficit_profiles.ainslie import jDWMAinslieGenerator
 from dynamiks.dwm.particle_motion_models import HillVortexParticleMotion
+# from dynamiks.dwm.particle_motion_models import ParticleMotionModel
 from dynamiks.sites import TurbulenceFieldSite
 from dynamiks.sites.turbulence_fields import MannTurbulenceField, RandomTurbulence
 from dynamiks.wind_turbines import PyWakeWindTurbines
@@ -92,6 +93,8 @@ class WindFarmEnv(WindEnv):
         """
 
         # Predefined values
+        self.wts=None
+        self.wts_baseline=None
         # The power setpoint for the farm. This is used if the Track_power is True. (Not used yet)
         self.power_setpoint = 0.0
         self.act_var = (
@@ -273,6 +276,13 @@ class WindFarmEnv(WindEnv):
         If the HTC path is given, then use hawc2 turbines, else use pywake turbines.
         Also is we have a baseline, then set that up also
         """
+        if self.wts is not None:
+            self.wts = None
+            del self.wts
+        if self.wts_baseline is not None:
+            self.wts_baseline = None
+            del self.wts_baseline
+
         if self.HTC_path is not None:
             # If we have a high fidelity turbine model, then we need to load it in
             self.wts = HAWC2WindTurbines(
@@ -661,7 +671,7 @@ class WindFarmEnv(WindEnv):
         elif self.turbtype == "None":
             # Zero turbulence site.
 
-            tf_agent = RandomTurbulence(ti=0, ws=self.ws)
+            tf_agent = RandomTurbulence(ti=0.0001, ws=self.ws)
             self.addedTurbulenceModel = None  # AutoScalingIsotropicMannTurbulence()
         else:
             # Throw and error:
@@ -706,7 +716,7 @@ class WindFarmEnv(WindEnv):
             particleDeficitGenerator=jDWMAinslieGenerator(),
             dt=self.dt,
             d_particle=self.d_particle,
-            particleMotionModel=HillVortexParticleMotion(),
+            particleMotionModel=HillVortexParticleMotion(temporal_filter=None),
             addedTurbulenceModel=self.addedTurbulenceModel,
         )  # NOTE, we need this particlemotion to capture the yaw
 
