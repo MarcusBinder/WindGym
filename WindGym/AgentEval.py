@@ -346,11 +346,7 @@ def eval_single_fast(
                 verticalalignment="top",
                 horizontalalignment="left",
                 transform=ax1.transAxes,
-                color="white
-                        text_plot = f" Agent observations scaled: \n Turbine level wind speed: {turb_ws} \n Turbine level wind direction: {turb_wd} \n Turbine level yaw: {turb_yaw} \n Turbine level TI: {turb_TI} \n Farm level wind speed: {farm_ws} \n Farm level wind direction: {farm_wd} \n Farm level TI: {farm_TI} "
-                        ax1.text(
-                            1.1,
-                            1.3,
+                color="white",
             )
 
             plt.savefig(
@@ -566,7 +562,6 @@ def eval_single_fast(
                 'turb': np.arange(n_turb),
             }
         )
-                
 
     return ds, ds_load
 
