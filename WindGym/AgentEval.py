@@ -515,14 +515,11 @@ def eval_single_fast(
 
     if not return_loads:
         return ds
-
-
     # Do this if we have the HTC and want the loads as well.
-    if env.HTC_path is not None:
+    elif env.HTC_path is not None:
         # If the HTC_path is not None, then ill assume we also want to include the loads
-        
         # First make sure we have written the lates results 
-        # env.wts.h2.write_output() # I am not sure this is needed tho
+        env.wts.h2.write_output() # I am not sure this is needed tho
 
         all_data = []
         # For each turbine read the data and put in into an array
@@ -562,6 +559,8 @@ def eval_single_fast(
                 'turb': np.arange(n_turb),
             }
         )
+        # Clean up also.
+        env._deleteHAWCfolder()
 
     return ds, ds_load
 
