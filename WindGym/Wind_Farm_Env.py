@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import copy
 import os
 import gc
-
-
+import socket
+import shutil
 # Dynamiks imports
 from dynamiks.dwm import DWMFlowSimulation
 from dynamiks.dwm.particle_deficit_profiles.ainslie import jDWMAinslieGenerator
@@ -285,11 +285,17 @@ class WindFarmEnv(WindEnv):
 
         if self.HTC_path is not None:
             # If we have a high fidelity turbine model, then we need to load it in
+            
+            # We need to make a unique string, such that the results file doenst get overwritten
+            node_string = socket.gethostname().split(".")[0] 
+            name_string = f"{node_string}_{self.wd:.2f}_{self.ws:.2f}_{self.ti:.2f}_{self.np_random.integers(low=0, high=45000)}"
+            name_string = name_string.replace(".","p")
+
             self.wts = HAWC2WindTurbines(
                 x=self.x_pos,
                 y=self.y_pos,
                 htc_lst=[self.HTC_path],
-                case_name="MyYawCase_1",  # subfolder name in the htc, res and log folders
+                case_name=name_string,  # subfolder name in the htc, res and log folders
                 suppress_output=True,  # don't show hawc2 output in console
             )
             # Add the yaw sensor, but because the only keyword does not work with h2lib, we add another layer that then only returns the first values of them.
@@ -331,7 +337,7 @@ class WindFarmEnv(WindEnv):
                     x=self.x_pos,
                     y=self.y_pos,
                     htc_lst=[self.HTC_path],
-                    case_name="MyYawCase_2",  # subfolder name in the htc, res and log folders
+                    case_name=name_string + "_baseline",  # subfolder name in the htc, res and log folders
                     suppress_output=True,  # don't show hawc2 output in console
                 )
                 # Add the yaw sensor, but because the only keyword does not work with h2lib, we add another layer that then only returns the first values of them.
@@ -698,13 +704,15 @@ class WindFarmEnv(WindEnv):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
         self.timestep = 0
-        # Setup the wind turbines
-        self._init_wts()
+
         # Sample global wind conditions and set the site
         self._set_windconditions()
         self._def_site()
         # Restart the measurement class. This is done to make sure that the measurements are not carried over from the last episode
         self._init_farm_mes()
+
+        # Setup the wind turbines
+        self._init_wts()
 
         # This is the rated poweroutput of the turbine at the given ws. Used for reward scaling.
         self.rated_power = self.turbine.power(self.ws)
@@ -1023,7 +1031,12 @@ class WindFarmEnv(WindEnv):
                 del self.site_base
 
             if self.HTC_path is not None:
+                # Close the connections
                 self.wts.h2.close()
+                self.wts_baseline.h2.close()
+                # Delete the directory
+                self._deleteHAWCfolder()
+
             self.fs = None
             self.site = None
             self.farm_measurements = None
@@ -1046,6 +1059,19 @@ class WindFarmEnv(WindEnv):
     def render(self):
         if self.render_mode == "rgb_array":
             return self._render_frame()
+
+    def _deleteHAWCfolder(self):
+        """
+        This deletes the HAWC2 results folder from the directory. 
+        This is done to make sure we keep it nice and clean
+        """
+        # This is the path to the results
+        delete_folder = self.wts.htc_lst[0].modelpath + os.path.split(self.wts.htc_lst[0].output.filename.values[0])[0]
+        shutil.rmtree(delete_folder)
+
+        if self.Baseline_comp:
+            delete_folder_baseline = self.wts_baseline.htc_lst[0].modelpath + os.path.split(self.wts_baseline.htc_lst[0].output.filename.values[0])[0]
+            shutil.rmtree(delete_folder_baseline)
 
     def _render_frame(self, baseline=False):
         """
