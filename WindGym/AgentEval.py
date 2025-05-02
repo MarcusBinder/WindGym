@@ -358,11 +358,6 @@ def eval_single_fast(
             plt.clf()
             plt.close("all")
 
-    # To make sure that the turbulence box is removed from memory, we set the current timestep to be equal to the max, and then do one last step.
-    # This clears the turbulence box from memory, and makes sure that we dont have any issues with the turbulence box being in memory.
-    env.timestep = env.time_max
-    obs, reward, terminated, truncated, info = env.step(action)
-    env.close()
 
     # Reshape the arrays and put them in a xarray dataset
     powerF_a = powerF_a.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
@@ -379,106 +374,6 @@ def eval_single_fast(
         pct_inc = pct_inc.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
 
     # # Then create a xarray dataset with the results
-    # if not baseline_comp:
-    #     ds = xr.Dataset(
-    #         data_vars={
-    #             # For agent:
-    #             # Power for the farm: [time, turbine, ws, wd, TI, turbbox]
-    #             "powerF_a": (
-    #                 ("time", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 powerF_a,
-    #             ),
-    #             # Power pr turbine [time, ws, wd, TI, turbbox]
-    #             "powerT_a": (
-    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 powerT_a,
-    #             ),
-    #             # yaw is array of: [time, turbine, ws, wd, TI, turbbox]
-    #             "yaw_a": (
-    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 yaw_a,
-    #             ),
-    #             # Ws at each turbine: [time, turbine, ws, wd, TI, turbbox]
-    #             "ws_a": (
-    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 ws_a,
-    #             ),
-    #             # For environment
-    #             # Reward
-    #             "reward": (
-    #                 ("time", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 rew_plot,
-    #             ),
-    #         },
-    #         coords={
-    #             "ws": np.array([ws]),
-    #             "wd": np.array([wd]),
-    #             "turb": np.arange(env.n_turb),
-    #             "time": time_plot,
-    #             "TI": np.array([ti]),
-    #             "turbbox": [turbbox],
-    #             "model_step": np.array([model_step]),
-    #         },
-    #     )
-
-    # else:
-    #     ds = xr.Dataset(
-    #         data_vars={
-    #             # For agent:
-    #             "powerF_a": (
-    #                 ("time", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 powerF_a,
-    #             ),  # Power for the farm: [time, turbine, ws, wd, TI, turbbox]
-    #             "powerT_a": (
-    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 powerT_a,
-    #             ),  # Power pr turbine [time, ws, wd, TI, turbbox]
-    #             "yaw_a": (
-    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 yaw_a,
-    #             ),  # yaw is array of: [time, turbine, ws, wd, TI, turbbox]
-    #             "ws_a": (
-    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 ws_a,
-    #             ),  # Ws at each turbine: [time, turbine, ws, wd, TI, turbbox]
-    #             # #For baseline
-    #             "powerF_b": (
-    #                 ("time", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 powerF_b,
-    #             ),  # Power for the farm: [time, turbine, ws, wd, TI, turbbox]
-    #             "powerT_b": (
-    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 powerT_b,
-    #             ),  # Power pr turbine [time, ws, wd, TI, turbbox]
-    #             "yaw_b": (
-    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 yaw_b,
-    #             ),  # yaw is array of: [time, turbine, ws, wd, TI, turbbox]
-    #             "ws_b": (
-    #                 ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 ws_b,
-    #             ),  # Ws at each turbine: [time, turbine, ws, wd, TI, turbbox]
-    #             # For environment
-    #             "reward": (
-    #                 ("time", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 rew_plot,
-    #             ),  # Reward
-    #             "pct_inc": (
-    #                 ("time", "ws", "wd", "TI", "turbbox", "model_step"),
-    #                 pct_inc,
-    #             ),  # Percentage increase in power output
-    #         },
-    #         coords={
-    #             "ws": np.array([ws]),
-    #             "wd": np.array([wd]),
-    #             "turb": np.arange(n_turb),
-    #             "time": time_plot,
-    #             "TI": np.array([ti]),
-    #             "turbbox": [turbbox],
-    #             "model_step": np.array([model_step]),
-    #         },
-    #     )
-
     # Common data variables
     data_vars = {
         "powerF_a": (("time", "ws", "wd", "TI", "turbbox", "model_step"), powerF_a),
@@ -514,6 +409,10 @@ def eval_single_fast(
     ds = xr.Dataset(data_vars=data_vars, coords=coords)
 
     if not return_loads:
+        # Do this to remove it from memory
+        env.timestep = env.time_max
+        obs, reward, terminated, truncated, info = env.step(action)
+        env.close()
         return ds
     # Do this if we have the HTC and want the loads as well.
     elif env.HTC_path is not None:
@@ -560,9 +459,13 @@ def eval_single_fast(
             }
         )
         # Clean up also.
-        env._deleteHAWCfolder()
+        # To make sure that the turbulence box is removed from memory, we set the current timestep to be equal to the max, and then do one last step.
+        # This clears the turbulence box from memory, and makes sure that we dont have any issues with the turbulence box being in memory.
+        env.timestep = env.time_max
+        obs, reward, terminated, truncated, info = env.step(action)
+        env.close()
 
-    return ds, ds_load
+        return ds, ds_load
 
 
 class AgentEval:
