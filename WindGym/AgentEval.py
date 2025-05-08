@@ -445,16 +445,28 @@ def eval_single_fast(
         time = all_data[0]["time"]
 
         # Stack data into arrays with shape (turbine, time)
-        blade_mx = np.stack([d["Blade_Mx"] for d in all_data])
-        blade_my = np.stack([d["Blade_My"] for d in all_data])
-        tower_mx = np.stack([d["Tower_Mx"] for d in all_data])
-        tower_my = np.stack([d["Tower_My"] for d in all_data])
+        blade_mx = np.stack([d["Blade_Mx"] for d in all_data]).T
+        blade_my = np.stack([d["Blade_My"] for d in all_data]).T
+        tower_mx = np.stack([d["Tower_Mx"] for d in all_data]).T
+        tower_my = np.stack([d["Tower_My"] for d in all_data]).T
+        Ae_rot_torque = np.stack([d["Ae rot. torque"] for d in all_data]).T
+        Ae_rot_power = np.stack([d["Ae rot. power"] for d in all_data]).T
+        Ae_rot_thrust = np.stack([d["Ae rot. thrust"] for d in all_data]).T
+        WSP_gl_coo_Vx = np.stack([d["WSP gl. coo.,Vx"] for d in all_data]).T
+        WSP_gl_coo_Vy = np.stack([d["WSP gl. coo.,Vy"] for d in all_data]).T
+        WSP_gl_coo_Vz = np.stack([d["WSP gl. coo.,Vz"] for d in all_data]).T
         
         # Reshape the data to match the xarray dataset dimensions
         blade_mx = blade_mx.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
         blade_my = blade_my.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
         tower_mx = tower_mx.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
         tower_my = tower_my.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        Ae_rot_torque = Ae_rot_torque.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        Ae_rot_power = Ae_rot_power.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        Ae_rot_thrust = Ae_rot_thrust.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        WSP_gl_coo_Vx = WSP_gl_coo_Vx.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        WSP_gl_coo_Vy = WSP_gl_coo_Vy.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        WSP_gl_coo_Vz = WSP_gl_coo_Vz.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
 
         # Create xarray dataset with 'turb' and 'time' dimensions
         ds_load = xr.Dataset(
@@ -463,6 +475,12 @@ def eval_single_fast(
                 "Blade_My": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), blade_my),
                 "Tower_Mx": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), tower_mx),
                 "Tower_My": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), tower_my),
+                "Ae_rot_torque": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), Ae_rot_torque),
+                "Ae_rot_power": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), Ae_rot_power),
+                "Ae_rot_thrust": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), Ae_rot_thrust),
+                "WSP_gl_coo_Vx": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), WSP_gl_coo_Vx),
+                "WSP_gl_coo_Vy": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), WSP_gl_coo_Vy),
+                "WSP_gl_coo_Vz": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), WSP_gl_coo_Vz),
             },
             coords={
                 "ws": np.array([ws]),
