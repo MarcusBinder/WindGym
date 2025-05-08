@@ -365,7 +365,7 @@ def eval_single_fast(
     yaw_a = yaw_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
     ws_a = ws_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
     rew_plot = rew_plot.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
-
+    
     if baseline_comp:
         powerF_b = powerF_b.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
         powerT_b = powerT_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
@@ -407,7 +407,6 @@ def eval_single_fast(
 
     # Create the dataset
     ds = xr.Dataset(data_vars=data_vars, coords=coords)
-
     if not return_loads:
         # Do this to remove it from memory
         env.timestep = env.time_max
@@ -429,6 +428,12 @@ def eval_single_fast(
 
             # Store each turbine's data in a dictionary
             all_data.append({
+                "Ae rot. torque": data[:, 10],
+                "Ae rot. power": data[:, 11],
+                "Ae rot. thrust": data[:, 12],
+                "WSP gl. coo.,Vx": data[:, 13],
+                "WSP gl. coo.,Vy": data[:, 14],
+                "WSP gl. coo.,Vz": data[:, 15],
                 "Blade_Mx": data[:, 19],
                 "Blade_My": data[:, 20],
                 "Tower_Mx": data[:, 28],
@@ -444,26 +449,50 @@ def eval_single_fast(
         blade_my = np.stack([d["Blade_My"] for d in all_data])
         tower_mx = np.stack([d["Tower_Mx"] for d in all_data])
         tower_my = np.stack([d["Tower_My"] for d in all_data])
+        
+        # Reshape the data to match the xarray dataset dimensions
+        blade_mx = blade_mx.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        blade_my = blade_my.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        tower_mx = tower_mx.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        tower_my = tower_my.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
 
         # Create xarray dataset with 'turb' and 'time' dimensions
         ds_load = xr.Dataset(
             data_vars={
-                'Blade_Mx': (('turb', 'time'), blade_mx),
-                'Blade_My': (('turb', 'time'), blade_my),
-                'Tower_Mx': (('turb', 'time'), tower_mx),
-                'Tower_My': (('turb', 'time'), tower_my),
+                "Blade_Mx": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), blade_mx),
+                "Blade_My": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), blade_my),
+                "Tower_Mx": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), tower_mx),
+                "Tower_My": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), tower_my),
             },
             coords={
-                'time': time,
-                'turb': np.arange(n_turb),
+                "ws": np.array([ws]),
+                "wd": np.array([wd]),
+                "turb": np.arange(n_turb),
+                "time": time,
+                "TI": np.array([ti]),
+                "turbbox": [turbbox],
+                "model_step": np.array([model_step]),
             }
         )
         # Clean up also.
         # To make sure that the turbulence box is removed from memory, we set the current timestep to be equal to the max, and then do one last step.
         # This clears the turbulence box from memory, and makes sure that we dont have any issues with the turbulence box being in memory.
-        env.timestep = env.time_max
-        obs, reward, terminated, truncated, info = env.step(action)
-        env.close()
+        env.wts.h2.close()
+
+        env._deleteHAWCfolder()
+        env.fs = None
+        env.site = None
+        env.farm_measurements = None
+        del env.fs
+        del env.site
+        del env.farm_measurements
+
+        if baseline_comp:
+            env.wts_baseline.h2.close()
+            env.fs_baseline = None
+            env.site_base = None
+            del env.fs_baseline
+            del env.site_base
 
         return ds, ds_load
 
@@ -543,7 +572,7 @@ class AgentEval:
         self.model = model
 
     def eval_single(
-        self, save_figs=False, scale_obs=None, debug=False, deterministic=False
+        self, save_figs=False, scale_obs=None, debug=False, deterministic=False, return_loads=False
     ):
         """
         Evaluate the agent on a single wind direction, wind speed, turbulence intensity and turbulence box.
@@ -562,12 +591,13 @@ class AgentEval:
             name=self.name,
             debug=debug,
             deterministic=deterministic,
+            return_loads=return_loads,
         )
 
         self.env.close()  # Close the environment to make sure that we dont have any issues with the turbulence box being in memory.
         return ds
 
-    def eval_multiple(self, save_figs=False, scale_obs=None, debug=False):
+    def eval_multiple(self, save_figs=False, scale_obs=None, debug=False, return_loads=False):
         """
         Evaluate the agent on multiple wind directions, wind speeds, turbulence intensities and turbulence boxes.
 
@@ -588,6 +618,7 @@ class AgentEval:
 
         # TODO this should be parallelized.
         ds_list = []
+        ds_list_loads = []
         for winddir in self.winddirs:
             for windspeed in self.windspeeds:
                 for TI in self.turbintensities:
@@ -597,15 +628,25 @@ class AgentEval:
                         self.set_condition(ws=windspeed, ti=TI, wd=winddir, turbbox=box)
                         # Run the simulation
                         ds = self.eval_single(
-                            save_figs=save_figs, scale_obs=scale_obs, debug=debug
+                            save_figs=save_figs, scale_obs=scale_obs, debug=debug, return_loads=return_loads
                         )
+                        if return_loads:
+                            ds_list.append(ds[0])
+                            ds_list_loads.append(ds[1])
                         # Save the results
-                        ds_list.append(ds)
+                        else:
+                            ds_list.append(ds)
                         i -= 1
                         print("Done with simulation. Missing sims: ", i)
         ds_total = xr.merge(ds_list)
         self.multiple_eval_ds = ds_total
-        return self.multiple_eval_ds
+        if return_loads:
+            ds_loads = xr.merge(ds_list_loads)
+            self.multiple_eval_ds_loads = ds_loads
+            # Return either one of both, depending on the return_loads flag.
+            return self.multiple_eval_ds, self.multiple_eval_ds_loads
+        else:
+            return self.multiple_eval_ds
         # Keep this for later, as I will work on it at some point
 
     def run_simulation(self, winddir, windspeed, TI, box, save_figs, scale_obs, debug):
