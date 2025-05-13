@@ -366,13 +366,6 @@ def eval_single_fast(
     ws_a = ws_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
     rew_plot = rew_plot.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
     
-    if baseline_comp:
-        powerF_b = powerF_b.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
-        powerT_b = powerT_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        yaw_b = yaw_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        ws_b = ws_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        pct_inc = pct_inc.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
-
     # # Then create a xarray dataset with the results
     # Common data variables
     data_vars = {
@@ -385,6 +378,12 @@ def eval_single_fast(
 
     # Add baseline variables if applicable
     if baseline_comp:
+        powerF_b = powerF_b.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
+        powerT_b = powerT_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        yaw_b = yaw_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        ws_b = ws_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        pct_inc = pct_inc.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
+
         data_vars.update({
             "powerF_b": (("time", "ws", "wd", "TI", "turbbox", "model_step"), powerF_b),
             "powerT_b": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), powerT_b),
@@ -404,10 +403,9 @@ def eval_single_fast(
         "model_step": np.array([model_step]),
     }
 
-
     # Create the dataset
-    ds = xr.Dataset(data_vars=data_vars, coords=coords)
     if not return_loads:
+        ds = xr.Dataset(data_vars=data_vars, coords=coords)
         # Do this to remove it from memory
         env.timestep = env.time_max
         obs, reward, terminated, truncated, info = env.step(action)
@@ -438,6 +436,7 @@ def eval_single_fast(
                 "Blade_My": data[:, 20],
                 "Tower_Mx": data[:, 28],
                 "Tower_My": data[:, 29],
+                "yaw_a": data[:, 112],
                 "time": time
             })
 
@@ -455,7 +454,8 @@ def eval_single_fast(
         WSP_gl_coo_Vx = np.stack([d["WSP gl. coo.,Vx"] for d in all_data]).T
         WSP_gl_coo_Vy = np.stack([d["WSP gl. coo.,Vy"] for d in all_data]).T
         WSP_gl_coo_Vz = np.stack([d["WSP gl. coo.,Vz"] for d in all_data]).T
-        
+        yaw_a = np.stack([d["yaw_a"] for d in all_data]).T
+
         # Reshape the data to match the xarray dataset dimensions
         blade_mx = blade_mx.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
         blade_my = blade_my.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
@@ -467,6 +467,7 @@ def eval_single_fast(
         WSP_gl_coo_Vx = WSP_gl_coo_Vx.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
         WSP_gl_coo_Vy = WSP_gl_coo_Vy.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
         WSP_gl_coo_Vz = WSP_gl_coo_Vz.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        yaw_a = yaw_a.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
 
         # Create xarray dataset with 'turb' and 'time' dimensions
         ds_load = xr.Dataset(
@@ -481,6 +482,7 @@ def eval_single_fast(
                 "WSP_gl_coo_Vx": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), WSP_gl_coo_Vx),
                 "WSP_gl_coo_Vy": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), WSP_gl_coo_Vy),
                 "WSP_gl_coo_Vz": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), WSP_gl_coo_Vz),
+                "yaw_a": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), yaw_a),
             },
             coords={
                 "ws": np.array([ws]),
@@ -512,7 +514,7 @@ def eval_single_fast(
             del env.fs_baseline
             del env.site_base
 
-        return ds, ds_load
+        return ds_load
 
 
 class AgentEval:
@@ -636,7 +638,6 @@ class AgentEval:
 
         # TODO this should be parallelized.
         ds_list = []
-        ds_list_loads = []
         for winddir in self.winddirs:
             for windspeed in self.windspeeds:
                 for TI in self.turbintensities:
@@ -648,23 +649,12 @@ class AgentEval:
                         ds = self.eval_single(
                             save_figs=save_figs, scale_obs=scale_obs, debug=debug, return_loads=return_loads
                         )
-                        if return_loads:
-                            ds_list.append(ds[0])
-                            ds_list_loads.append(ds[1])
-                        # Save the results
-                        else:
-                            ds_list.append(ds)
+                        ds_list.append(ds)
                         i -= 1
                         print("Done with simulation. Missing sims: ", i)
         ds_total = xr.merge(ds_list)
         self.multiple_eval_ds = ds_total
-        if return_loads:
-            ds_loads = xr.merge(ds_list_loads)
-            self.multiple_eval_ds_loads = ds_loads
-            # Return either one of both, depending on the return_loads flag.
-            return self.multiple_eval_ds, self.multiple_eval_ds_loads
-        else:
-            return self.multiple_eval_ds
+        return self.multiple_eval_ds
         # Keep this for later, as I will work on it at some point
 
     def run_simulation(self, winddir, windspeed, TI, box, save_figs, scale_obs, debug):
