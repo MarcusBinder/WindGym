@@ -21,6 +21,7 @@ class CurriculumWrapper(gym.Wrapper):
       - 'huber': negative Huber loss
     weight_function:
       function(step: int) -> float in [0,1], weighting env reward vs. similarity
+      1 = env reward, 0 = similarity
     """
     def __init__(
         self,
