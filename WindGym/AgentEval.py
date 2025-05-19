@@ -55,6 +55,7 @@ def eval_single_fast(
     debug=False,
     deterministic=False,
     return_loads=False,
+    cleanup=True,
 ):
     """
     This function evaluates the agent for a single wind direction, and then saves the results in a xarray dataset.
@@ -189,7 +190,8 @@ def eval_single_fast(
                     torch.Tensor(obs).to(device), deterministic=deterministic
                 )
                 action = action.detach().cpu().numpy()
-        else:  # I assume this will always be SB3 models.
+                action = action.flatten()
+        else:  # This is for the other models (Pywake and such)
             action = model.predict(obs, deterministic=deterministic)[0]
 
         obs, reward, terminated, truncated, info = env.step(action)
@@ -498,21 +500,23 @@ def eval_single_fast(
         # To make sure that the turbulence box is removed from memory, we set the current timestep to be equal to the max, and then do one last step.
         # This clears the turbulence box from memory, and makes sure that we dont have any issues with the turbulence box being in memory.
         env.wts.h2.close()
-
-        env._deleteHAWCfolder()
-        env.fs = None
-        env.site = None
-        env.farm_measurements = None
-        del env.fs
-        del env.site
-        del env.farm_measurements
-
         if baseline_comp:
             env.wts_baseline.h2.close()
-            env.fs_baseline = None
-            env.site_base = None
-            del env.fs_baseline
-            del env.site_base
+        
+        if cleanup:
+            env._deleteHAWCfolder()
+            env.fs = None
+            env.site = None
+            env.farm_measurements = None
+            del env.fs
+            del env.site
+            del env.farm_measurements
+
+            if baseline_comp:
+                env.fs_baseline = None
+                env.site_base = None
+                del env.fs_baseline
+                del env.site_base
 
         return ds_load
 
@@ -1217,4 +1221,3 @@ class AgentEval:
         if save:
             plt.savefig(self.name + "_turbine_metrics.png")
         return fig, axs
-                                                                                                                                                                  
