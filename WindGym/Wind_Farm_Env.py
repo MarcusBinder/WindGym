@@ -1069,9 +1069,17 @@ class WindFarmEnv(WindEnv):
         delete_folder = self.wts.htc_lst[0].modelpath + os.path.split(self.wts.htc_lst[0].output.filename.values[0])[0]
         shutil.rmtree(delete_folder)
 
+        # Also delete the htc folder
+        htc_folder = self.wts.htc_lst[0].modelpath + os.path.split(self.wts.htc_lst[0].output.filename.values[0].replace("res","htc"))[0]
+        shutil.rmtree(htc_folder)
+
         if self.Baseline_comp:
             delete_folder_baseline = self.wts_baseline.htc_lst[0].modelpath + os.path.split(self.wts_baseline.htc_lst[0].output.filename.values[0])[0]
             shutil.rmtree(delete_folder_baseline)
+
+            # Also delete the htc folder
+            htc_folder_baseline = self.wts_baseline.htc_lst[0].modelpath + os.path.split(self.wts_baseline.htc_lst[0].output.filename.values[0].replace("res","htc"))[0]
+            shutil.rmtree(htc_folder_baseline)
 
     def _render_frame(self, baseline=False):
         """
