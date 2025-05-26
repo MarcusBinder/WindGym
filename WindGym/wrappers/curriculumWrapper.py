@@ -93,7 +93,6 @@ class CurriculumWrapper(gym.Wrapper):
 
         ref_yaws = self.pywake_yaws
 
-
         # compute yaw_diff metric depending on similarity_type
         diff = agent_yaws - ref_yaws
 
