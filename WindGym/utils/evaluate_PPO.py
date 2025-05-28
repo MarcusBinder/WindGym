@@ -18,7 +18,8 @@ class Agent(nn.Module):
         super().__init__()
         self.critic = nn.Sequential(
             layer_init(
-                nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)),
+                nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)
+            ),
             nn.Tanh(),
             layer_init(nn.Linear(64, 64)),
             nn.Tanh(),
@@ -26,15 +27,18 @@ class Agent(nn.Module):
         )
         self.actor_mean = nn.Sequential(
             layer_init(
-                nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)),
+                nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)
+            ),
             nn.Tanh(),
             layer_init(nn.Linear(64, 64)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, np.prod(
-                envs.single_action_space.shape)), std=0.01),
+            layer_init(
+                nn.Linear(64, np.prod(envs.single_action_space.shape)), std=0.01
+            ),
         )
-        self.actor_logstd = nn.Parameter(torch.zeros(
-            1, np.prod(envs.single_action_space.shape)))
+        self.actor_logstd = nn.Parameter(
+            torch.zeros(1, np.prod(envs.single_action_space.shape))
+        )
 
     def get_value(self, x):
         return self.critic(x)
@@ -46,49 +50,102 @@ class Agent(nn.Module):
         probs = Normal(action_mean, action_std)
         if action is None:
             action = probs.sample()
-        return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(x)
-
+        return (
+            action,
+            probs.log_prob(action).sum(1),
+            probs.entropy().sum(1),
+            self.critic(x),
+        )
 
 
 def make_eval_env(idx, wind_turbine, yaml_path, dt_sim, dt_env):
     """
     Makes the evaluation environment. Used for the evaluation of the model
     """
-    ws_list = [10, 11, 12,10, 11, 12,10, 11, 12,10, 11, 12,10, 11, 12,10, 11, 12,10, 11, 12,]
-    wd_list = [255, 260, 265, 270, 275, 280, 285, 255, 260, 265, 270, 275, 280, 285, 255, 260, 265, 270, 275, 280, 285]
-    env = FarmEval(turbine=wind_turbine(),
-                      n_passthrough=4000, # this value is not used, as it is overridden in the env.
-                      yaw_init="Zeros",
-                      #   TurbBox="/work/users/manils/wesc/Boxes/V80env/",
-                      TurbBox="/work/users/manils/p2t2t/Boxes/V80env/",
-                      yaml_path=yaml_path,
-                      dt_sim=dt_sim,
-                      dt_env=dt_env,
-                      reset_init=False,
-                      turbtype="None",  # the type of turbulence.
-                      )
+    ws_list = [
+        10,
+        11,
+        12,
+        10,
+        11,
+        12,
+        10,
+        11,
+        12,
+        10,
+        11,
+        12,
+        10,
+        11,
+        12,
+        10,
+        11,
+        12,
+        10,
+        11,
+        12,
+    ]
+    wd_list = [
+        255,
+        260,
+        265,
+        270,
+        275,
+        280,
+        285,
+        255,
+        260,
+        265,
+        270,
+        275,
+        280,
+        285,
+        255,
+        260,
+        265,
+        270,
+        275,
+        280,
+        285,
+    ]
+    env = FarmEval(
+        turbine=wind_turbine(),
+        n_passthrough=4000,  # this value is not used, as it is overridden in the env.
+        yaw_init="Zeros",
+        #   TurbBox="/work/users/manils/wesc/Boxes/V80env/",
+        TurbBox="/work/users/manils/p2t2t/Boxes/V80env/",
+        yaml_path=yaml_path,
+        dt_sim=dt_sim,
+        dt_env=dt_env,
+        reset_init=False,
+        turbtype="None",  # the type of turbulence.
+    )
 
     ws = ws_list[idx]
     wd = wd_list[idx]
-    
+
     env.set_wind_vals(ws=ws, ti=0.05, wd=wd)
     return env
 
-def evaluate(trained_agent, n_envs = 21, n_steps = 1000,):
-    """Function to evaluate the performance of the model. 
+
+def evaluate(
+    trained_agent,
+    n_envs=21,
+    n_steps=1000,
+):
+    """Function to evaluate the performance of the model.
     Heavily based on the code from cleanrl. https://github.com/vwxyzjn/cleanrl/blob/master/cleanrl_utils/evals/ppo_eval.py
     """
 
-    # First we make the eval envs. 
+    # First we make the eval envs.
     eval_envs = gym.vector.AsyncVectorEnv(
-        [lambda: make_eval_env(idx) for idx in range(n_envs)], 
+        [lambda: make_eval_env(idx) for idx in range(n_envs)],
         autoreset_mode=gym.vector.AutoresetMode.SAME_STEP,
-        )
+    )
     eval_envs = RecordEpisodeVals(eval_envs)
 
-    device = torch.device(
-        "cuda" if torch.cuda.is_available() else "cpu")
-    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # Make the agent that we want to evaluate, and copy the weights from the trained agent.
     eval_agent = Agent(eval_envs).to(device)
 
@@ -105,11 +162,16 @@ def evaluate(trained_agent, n_envs = 21, n_steps = 1000,):
         obs = next_obs
 
     # The eval score is the total power produced by the wind farm, divided by the number of environments and the number of turbines, and the steps.
-    eval_score = eval_envs.episode_powers.sum() / eval_envs.num_envs / eval_envs.single_action_space.shape[0] / n_steps
-    
+    eval_score = (
+        eval_envs.episode_powers.sum()
+        / eval_envs.num_envs
+        / eval_envs.single_action_space.shape[0]
+        / n_steps
+    )
+
     # Clean up
     eval_envs.close()
     del eval_envs
     del eval_agent
-    
+
     return eval_score

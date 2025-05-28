@@ -9,6 +9,7 @@ Generate_circular_farm functions create circular arrangements of turbines,
 - Originally coded by #JensMVPeter 
 """
 
+
 def generate_square_grid(turbine, nx, ny, xDist, yDist):
     """
     Create a square grid of turbines.
@@ -57,10 +58,7 @@ def generate_circle(n, r, angle_offset=0):
 
 
 def generate_cirular_farm(
-    n_list: ArrayLike, 
-    turbine, 
-    r_dist: float = 5, 
-    angle_offset_list: ArrayLike = None
+    n_list: ArrayLike, turbine, r_dist: float = 5, angle_offset_list: ArrayLike = None
 ):
     """
     Generate a circular farm of n circular grids with radius r and m points.
@@ -70,7 +68,6 @@ def generate_cirular_farm(
     if n_list[0] != 1:
         r_list = r_list + 0.5
     r_list *= r_dist * D  # Diameter factors
-
 
     x = []
     y = []
@@ -90,7 +87,7 @@ def plot_farm(x, y, turbine=None, D=None):
     Plots the turbines in the farm layout, and their minimum distance to the closest turbine
     """
     if D is None and turbine is None:
-        D = 1.0 # Default diameter if not provided
+        D = 1.0  # Default diameter if not provided
     elif turbine is not None:
         D = turbine.diameter()
 
@@ -100,9 +97,9 @@ def plot_farm(x, y, turbine=None, D=None):
         distances[i] = np.inf  # Ignore self-distance
         min_distance = np.min(distances)
         min_distances.append(min_distance)
-    min_distances = np.array(min_distances) / D # Convert to diameter units
-    plt.scatter(x, y, c=min_distances, cmap='viridis', label='Min Distance (m)')
-    plt.colorbar(label='Min Distance (Diameter Units)')
+    min_distances = np.array(min_distances) / D  # Convert to diameter units
+    plt.scatter(x, y, c=min_distances, cmap="viridis", label="Min Distance (m)")
+    plt.colorbar(label="Min Distance (Diameter Units)")
     # plt.legend(handles=[Line2D([0], [0], marker='o', color='w', markerfacecolor='C0', label='Turbines'),
     #                     Line2D([0], [0], marker='o', color='w', markerfacecolor='yellow', label='Min Distance')])
     plt.show()

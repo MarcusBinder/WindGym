@@ -7,10 +7,12 @@ import os
 import gc
 import socket
 import shutil
+
 # Dynamiks imports
 from dynamiks.dwm import DWMFlowSimulation
 from dynamiks.dwm.particle_deficit_profiles.ainslie import jDWMAinslieGenerator
 from dynamiks.dwm.particle_motion_models import HillVortexParticleMotion
+
 # from dynamiks.dwm.particle_motion_models import ParticleMotionModel
 from dynamiks.sites import TurbulenceFieldSite
 from dynamiks.sites.turbulence_fields import MannTurbulenceField, RandomTurbulence
@@ -98,8 +100,8 @@ class WindFarmEnv(WindEnv):
             raise ValueError("x_pos and y_pos must be the same length")
 
         # Predefined values
-        self.wts=None
-        self.wts_baseline=None
+        self.wts = None
+        self.wts_baseline = None
         # The power setpoint for the farm. This is used if the Track_power is True. (Not used yet)
         self.power_setpoint = 0.0
         self.act_var = (
@@ -290,11 +292,11 @@ class WindFarmEnv(WindEnv):
 
         if self.HTC_path is not None:
             # If we have a high fidelity turbine model, then we need to load it in
-            
+
             # We need to make a unique string, such that the results file doenst get overwritten
-            node_string = socket.gethostname().split(".")[0] 
+            node_string = socket.gethostname().split(".")[0]
             name_string = f"{node_string}_{self.wd:.2f}_{self.ws:.2f}_{self.ti:.2f}_{self.np_random.integers(low=0, high=45000)}"
-            name_string = name_string.replace(".","p")
+            name_string = name_string.replace(".", "p")
 
             self.wts = HAWC2WindTurbines(
                 x=self.x_pos,
@@ -342,7 +344,8 @@ class WindFarmEnv(WindEnv):
                     x=self.x_pos,
                     y=self.y_pos,
                     htc_lst=[self.HTC_path],
-                    case_name=name_string + "_baseline",  # subfolder name in the htc, res and log folders
+                    case_name=name_string
+                    + "_baseline",  # subfolder name in the htc, res and log folders
                     suppress_output=True,  # don't show hawc2 output in console
                 )
                 # Add the yaw sensor, but because the only keyword does not work with h2lib, we add another layer that then only returns the first values of them.
@@ -1067,23 +1070,43 @@ class WindFarmEnv(WindEnv):
 
     def _deleteHAWCfolder(self):
         """
-        This deletes the HAWC2 results folder from the directory. 
+        This deletes the HAWC2 results folder from the directory.
         This is done to make sure we keep it nice and clean
         """
         # This is the path to the results
-        delete_folder = self.wts.htc_lst[0].modelpath + os.path.split(self.wts.htc_lst[0].output.filename.values[0])[0]
+        delete_folder = (
+            self.wts.htc_lst[0].modelpath
+            + os.path.split(self.wts.htc_lst[0].output.filename.values[0])[0]
+        )
         shutil.rmtree(delete_folder)
 
         # Also delete the htc folder
-        htc_folder = self.wts.htc_lst[0].modelpath + os.path.split(self.wts.htc_lst[0].output.filename.values[0].replace("res","htc"))[0]
+        htc_folder = (
+            self.wts.htc_lst[0].modelpath
+            + os.path.split(
+                self.wts.htc_lst[0].output.filename.values[0].replace("res", "htc")
+            )[0]
+        )
         shutil.rmtree(htc_folder)
 
         if self.Baseline_comp:
-            delete_folder_baseline = self.wts_baseline.htc_lst[0].modelpath + os.path.split(self.wts_baseline.htc_lst[0].output.filename.values[0])[0]
+            delete_folder_baseline = (
+                self.wts_baseline.htc_lst[0].modelpath
+                + os.path.split(self.wts_baseline.htc_lst[0].output.filename.values[0])[
+                    0
+                ]
+            )
             shutil.rmtree(delete_folder_baseline)
 
             # Also delete the htc folder
-            htc_folder_baseline = self.wts_baseline.htc_lst[0].modelpath + os.path.split(self.wts_baseline.htc_lst[0].output.filename.values[0].replace("res","htc"))[0]
+            htc_folder_baseline = (
+                self.wts_baseline.htc_lst[0].modelpath
+                + os.path.split(
+                    self.wts_baseline.htc_lst[0]
+                    .output.filename.values[0]
+                    .replace("res", "htc")
+                )[0]
+            )
             shutil.rmtree(htc_folder_baseline)
 
     def _render_frame(self, baseline=False):

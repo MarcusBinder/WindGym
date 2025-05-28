@@ -30,7 +30,9 @@ class RecordEpisodeVals(gym.wrappers.vector.RecordEpisodeStatistics):
         self.episode_powers = np.zeros(self.num_envs)  #
         self.last_dones = self.prev_dones.copy()
 
-        self.episode_powers_baseline = np.zeros(self.num_envs)  # Reset the episode powers
+        self.episode_powers_baseline = np.zeros(
+            self.num_envs
+        )  # Reset the episode powers
 
         return obs, info
 
@@ -69,10 +71,8 @@ class RecordEpisodeVals(gym.wrappers.vector.RecordEpisodeStatistics):
 
                 if "Power baseline" in infos:
                     self.mean_power_queue_baseline.extend(
-                        self.episode_powers_baseline[i]
-                        / self.episode_lengths[i]
+                        self.episode_powers_baseline[i] / self.episode_lengths[i]
                     )
-
 
         return (
             observations,

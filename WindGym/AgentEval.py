@@ -360,22 +360,24 @@ def eval_single_fast(
             plt.clf()
             plt.close("all")
 
-
     # Reshape the arrays and put them in a xarray dataset
     powerF_a = powerF_a.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
     powerT_a = powerT_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
     yaw_a = yaw_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
     ws_a = ws_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
     rew_plot = rew_plot.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
-    
+
     # # Then create a xarray dataset with the results
     # Common data variables
     data_vars = {
         "powerF_a": (("time", "ws", "wd", "TI", "turbbox", "model_step"), powerF_a),
-        "powerT_a": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), powerT_a),
-        "yaw_a":    (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), yaw_a),
-        "ws_a":     (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), ws_a),
-        "reward":   (("time", "ws", "wd", "TI", "turbbox", "model_step"), rew_plot),
+        "powerT_a": (
+            ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+            powerT_a,
+        ),
+        "yaw_a": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), yaw_a),
+        "ws_a": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), ws_a),
+        "reward": (("time", "ws", "wd", "TI", "turbbox", "model_step"), rew_plot),
     }
 
     # Add baseline variables if applicable
@@ -386,13 +388,30 @@ def eval_single_fast(
         ws_b = ws_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
         pct_inc = pct_inc.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
 
-        data_vars.update({
-            "powerF_b": (("time", "ws", "wd", "TI", "turbbox", "model_step"), powerF_b),
-            "powerT_b": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), powerT_b),
-            "yaw_b":    (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), yaw_b),
-            "ws_b":     (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), ws_b),
-            "pct_inc":  (("time", "ws", "wd", "TI", "turbbox", "model_step"), pct_inc),
-        })
+        data_vars.update(
+            {
+                "powerF_b": (
+                    ("time", "ws", "wd", "TI", "turbbox", "model_step"),
+                    powerF_b,
+                ),
+                "powerT_b": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    powerT_b,
+                ),
+                "yaw_b": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    yaw_b,
+                ),
+                "ws_b": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    ws_b,
+                ),
+                "pct_inc": (
+                    ("time", "ws", "wd", "TI", "turbbox", "model_step"),
+                    pct_inc,
+                ),
+            }
+        )
 
     # Common coordinates
     coords = {
@@ -416,8 +435,8 @@ def eval_single_fast(
     # Do this if we have the HTC and want the loads as well.
     elif env.HTC_path is not None:
         # If the HTC_path is not None, then ill assume we also want to include the loads
-        # First make sure we have written the lates results 
-        env.wts.h2.write_output() # I am not sure this is needed tho
+        # First make sure we have written the lates results
+        env.wts.h2.write_output()  # I am not sure this is needed tho
 
         all_data = []
         # For each turbine read the data and put in into an array
@@ -427,20 +446,22 @@ def eval_single_fast(
             time, data, info = gtsdf.load(test_string)
 
             # Store each turbine's data in a dictionary
-            all_data.append({
-                "Ae rot. torque": data[:, 10],
-                "Ae rot. power": data[:, 11],
-                "Ae rot. thrust": data[:, 12],
-                "WSP gl. coo.,Vx": data[:, 13],
-                "WSP gl. coo.,Vy": data[:, 14],
-                "WSP gl. coo.,Vz": data[:, 15],
-                "Blade_Mx": data[:, 19],
-                "Blade_My": data[:, 20],
-                "Tower_Mx": data[:, 28],
-                "Tower_My": data[:, 29],
-                "yaw_a": data[:, 112],
-                "time": time
-            })
+            all_data.append(
+                {
+                    "Ae rot. torque": data[:, 10],
+                    "Ae rot. power": data[:, 11],
+                    "Ae rot. thrust": data[:, 12],
+                    "WSP gl. coo.,Vx": data[:, 13],
+                    "WSP gl. coo.,Vy": data[:, 14],
+                    "WSP gl. coo.,Vz": data[:, 15],
+                    "Blade_Mx": data[:, 19],
+                    "Blade_My": data[:, 20],
+                    "Tower_Mx": data[:, 28],
+                    "Tower_My": data[:, 29],
+                    "yaw_a": data[:, 112],
+                    "time": time,
+                }
+            )
 
         # Assuming all turbines share the same time vector
         time = all_data[0]["time"]
@@ -459,32 +480,85 @@ def eval_single_fast(
         yaw_a = np.stack([d["yaw_a"] for d in all_data]).T
 
         # Reshape the data to match the xarray dataset dimensions
-        blade_mx = blade_mx.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        blade_my = blade_my.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        tower_mx = tower_mx.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        tower_my = tower_my.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        Ae_rot_torque = Ae_rot_torque.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        Ae_rot_power = Ae_rot_power.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        Ae_rot_thrust = Ae_rot_thrust.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        WSP_gl_coo_Vx = WSP_gl_coo_Vx.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        WSP_gl_coo_Vy = WSP_gl_coo_Vy.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        WSP_gl_coo_Vz = WSP_gl_coo_Vz.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        blade_mx = blade_mx.reshape(
+            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
+        )
+        blade_my = blade_my.reshape(
+            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
+        )
+        tower_mx = tower_mx.reshape(
+            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
+        )
+        tower_my = tower_my.reshape(
+            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
+        )
+        Ae_rot_torque = Ae_rot_torque.reshape(
+            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
+        )
+        Ae_rot_power = Ae_rot_power.reshape(
+            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
+        )
+        Ae_rot_thrust = Ae_rot_thrust.reshape(
+            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
+        )
+        WSP_gl_coo_Vx = WSP_gl_coo_Vx.reshape(
+            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
+        )
+        WSP_gl_coo_Vy = WSP_gl_coo_Vy.reshape(
+            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
+        )
+        WSP_gl_coo_Vz = WSP_gl_coo_Vz.reshape(
+            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
+        )
         yaw_a = yaw_a.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
 
         # Create xarray dataset with 'turb' and 'time' dimensions
         ds_load = xr.Dataset(
             data_vars={
-                "Blade_Mx": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), blade_mx),
-                "Blade_My": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), blade_my),
-                "Tower_Mx": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), tower_mx),
-                "Tower_My": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), tower_my),
-                "Ae_rot_torque": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), Ae_rot_torque),
-                "Ae_rot_power": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), Ae_rot_power),
-                "Ae_rot_thrust": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), Ae_rot_thrust),
-                "WSP_gl_coo_Vx": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), WSP_gl_coo_Vx),
-                "WSP_gl_coo_Vy": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), WSP_gl_coo_Vy),
-                "WSP_gl_coo_Vz": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), WSP_gl_coo_Vz),
-                "yaw_a": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), yaw_a),
+                "Blade_Mx": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    blade_mx,
+                ),
+                "Blade_My": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    blade_my,
+                ),
+                "Tower_Mx": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    tower_mx,
+                ),
+                "Tower_My": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    tower_my,
+                ),
+                "Ae_rot_torque": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    Ae_rot_torque,
+                ),
+                "Ae_rot_power": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    Ae_rot_power,
+                ),
+                "Ae_rot_thrust": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    Ae_rot_thrust,
+                ),
+                "WSP_gl_coo_Vx": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    WSP_gl_coo_Vx,
+                ),
+                "WSP_gl_coo_Vy": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    WSP_gl_coo_Vy,
+                ),
+                "WSP_gl_coo_Vz": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    WSP_gl_coo_Vz,
+                ),
+                "yaw_a": (
+                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    yaw_a,
+                ),
             },
             coords={
                 "ws": np.array([ws]),
@@ -494,7 +568,7 @@ def eval_single_fast(
                 "TI": np.array([ti]),
                 "turbbox": [turbbox],
                 "model_step": np.array([model_step]),
-            }
+            },
         )
         # Clean up also.
         # To make sure that the turbulence box is removed from memory, we set the current timestep to be equal to the max, and then do one last step.
@@ -502,7 +576,7 @@ def eval_single_fast(
         env.wts.h2.close()
         if baseline_comp:
             env.wts_baseline.h2.close()
-        
+
         if cleanup:
             env._deleteHAWCfolder()
             env.fs = None
@@ -596,7 +670,12 @@ class AgentEval:
         self.model = model
 
     def eval_single(
-        self, save_figs=False, scale_obs=None, debug=False, deterministic=False, return_loads=False
+        self,
+        save_figs=False,
+        scale_obs=None,
+        debug=False,
+        deterministic=False,
+        return_loads=False,
     ):
         """
         Evaluate the agent on a single wind direction, wind speed, turbulence intensity and turbulence box.
@@ -621,7 +700,9 @@ class AgentEval:
         self.env.close()  # Close the environment to make sure that we dont have any issues with the turbulence box being in memory.
         return ds
 
-    def eval_multiple(self, save_figs=False, scale_obs=None, debug=False, return_loads=False):
+    def eval_multiple(
+        self, save_figs=False, scale_obs=None, debug=False, return_loads=False
+    ):
         """
         Evaluate the agent on multiple wind directions, wind speeds, turbulence intensities and turbulence boxes.
 
@@ -651,7 +732,10 @@ class AgentEval:
                         self.set_condition(ws=windspeed, ti=TI, wd=winddir, turbbox=box)
                         # Run the simulation
                         ds = self.eval_single(
-                            save_figs=save_figs, scale_obs=scale_obs, debug=debug, return_loads=return_loads
+                            save_figs=save_figs,
+                            scale_obs=scale_obs,
+                            debug=debug,
+                            return_loads=return_loads,
                         )
                         ds_list.append(ds)
                         i -= 1

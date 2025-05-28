@@ -11,6 +11,7 @@ from WindGym import AgentEvalFast
 from WindGym.Agents import RandomAgent, ConstantAgent
 from WindGym.utils.generate_layouts import generate_square_grid
 
+
 @pytest.fixture
 def turbine():
     """Provides a standard wind turbine configuration for testing"""
@@ -62,11 +63,7 @@ def wind_farm_env(turbine, mann_turbulence_field, monkeypatch):
         "dynamiks.sites.turbulence_fields.MannTurbulenceField.generate", mock_generate
     )
 
-    x_pos, y_pos = generate_square_grid(turbine=turbine,
-                                        nx=2,
-                                        ny=1,
-                                        xDist=4,
-                                        yDist=4)
+    x_pos, y_pos = generate_square_grid(turbine=turbine, nx=2, ny=1, xDist=4, yDist=4)
 
     env = WindFarmEnv(
         turbine=turbine,
