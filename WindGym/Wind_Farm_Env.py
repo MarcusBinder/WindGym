@@ -51,6 +51,8 @@ class WindFarmEnv(WindEnv):
     def __init__(
         self,
         turbine,
+        x_pos,
+        y_pos,
         n_passthrough=5,
         TI_min_mes: float = 0.0,
         TI_max_mes: float = 0.50,
@@ -91,6 +93,9 @@ class WindFarmEnv(WindEnv):
             HTC_path: str: The path to the high fidelity turbine model. If this is Not none, then we assume you want to use that instead of pywake turbines. Note you still need a pywake version of your turbine.
             reset_init: bool: If True, then the environment will be reset at initialization. This is used to save time for things that call the reset method anyways.
         """
+        # Check that x_pos and y_pos are the same length
+        if len(x_pos) != len(y_pos):
+            raise ValueError("x_pos and y_pos must be the same length")
 
         # Predefined values
         self.wts=None
@@ -139,7 +144,7 @@ class WindFarmEnv(WindEnv):
         # Load the configuration
         self.load_config(yaml_path)
 
-        self.n_turb = self.nx * self.ny  # The number of turbines
+        self.n_turb = len(x_pos)  # The number of turbines
 
         # Deques that holds the power output of the farm and the baseline farm. This is used for the power reward
         self.farm_pow_deq = deque(maxlen=self.power_avg)
@@ -246,13 +251,13 @@ class WindFarmEnv(WindEnv):
 
         self.D = turbine.diameter()
 
-        x = np.linspace(0, self.D * self.xDist * self.nx, self.nx)
-        y = np.linspace(0, self.D * self.yDist * self.ny, self.ny)
+        # x = np.linspace(0, self.D * self.xDist * self.nx, self.nx)
+        # y = np.linspace(0, self.D * self.yDist * self.ny, self.ny)
 
-        xv, yv = np.meshgrid(x, y, indexing="xy")
+        # xv, yv = np.meshgrid(x, y, indexing="xy")
 
-        self.x_pos = xv.flatten()
-        self.y_pos = yv.flatten()
+        self.x_pos = x_pos
+        self.y_pos = y_pos
 
         # Define the observation and action space
         self.obs_var = self.farm_measurements.observed_variables()
@@ -381,10 +386,10 @@ class WindFarmEnv(WindEnv):
         farm_params = config.get("farm")
         self.yaw_min = farm_params["yaw_min"]
         self.yaw_max = farm_params["yaw_max"]
-        self.xDist = farm_params["xDist"]
-        self.yDist = farm_params["yDist"]
-        self.nx = farm_params["nx"]
-        self.ny = farm_params["ny"]
+        # self.xDist = farm_params["xDist"]
+        # self.yDist = farm_params["yDist"]
+        # self.nx = farm_params["nx"]
+        # self.ny = farm_params["ny"]
 
         # Unpack the wind params
         wind_params = config.get("wind")

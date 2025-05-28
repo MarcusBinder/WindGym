@@ -9,7 +9,7 @@ from dynamiks.sites.turbulence_fields import MannTurbulenceField
 from gymnasium.utils.env_checker import check_env
 from WindGym import AgentEvalFast
 from WindGym.Agents import RandomAgent, ConstantAgent
-
+from WindGym.utils.generate_layouts import generate_square_grid
 
 @pytest.fixture
 def turbine():
@@ -62,8 +62,16 @@ def wind_farm_env(turbine, mann_turbulence_field, monkeypatch):
         "dynamiks.sites.turbulence_fields.MannTurbulenceField.generate", mock_generate
     )
 
+    x_pos, y_pos = generate_square_grid(turbine=turbine,
+                                        nx=2,
+                                        ny=1,
+                                        xDist=4,
+                                        yDist=4)
+
     env = WindFarmEnv(
         turbine=turbine,
+        x_pos=x_pos,
+        y_pos=y_pos,
         n_passthrough=2,
         yaml_path=Path("examples/EnvConfigs/2turb.yaml"),
         turbtype="MannFixed",  # Using fixed turbulence type
