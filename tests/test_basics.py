@@ -335,10 +335,14 @@ def eval_pretrained_agent(base_example_data_path):
     )  # Name of the agent .zip file
     SEED = 1  # What seed to use for the evaluation
     t_sim = 20  # How many seconds to simulate
-    yaml_path = base_example_data_path / Path("Env1.yaml")  # Path to the yaml file
+    yaml_path = base_example_data_path / Path("Env1.yaml")  # Path to the yaml file2
+
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=2, xDist=4, yDist=4)
 
     env = FarmEval(
         turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
         yaml_path=yaml_path,
         yaw_init="Zeros",  # always start at zero yaw offset ,
         seed=SEED,
@@ -423,9 +427,12 @@ def test_fast_eval():
     This ensures that the environment can be evaluated quickly and efficiently.
     """
     SEED = 1
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=2, xDist=4, yDist=4)
 
     env = FarmEval(
         turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
         yaml_path="examples/EnvConfigs/Env1.yaml",
         turbtype="None",
         yaw_init="Zeros",  # always start at zero yaw offset ,
@@ -482,9 +489,12 @@ def test_fast_eval_debug():
     This ensures that the environment can be evaluated quickly and efficiently.
     """
     SEED = 1
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=2, xDist=4, yDist=4)
 
     env = FarmEval(
         turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
         yaml_path="examples/EnvConfigs/Env1.yaml",
         turbtype="None",
         yaw_init="Zeros",  # always start at zero yaw offset ,
