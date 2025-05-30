@@ -82,6 +82,54 @@ def generate_cirular_farm(
     return x, y
 
 
+def generate_staggered_grid(
+    turbine, nx, ny, xDist, yDist, x_stagger_offset=None, y_stagger_offset=None
+):
+    """
+    Create a staggered grid of turbines with column- or row-based offsets.
+
+    Parameters
+    ----------
+    turbine : WindTurbine
+        The wind turbine object.
+    nx : int
+        Number of turbines in the x-direction.
+    ny : int
+        Number of turbines in the y-direction.
+    xDist : float
+        Distance between turbines in the x-direction, in rotor diameters.
+    yDist : float
+        Distance between turbines in the y-direction, in rotor diameters.
+    x_stagger_offset : list[float] or None
+        List of horizontal offsets (in rotor diameters) per column.
+    y_stagger_offset : list[float] or None
+        List of vertical offsets (in rotor diameters) per column.
+
+    Returns
+    -------
+    np.ndarray
+        Array of turbine positions.
+    """
+    D = turbine.diameter()
+    x_list = []
+    y_list = []
+
+    # Ensure offset lists are the correct length or default to zeros
+    if x_stagger_offset is None:
+        x_stagger_offset = [0.0] * nx
+    if y_stagger_offset is None:
+        y_stagger_offset = [0.0] * nx
+
+    for i in range(nx):
+        for j in range(ny):
+            x = i * xDist * D + x_stagger_offset[i] * D
+            y = j * yDist * D + y_stagger_offset[i] * D
+            x_list.append(x)
+            y_list.append(y)
+
+    return np.array(x_list), np.array(y_list)
+
+
 def plot_farm(x, y, turbine=None, D=None):
     """
     Plots the turbines in the farm layout, and their minimum distance to the closest turbine
