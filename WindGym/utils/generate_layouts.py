@@ -33,8 +33,8 @@ def generate_square_grid(turbine, nx, ny, xDist, yDist):
         Array of turbine positions.
     """
     D = turbine.diameter()
-    x = np.linspace(0, D * xDist * nx, nx)
-    y = np.linspace(0, D * yDist * ny, ny)
+    x = np.linspace(0, D * xDist * (nx - 1), nx)
+    y = np.linspace(0, D * yDist * (ny - 1), ny)
     xv, yv = np.meshgrid(x, y, indexing="xy")
 
     x_pos = xv.flatten()
