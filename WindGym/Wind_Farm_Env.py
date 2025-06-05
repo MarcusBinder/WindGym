@@ -195,22 +195,30 @@ class WindFarmEnv(WindEnv):
 
         # Read in the turb boxes
         if turbtype == "MannLoad":
-            if os.path.exists(TurbBox) and os.path.isfile(TurbBox):
-                # The TurbBox is a file, so we just add this to the list of files
-                self.TF_files.append(TurbBox)
-            else:
-                # If the path exist, but is not a file, then we must be a directory
-                # Therefore add all the files in the dir, to the list.
-                try:
-                    for f in os.listdir(TurbBox):
-                        if f.split("_")[0] == "TF":
-                            self.TF_files.append(os.path.join(TurbBox, f))
-                except FileNotFoundError:
-                    # If not then we change to generated turbulence
-                    print(
-                        "Coudnt find the turbulence box file(s), so we switch to generated turbulence"
-                    )
-                    self.turbtype = "MannGenerate"
+           if os.path.exists(TurbBox) and os.path.isfile(TurbBox):
+               # The TurbBox is a file, so we just add this to the list of files
+               self.TF_files.append(TurbBox)
+           else:
+               # If the path exist, but is not a file, then we must be a directory
+               # Therefore add all the files in the dir, to the list.
+               try:
+                   for f in os.listdir(TurbBox):
+                       if f.split("_")[0] == "TF":
+                           self.TF_files.append(os.path.join(TurbBox, f))
+                   
+                   # NEW: Check if we actually found any files
+                   if len(self.TF_files) == 0:
+                       print(
+                           "No turbulence box files found in directory, switching to generated turbulence"
+                       )
+                       self.turbtype = "MannGenerate"
+                       
+               except FileNotFoundError:
+                   # If not then we change to generated turbulence
+                   print(
+                       "Couldn't find the turbulence box file(s), so we switch to generated turbulence"
+                   )
+                   self.turbtype = "MannGenerate"
 
         # If we need to have a "baseline" farm, then we need to set up the baseline controller
         # This could be moved to the Power_reward check, but I have a feeling this will be expanded in the future, when we include damage.
@@ -609,13 +617,16 @@ class WindFarmEnv(WindEnv):
         """
 
         if self.turbtype == "MannLoad":
-            # Load the turbbox from predefined folder somewhere
-            # selects one at random
-            tf_file = self.np_random.choice(self.TF_files)
 
+            # Load the turbbox from predefined folder somewhere
+            # selects one at random from the files that were already discovered in __init__
+            tf_file = self.np_random.choice(self.TF_files)
+    
             tf_agent = MannTurbulenceField.from_netcdf(filename=tf_file)
             tf_agent.scale_TI(TI=self.ti, U=self.ws)
             self.addedTurbulenceModel = SynchronizedAutoScalingIsotropicMannTurbulence()
+
+
 
         elif self.turbtype == "MannGenerate":
             # Create the turbbox with a random seed.
