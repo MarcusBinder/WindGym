@@ -29,6 +29,7 @@ class FarmEval(WindFarmEnv):
         n_passthrough=5,
         HTC_path=None,
         reset_init=True,
+        fill_window=True
     ):
         # TODO There must be a better way to set all these valuesm **kwargs???
         # Run the Env with these values, to make sure that the oberservartion space is the same.
@@ -49,7 +50,9 @@ class FarmEval(WindFarmEnv):
             yaw_step=yaw_step,
             HTC_path=HTC_path,
             reset_init=reset_init,
+            fill_window=fill_window
         )
+        self.yaml_path = yaml_path 
 
     def reset(self, seed=None, options=None):
         # Overwrite the reset function so that we never terminates.
