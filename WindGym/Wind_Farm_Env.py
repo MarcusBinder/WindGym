@@ -588,11 +588,11 @@ class WindFarmEnv(WindEnv):
         """
         sample wind direction and wind speed from the site
         """
-        idx = np.random.choice(np.arange(dirs.size), 1, p=freqs)
+        idx = self.np_random.choice(np.arange(dirs.size), 1, p=freqs)
         wd = dirs[idx]
         A = As[idx]
         k = ks[idx]
-        ws = A * np.random.weibull(k)
+        ws = A * self.np_random.weibull(k)
         return wd.item(), ws.item()
 
     def _def_site(self):
@@ -661,7 +661,8 @@ class WindFarmEnv(WindEnv):
         elif self.turbtype == "None":
             # Zero turbulence site.
 
-            tf_agent = RandomTurbulence(ti=0, ws=self.ws)
+            tf_agent_seed = self.np_random.integers(2**31) # Generate a seed from the main RNG
+            tf_agent = RandomTurbulence(ti=0, ws=self.ws, seed=tf_agent_seed)
             self.addedTurbulenceModel = None  # AutoScalingIsotropicMannTurbulence()
         else:
             # Throw and error:
@@ -695,6 +696,13 @@ class WindFarmEnv(WindEnv):
         self._def_site()
         # Restart the measurement class. This is done to make sure that the measurements are not carried over from the last episode
         self._init_farm_mes()
+
+        if hasattr(self, 'farm_measurements') and self.farm_measurements is not None:
+            self.farm_measurements.np_random = self.np_random
+            # print(f"DEBUG RESET WindFarmEnv: farm_measurements.np_random ID = {id(self.farm_measurements.np_random)}, state_key[:2] = {self.farm_measurements.np_random.bit_generator.state['state']['key'][:2]}")
+        else:
+            print("WARNING: farm_measurements was not initialized prior to attempting to set its np_random in reset.")
+
 
         # This is the rated poweroutput of the turbine at the given ws. Used for reward scaling.
         self.rated_power = self.turbine.power(self.ws)
