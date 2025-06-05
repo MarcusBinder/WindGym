@@ -8,7 +8,7 @@ from WindGym import FarmEval, AgentEval, PyWakeAgent
 from dynamiks.sites.turbulence_fields import MannTurbulenceField
 from gymnasium.utils.env_checker import check_env
 from WindGym import AgentEvalFast
-from WindGym.Agents import RandomAgent, ConstantAgent
+from WindGym.Agents import RandomAgent, ConstantAgent, BaseAgent
 
 
 @pytest.fixture
@@ -96,6 +96,20 @@ def trained_agent():
     model = PPO.load(model_path)
     return model
 
+def test_bese_agent(base_example_data_path):
+    base_agent = BaseAgent()
+    assert(base_agent.predict() is None)
+
+def test_random_agent(base_example_data_path):
+    yaml_path = base_example_data_path / Path("Env1.yaml")
+    env = FarmEval(
+        turbine=V80(),
+        yaml_path=yaml_path, 
+        yaw_init="Zeros",  # always start at zero yaw offset ,
+        seed=1,
+    )
+    random_agent = RandomAgent(env=env)
+    random_agent.predict()
 
 def test_environment_initialization(wind_farm_env):
     """
@@ -434,7 +448,7 @@ def test_fast_eval():
     yaw_goal = np.zeros((n_turb))  # yaw angles in radians
     yaw_goal[0] = -10
     yaw_goal[1] = 20
-    model = ConstantAgent(yaw_angles=yaw_goal)  # yaw angles in degrees
+    model = ConstantAgent(yaw_angles=list(yaw_goal))  # yaw angles in degrees
 
     ds = AgentEvalFast(
         env,
