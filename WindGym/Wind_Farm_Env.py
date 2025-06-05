@@ -588,11 +588,11 @@ class WindFarmEnv(WindEnv):
         """
         sample wind direction and wind speed from the site
         """
-        idx = self.np_random.choice(np.arange(dirs.size), 1, p=freqs)
+        idx = np.random.choice(np.arange(dirs.size), 1, p=freqs)
         wd = dirs[idx]
         A = As[idx]
         k = ks[idx]
-        ws = A * self.np_random.weibull(k)
+        ws = A * np.random.weibull(k)
         return wd.item(), ws.item()
 
     def _def_site(self):
