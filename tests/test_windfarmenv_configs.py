@@ -98,76 +98,57 @@ def temp_yaml_file_path(request):
 def test_wind_farm_env_configurations(temp_yaml_file_path, description):
     print(f"Testing configuration: {description} with YAML: {temp_yaml_file_path}")
     env = None
-    try:
-        current_power_avg = 5 # Default, aligned with YAML
-        with open(temp_yaml_file_path, 'r') as f:
-            yaml_config = yaml.safe_load(f)
-            current_power_avg = yaml_config.get("power_def", {}).get("Power_avg", 5)
-            # Get history length for measurements to ensure fill_window is adequate
-            # Assuming all history lengths are critical and set to the same value in the test YAML
-            critical_history_length = yaml_config.get("ws_mes", {}).get("ws_history_length", 5)
+    current_power_avg = 5 # Default, aligned with YAML
+    with open(temp_yaml_file_path, 'r') as f:
+        yaml_config = yaml.safe_load(f)
+        current_power_avg = yaml_config.get("power_def", {}).get("Power_avg", 5)
+        # Get history length for measurements to ensure fill_window is adequate
+        # Assuming all history lengths are critical and set to the same value in the test YAML
+        critical_history_length = yaml_config.get("ws_mes", {}).get("ws_history_length", 5)
 
 
-        env_params = dict(
-            turbine=V80(),
-            yaml_path=temp_yaml_file_path,
-            seed=42,
-            dt_sim=1,
-            dt_env=10, # dt_env must be multiple of dt_sim
-            yaw_step=1.0,
-            turbtype="None", # Simplifies by removing turbulence field generation/loading randomness
-            Baseline_comp=True, # Keep True to test reward paths that might use it
-            # fill_window needs to be >= maxlen of deques used for rewards (Power_avg)
-            # AND >= max_hist for MesClass.max_hist() if full history is needed at obs.
-            # For reward determinism, ensure deques are consistently filled.
-            fill_window=max(current_power_avg, critical_history_length)
-        )
-        env = WindFarmEnv(**env_params)
+    env_params = dict(
+        turbine=V80(),
+        yaml_path=temp_yaml_file_path,
+        seed=42,
+        dt_sim=1,
+        dt_env=10, # dt_env must be multiple of dt_sim
+        yaw_step=1.0,
+        turbtype="None", # Simplifies by removing turbulence field generation/loading randomness
+        Baseline_comp=True, # Keep True to test reward paths that might use it
+        # fill_window needs to be >= maxlen of deques used for rewards (Power_avg)
+        # AND >= max_hist for MesClass.max_hist() if full history is needed at obs.
+        # For reward determinism, ensure deques are consistently filled.
+        fill_window=max(current_power_avg, critical_history_length)
+    )
+    env = WindFarmEnv(**env_params)
 
-        # Make a pristine copy for the second run of check_env's internal test
-        # This isn't how check_env works, but helps in local debugging
-        # env_copy_params = deepcopy(env_params)
-        # env_copy_params["seed"] = 42 # Ensure same seed
+    # The check_env utility will run its own series of resets and steps.
+    check_env(env, skip_render_check=True) # This is the main check
 
-        # The check_env utility will run its own series of resets and steps.
-        check_env(env, skip_render_check=True) # This is the main check
+    # Basic reset and step checks (mostly covered by check_env)
+    obs, info = env.reset(seed=42)
+    assert isinstance(obs, np.ndarray), "Observation should be a numpy array"
+    assert obs.shape == env.observation_space.shape, f"Observation shape mismatch (Obs: {obs.shape}, Space: {env.observation_space.shape}) for {description}"
+    assert isinstance(info, dict), "Info should be a dictionary"
 
-        # Optional: Further manual checks if check_env passes but you want to be sure
-        # obs1, info1 = env.reset(seed=123)
-        # action = env.action_space.sample() # Use a seeded action space if not done by check_env
-        # obs1_s, rew1, term1, trunc1, info1_s = env.step(action)
+    num_raw_features = env._get_num_raw_features()
+    expected_obs_len = env.farm_measurements.observed_variables()
+    assert num_raw_features <= expected_obs_len, f"Raw features count ({num_raw_features}) mismatch with farm_measurements config ({expected_obs_len}) for {description}"
+    assert len(obs) == expected_obs_len, f"Observation length {len(obs)} doesn't match expected {expected_obs_len} for {description}"
 
-        # obs2, info2 = env.reset(seed=123) # Identical seed
-        # obs2_s, rew2, term2, trunc2, info2_s = env.step(action) # Identical action
+    for i in range(3): # A few steps for basic functional check
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
 
-        # assert np.allclose(obs1_s, obs2_s, atol=1e-6), f"Observations not deterministic for {description}"
-        # assert np.isclose(rew1, rew2, atol=1e-6), f"Rewards not deterministic for {description}"
+        assert isinstance(obs, np.ndarray), f"Observation should be a numpy array after step {i+1}"
+        assert obs.shape == env.observation_space.shape, f"Observation shape mismatch after step {i+1}"
+        assert isinstance(reward, float), f"Reward should be a float after step {i+1}"
+        assert isinstance(terminated, bool), f"Terminated flag should be a bool after step {i+1}"
+        assert isinstance(truncated, bool), f"Truncated flag should be a bool after step {i+1}"
+        assert isinstance(info, dict), f"Info should be a dictionary after step {i+1}"
 
-
-        # Basic reset and step checks (mostly covered by check_env)
-        obs, info = env.reset(seed=42)
-        assert isinstance(obs, np.ndarray), "Observation should be a numpy array"
-        assert obs.shape == env.observation_space.shape, f"Observation shape mismatch (Obs: {obs.shape}, Space: {env.observation_space.shape}) for {description}"
-        assert isinstance(info, dict), "Info should be a dictionary"
-
-        num_raw_features = env._get_num_raw_features()
-        expected_obs_len = env.farm_measurements.observed_variables()
-        assert num_raw_features <= expected_obs_len, f"Raw features count ({num_raw_features}) mismatch with farm_measurements config ({expected_obs_len}) for {description}"
-        assert len(obs) == expected_obs_len, f"Observation length {len(obs)} doesn't match expected {expected_obs_len} for {description}"
-
-        for i in range(3): # A few steps for basic functional check
-            action = env.action_space.sample()
-            obs, reward, terminated, truncated, info = env.step(action)
-
-            assert isinstance(obs, np.ndarray), f"Observation should be a numpy array after step {i+1}"
-            assert obs.shape == env.observation_space.shape, f"Observation shape mismatch after step {i+1}"
-            assert isinstance(reward, float), f"Reward should be a float after step {i+1}"
-            assert isinstance(terminated, bool), f"Terminated flag should be a bool after step {i+1}"
-            assert isinstance(truncated, bool), f"Truncated flag should be a bool after step {i+1}"
-            assert isinstance(info, dict), f"Info should be a dictionary after step {i+1}"
-    finally:
-        if env:
-            env.close()
+    env.close()
 
 @pytest.mark.parametrize(
     "temp_yaml_file_path, expected_wd_in_obs_calc",
