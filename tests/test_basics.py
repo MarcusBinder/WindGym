@@ -96,6 +96,7 @@ def trained_agent():
     model = PPO.load(model_path)
     return model
 
+
 def test_environment_initialization(wind_farm_env):
     """
     Validates that the environment initializes correctly with proper spaces and initial state.
