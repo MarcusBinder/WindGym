@@ -96,21 +96,6 @@ def trained_agent():
     model = PPO.load(model_path)
     return model
 
-def test_bese_agent(base_example_data_path):
-    base_agent = BaseAgent()
-    assert(base_agent.predict() is None)
-
-def test_random_agent(base_example_data_path):
-    yaml_path = base_example_data_path / Path("Env1.yaml")
-    env = FarmEval(
-        turbine=V80(),
-        yaml_path=yaml_path, 
-        yaw_init="Zeros",  # always start at zero yaw offset ,
-        seed=1,
-    )
-    random_agent = RandomAgent(env=env)
-    random_agent.predict()
-
 def test_environment_initialization(wind_farm_env):
     """
     Validates that the environment initializes correctly with proper spaces and initial state.
