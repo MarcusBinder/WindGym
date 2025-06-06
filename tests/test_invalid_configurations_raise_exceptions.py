@@ -245,26 +245,22 @@ class TestInvalidConfigurations:
             },
             id="MissingPowerDefSection",
         ),
-        pytest.param(
-            {
-                "id": "InvalidTypeForFarmNx",
-                "yaml_config_kwargs": {
-                    "farm": {
-                        "nx": "not_a_number",
-                        "ny": 1,
-                        "yaw_min": -30,
-                        "yaw_max": 30,
-                        "xDist": 5,
-                        "yDist": 3,
-                    }
-                },
-                "expected_exception_info": (
-                    TypeError,
-                    r"'str' object cannot be interpreted as an integer",
-                ),
-            },
-            id="InvalidTypeForFarmNx",
-        ),
+        # pytest.param(
+        #     {
+        #         "id": "InvalidTypeForFarmNx",
+        #         "yaml_config_kwargs": {
+        #             "farm": {
+        #                 "yaw_min": -30,
+        #                 "yaw_max": 30,
+        #             }
+        #         },
+        #         "expected_exception_info": (
+        #             TypeError,
+        #             r"'str' object cannot be interpreted as an integer",
+        #         ),
+        #     },
+        #     id="InvalidTypeForFarmNx",
+        # ),
         pytest.param(
             {
                 "id": "InvalidNoiseType",

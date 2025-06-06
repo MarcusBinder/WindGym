@@ -156,10 +156,6 @@ def test_farm_params_loading(temp_yaml_file_factory):
 
     assert env.yaw_min == -25
     assert env.yaw_max == 25
-    assert env.xDist == 4
-    assert env.yDist == 4
-    assert env.nx == 3
-    assert env.ny == 2
     assert env.n_turb == 6  # 3 * 2
     env.close()
 

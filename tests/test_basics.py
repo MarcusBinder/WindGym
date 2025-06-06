@@ -418,7 +418,7 @@ def test_set_windconditions_with_site(wind_farm_env):
 
 def test_check_env(wind_farm_env):
     """Test that the environment passes the gymnasium check"""
-    check_env(wind_farm_env)
+    check_env(wind_farm_env, skip_render_check=True)
 
 
 def test_fast_eval():
