@@ -144,7 +144,7 @@ def test_farm_params_loading(temp_yaml_file_factory):
     }
     yaml_content = yaml.dump(config_dict)
     yaml_filepath = temp_yaml_file_factory(yaml_content, "farm_params")
-    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=3, ny=2, xDist=4, yDist=4)
 
     env = WindFarmEnv(
         turbine=V80(),
