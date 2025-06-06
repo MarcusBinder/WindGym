@@ -11,7 +11,9 @@ import gymnasium as gym
 from WindGym import WindFarmEnv
 from py_wake.examples.data.hornsrev1 import V80
 from gymnasium.utils.env_checker import check_env
-from WindGym.utils.generate_layouts import generate_square_grid # Import the layout generator
+from WindGym.utils.generate_layouts import (
+    generate_square_grid,
+)  # Import the layout generator
 
 
 # Helper to get a base, mostly complete YAML dictionary for tests
@@ -206,7 +208,7 @@ class TestSpecificFeatures:
         yaml_filepath = temp_yaml_filepath_factory(
             config_dict, f"fill_window_{str(fill_window_config_val).lower()}"
         )
-        
+
         # FIX: Generate turbine layout based on the config
         farm_params = config_dict["farm"]
         x_pos, y_pos = generate_square_grid(
@@ -221,8 +223,8 @@ class TestSpecificFeatures:
 
         env = WindFarmEnv(
             turbine=V80(),
-            x_pos=x_pos, # FIX: Pass x_pos
-            y_pos=y_pos, # FIX: Pass y_pos
+            x_pos=x_pos,  # FIX: Pass x_pos
+            y_pos=y_pos,  # FIX: Pass y_pos
             yaml_path=yaml_filepath,
             fill_window=fill_window_config_val,
             reset_init=True,
@@ -274,11 +276,11 @@ class TestSpecificFeatures:
             xDist=farm_params["xDist"],
             yDist=farm_params["yDist"],
         )
-        
+
         env = WindFarmEnv(
             turbine=V80(),
-            x_pos=x_pos, # FIX: Pass x_pos
-            y_pos=y_pos, # FIX: Pass y_pos
+            x_pos=x_pos,  # FIX: Pass x_pos
+            y_pos=y_pos,  # FIX: Pass y_pos
             yaml_path=yaml_filepath,
             render_mode=render_mode_val,
             reset_init=True,
@@ -385,8 +387,8 @@ class TestSpecificFeatures:
 
         env = WindFarmEnv(
             turbine=V80(),
-            x_pos=x_pos, # FIX: Pass x_pos
-            y_pos=y_pos, # FIX: Pass y_pos
+            x_pos=x_pos,  # FIX: Pass x_pos
+            y_pos=y_pos,  # FIX: Pass y_pos
             yaml_path=yaml_filepath,
             reset_init=True,
             seed=42,
@@ -490,8 +492,8 @@ class TestSpecificFeatures:
 
         env = WindFarmEnv(
             turbine=V80(),
-            x_pos=x_pos, # FIX: Pass x_pos
-            y_pos=y_pos, # FIX: Pass y_pos
+            x_pos=x_pos,  # FIX: Pass x_pos
+            y_pos=y_pos,  # FIX: Pass y_pos
             yaml_path=yaml_filepath,
             reset_init=True,
             seed=42,
@@ -532,8 +534,8 @@ class TestSpecificFeatures:
         ):
             WindFarmEnv(
                 turbine=V80(),
-                x_pos=x_pos, # FIX: Pass x_pos
-                y_pos=y_pos, # FIX: Pass y_pos
+                x_pos=x_pos,  # FIX: Pass x_pos
+                y_pos=y_pos,  # FIX: Pass y_pos
                 yaml_path=yaml_filepath,
                 reset_init=True,
                 seed=42,
