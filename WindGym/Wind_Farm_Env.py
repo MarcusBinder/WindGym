@@ -45,7 +45,7 @@ For now it only supports the PyWakeWindTurbines, but it should be easy to expand
 
 
 class WindFarmEnv(WindEnv):
-    metadata = {"render_modes": ["human", "rgb_array"]}
+    metadata = {"render_modes": ["human"]}
 
     def __init__(
         self,
@@ -1053,7 +1053,7 @@ class WindFarmEnv(WindEnv):
         return observation, reward, terminated, truncated, info
 
     def render(self):
-        if self.render_mode == "rgb_array":
+        if self.render_mode == "human":
             return self._render_frame()
 
     def _render_frame(self, baseline=False):
