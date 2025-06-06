@@ -215,10 +215,18 @@ class WindFarmEnv(WindEnv):
                     for f in os.listdir(TurbBox):
                         if f.split("_")[0] == "TF":
                             self.TF_files.append(os.path.join(TurbBox, f))
+
+                    # NEW: Check if we actually found any files
+                    if len(self.TF_files) == 0:
+                        print(
+                            "No turbulence box files found in directory, switching to generated turbulence"
+                        )
+                        self.turbtype = "MannGenerate"
+
                 except FileNotFoundError:
                     # If not then we change to generated turbulence
                     print(
-                        "Coudnt find the turbulence box file(s), so we switch to generated turbulence"
+                        "Couldn't find the turbulence box file(s), so we switch to generated turbulence"
                     )
                     self.turbtype = "MannGenerate"
 
@@ -253,10 +261,6 @@ class WindFarmEnv(WindEnv):
 
         self.D = turbine.diameter()
 
-        # x = np.linspace(0, self.D * self.xDist * self.nx, self.nx)
-        # y = np.linspace(0, self.D * self.yDist * self.ny, self.ny)
-
-        # xv, yv = np.meshgrid(x, y, indexing="xy")
 
         self.x_pos = x_pos
         self.y_pos = y_pos
@@ -634,7 +638,7 @@ class WindFarmEnv(WindEnv):
 
         if self.turbtype == "MannLoad":
             # Load the turbbox from predefined folder somewhere
-            # selects one at random
+            # selects one at random from the files that were already discovered in __init__
             tf_file = self.np_random.choice(self.TF_files)
 
             tf_agent = MannTurbulenceField.from_netcdf(filename=tf_file)
@@ -684,8 +688,11 @@ class WindFarmEnv(WindEnv):
 
         elif self.turbtype == "None":
             # Zero turbulence site.
+            tf_agent_seed = self.np_random.integers(
+                2**31
+            )  # Generate a seed from the main RNG
+            tf_agent = RandomTurbulence(ti=0, ws=self.ws, seed=tf_agent_seed)
 
-            tf_agent = RandomTurbulence(ti=0.0001, ws=self.ws)
             self.addedTurbulenceModel = None  # AutoScalingIsotropicMannTurbulence()
         else:
             # Throw and error:
@@ -721,6 +728,14 @@ class WindFarmEnv(WindEnv):
 
         # Setup the wind turbines
         self._init_wts()
+
+        if hasattr(self, "farm_measurements") and self.farm_measurements is not None:
+            self.farm_measurements.np_random = self.np_random
+            # print(f"DEBUG RESET WindFarmEnv: farm_measurements.np_random ID = {id(self.farm_measurements.np_random)}, state_key[:2] = {self.farm_measurements.np_random.bit_generator.state['state']['key'][:2]}")
+        else:
+            print(
+                "WARNING: farm_measurements was not initialized prior to attempting to set its np_random in reset."
+            )
 
         # This is the rated poweroutput of the turbine at the given ws. Used for reward scaling.
         self.rated_power = self.turbine.power(self.ws)

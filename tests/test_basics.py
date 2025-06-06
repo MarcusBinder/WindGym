@@ -8,9 +8,8 @@ from WindGym import FarmEval, AgentEval, PyWakeAgent
 from dynamiks.sites.turbulence_fields import MannTurbulenceField
 from gymnasium.utils.env_checker import check_env
 from WindGym import AgentEvalFast
-from WindGym.Agents import RandomAgent, ConstantAgent
+from WindGym.Agents import RandomAgent, ConstantAgent, BaseAgent
 from WindGym.utils.generate_layouts import generate_square_grid
-
 
 @pytest.fixture
 def turbine():
@@ -446,7 +445,7 @@ def test_fast_eval():
     yaw_goal = np.zeros((n_turb))  # yaw angles in radians
     yaw_goal[0] = -10
     yaw_goal[1] = 20
-    model = ConstantAgent(yaw_angles=yaw_goal)  # yaw angles in degrees
+    model = ConstantAgent(yaw_angles=list(yaw_goal))  # yaw angles in degrees
 
     ds = AgentEvalFast(
         env,
