@@ -36,8 +36,12 @@ class TestGenerateSquareGrid:
 
         assert isinstance(x_pos, np.ndarray), "x_pos should be a numpy array"
         assert isinstance(y_pos, np.ndarray), "y_pos should be a numpy array"
-        assert x_pos.shape == (nx * ny,), f"Expected shape ({nx * ny},), but got {x_pos.shape}"
-        assert y_pos.shape == (nx * ny,), f"Expected shape ({nx * ny},), but got {y_pos.shape}"
+        assert x_pos.shape == (
+            nx * ny,
+        ), f"Expected shape ({nx * ny},), but got {x_pos.shape}"
+        assert y_pos.shape == (
+            nx * ny,
+        ), f"Expected shape ({nx * ny},), but got {y_pos.shape}"
 
         expected_x = np.array([0, D * x_dist, 0, D * x_dist])
         expected_y = np.array([0, 0, D * y_dist, D * y_dist])
@@ -201,12 +205,14 @@ class TestGenerateStaggeredGrid:
         # Col 1: (400, 200), (400, 600)
         # The function generates column by column.
         expected_x = np.array([0, 0, D * x_dist, D * x_dist])
-        expected_y = np.array([
-            0,                          # (i=0, j=0) y=0*400+0*80 = 0
-            D * y_dist,                 # (i=0, j=1) y=1*400+0*80 = 400
-            (y_dist / 2) * D,           # (i=1, j=0) y=0*400+2.5*80 = 200
-            D * y_dist + (y_dist / 2) * D # (i=1, j=1) y=1*400+2.5*80 = 600
-        ])
+        expected_y = np.array(
+            [
+                0,  # (i=0, j=0) y=0*400+0*80 = 0
+                D * y_dist,  # (i=0, j=1) y=1*400+0*80 = 400
+                (y_dist / 2) * D,  # (i=1, j=0) y=0*400+2.5*80 = 200
+                D * y_dist + (y_dist / 2) * D,  # (i=1, j=1) y=1*400+2.5*80 = 600
+            ]
+        )
 
         np.testing.assert_allclose(x_pos, expected_x)
         np.testing.assert_allclose(y_pos, expected_y)
