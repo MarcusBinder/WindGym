@@ -205,10 +205,18 @@ class WindFarmEnv(WindEnv):
                     for f in os.listdir(TurbBox):
                         if f.split("_")[0] == "TF":
                             self.TF_files.append(os.path.join(TurbBox, f))
+
+                    # NEW: Check if we actually found any files
+                    if len(self.TF_files) == 0:
+                        print(
+                            "No turbulence box files found in directory, switching to generated turbulence"
+                        )
+                        self.turbtype = "MannGenerate"
+
                 except FileNotFoundError:
                     # If not then we change to generated turbulence
                     print(
-                        "Coudnt find the turbulence box file(s), so we switch to generated turbulence"
+                        "Couldn't find the turbulence box file(s), so we switch to generated turbulence"
                     )
                     self.turbtype = "MannGenerate"
 
@@ -610,7 +618,7 @@ class WindFarmEnv(WindEnv):
 
         if self.turbtype == "MannLoad":
             # Load the turbbox from predefined folder somewhere
-            # selects one at random
+            # selects one at random from the files that were already discovered in __init__
             tf_file = self.np_random.choice(self.TF_files)
 
             tf_agent = MannTurbulenceField.from_netcdf(filename=tf_file)
