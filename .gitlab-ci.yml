@@ -32,7 +32,11 @@ test_linux:
     - pre_commit
   script:
     - apt-get update && apt-get install -y git
-    - pixi run pytest
+    - pixi run pytest --cov=windgym --cov-report=html:htmlcov --cov-report=term
+  artifacts:
+    paths:
+      - ./htmlcov
+    when: always
   coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
   tags:
     - linux
