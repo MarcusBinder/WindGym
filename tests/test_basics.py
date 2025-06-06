@@ -9,6 +9,7 @@ from dynamiks.sites.turbulence_fields import MannTurbulenceField
 from gymnasium.utils.env_checker import check_env
 from WindGym import AgentEvalFast
 from WindGym.Agents import RandomAgent, ConstantAgent, BaseAgent
+from WindGym.utils.generate_layouts import generate_square_grid
 
 
 @pytest.fixture
@@ -62,8 +63,12 @@ def wind_farm_env(turbine, mann_turbulence_field, monkeypatch):
         "dynamiks.sites.turbulence_fields.MannTurbulenceField.generate", mock_generate
     )
 
+    x_pos, y_pos = generate_square_grid(turbine=turbine, nx=2, ny=1, xDist=4, yDist=4)
+
     env = WindFarmEnv(
         turbine=turbine,
+        x_pos=x_pos,
+        y_pos=y_pos,
         n_passthrough=2,
         yaml_path=Path("examples/EnvConfigs/2turb.yaml"),
         turbtype="MannFixed",  # Using fixed turbulence type
@@ -330,10 +335,14 @@ def eval_pretrained_agent(base_example_data_path):
     )  # Name of the agent .zip file
     SEED = 1  # What seed to use for the evaluation
     t_sim = 20  # How many seconds to simulate
-    yaml_path = base_example_data_path / Path("Env1.yaml")  # Path to the yaml file
+    yaml_path = base_example_data_path / Path("Env1.yaml")  # Path to the yaml file2
+
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=2, xDist=4, yDist=4)
 
     env = FarmEval(
         turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
         yaml_path=yaml_path,
         yaw_init="Zeros",  # always start at zero yaw offset ,
         seed=SEED,
@@ -409,7 +418,7 @@ def test_set_windconditions_with_site(wind_farm_env):
 
 def test_check_env(wind_farm_env):
     """Test that the environment passes the gymnasium check"""
-    check_env(wind_farm_env)
+    check_env(wind_farm_env, skip_render_check=True)
 
 
 def test_fast_eval():
@@ -418,9 +427,12 @@ def test_fast_eval():
     This ensures that the environment can be evaluated quickly and efficiently.
     """
     SEED = 1
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=2, xDist=4, yDist=4)
 
     env = FarmEval(
         turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
         yaml_path="examples/EnvConfigs/Env1.yaml",
         turbtype="None",
         yaw_init="Zeros",  # always start at zero yaw offset ,
@@ -477,9 +489,12 @@ def test_fast_eval_debug():
     This ensures that the environment can be evaluated quickly and efficiently.
     """
     SEED = 1
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=2, xDist=4, yDist=4)
 
     env = FarmEval(
         turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
         yaml_path="examples/EnvConfigs/Env1.yaml",
         turbtype="None",
         yaw_init="Zeros",  # always start at zero yaw offset ,

@@ -7,6 +7,7 @@ import copy  # For deepcopy
 import numpy as np  # For dummy_action
 from WindGym import WindFarmEnv
 from py_wake.examples.data.hornsrev1 import V80  # Default turbine
+from WindGym.utils.generate_layouts import generate_square_grid
 
 
 # --- Helper to get a base, valid YAML dictionary ---
@@ -20,10 +21,6 @@ def get_base_valid_yaml_dict():
         "farm": {
             "yaw_min": -30,
             "yaw_max": 30,
-            "xDist": 5,
-            "yDist": 3,
-            "nx": 2,
-            "ny": 1,
         },
         "wind": {
             "ws_min": 8,
@@ -248,26 +245,22 @@ class TestInvalidConfigurations:
             },
             id="MissingPowerDefSection",
         ),
-        pytest.param(
-            {
-                "id": "InvalidTypeForFarmNx",
-                "yaml_config_kwargs": {
-                    "farm": {
-                        "nx": "not_a_number",
-                        "ny": 1,
-                        "yaw_min": -30,
-                        "yaw_max": 30,
-                        "xDist": 5,
-                        "yDist": 3,
-                    }
-                },
-                "expected_exception_info": (
-                    TypeError,
-                    r"'str' object cannot be interpreted as an integer",
-                ),
-            },
-            id="InvalidTypeForFarmNx",
-        ),
+        # pytest.param(
+        #     {
+        #         "id": "InvalidTypeForFarmNx",
+        #         "yaml_config_kwargs": {
+        #             "farm": {
+        #                 "yaw_min": -30,
+        #                 "yaw_max": 30,
+        #             }
+        #         },
+        #         "expected_exception_info": (
+        #             TypeError,
+        #             r"'str' object cannot be interpreted as an integer",
+        #         ),
+        #     },
+        #     id="InvalidTypeForFarmNx",
+        # ),
         pytest.param(
             {
                 "id": "InvalidNoiseType",
@@ -321,8 +314,16 @@ class TestInvalidConfigurations:
         ) as excinfo:
             env = None
             try:
+                x_pos, y_pos = generate_square_grid(
+                    turbine=V80(), nx=2, ny=1, xDist=5, yDist=3
+                )
                 env = WindFarmEnv(
-                    turbine=V80(), yaml_path=yaml_path, seed=123, reset_init=True
+                    turbine=V80(),
+                    x_pos=x_pos,
+                    y_pos=y_pos,
+                    yaml_path=yaml_path,
+                    seed=123,
+                    reset_init=True,
                 )
                 if requires_step:
                     if env.action_space is None:

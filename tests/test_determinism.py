@@ -11,6 +11,7 @@ from WindGym import WindFarmEnv
 from py_wake.examples.data.hornsrev1 import V80
 from gymnasium.utils.env_checker import data_equivalence  # Helper from Gymnasium
 from copy import deepcopy  # For debugging RNG state if needed
+from WindGym.utils.generate_layouts import generate_square_grid
 
 
 # A controlled YAML configuration string for this specific determinism test.
@@ -77,10 +78,13 @@ def test_step_determinism_basic(deterministic_env_config_path):
     """
     common_seed = 123
     env = None
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
     try:
         env = WindFarmEnv(
             turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=deterministic_env_config_path,
             seed=common_seed,
             dt_sim=1,
@@ -154,10 +158,13 @@ def test_step_determinism_with_noise(
     ) as tmp_file:
         tmp_file.write(noisy_yaml_string)
         noisy_yaml_filepath = tmp_file.name
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
     try:
         env = WindFarmEnv(
             turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=noisy_yaml_filepath,  # Use the modified YAML path
             seed=common_seed,
             dt_sim=1,
