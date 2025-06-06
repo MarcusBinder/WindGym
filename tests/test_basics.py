@@ -11,6 +11,7 @@ from WindGym import AgentEvalFast
 from WindGym.Agents import RandomAgent, ConstantAgent, BaseAgent
 from WindGym.utils.generate_layouts import generate_square_grid
 
+
 @pytest.fixture
 def turbine():
     """Provides a standard wind turbine configuration for testing"""

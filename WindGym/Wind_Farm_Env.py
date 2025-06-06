@@ -261,7 +261,6 @@ class WindFarmEnv(WindEnv):
 
         self.D = turbine.diameter()
 
-
         self.x_pos = x_pos
         self.y_pos = y_pos
 
