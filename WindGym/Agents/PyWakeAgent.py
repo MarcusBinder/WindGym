@@ -106,6 +106,7 @@ class PyWakeAgent(BaseAgent):
         )
 
         self.optimized_yaws = yaws.squeeze()
+        self.optimized = True
 
     def predict(self, *args, **kwargs):
         """

@@ -7,6 +7,7 @@ import numpy as np
 
 from WindGym import WindFarmEnv  # Assuming WindFarmEnv is accessible
 from py_wake.examples.data.hornsrev1 import V80  # A standard turbine for init
+from WindGym.utils.generate_layouts import generate_square_grid
 
 
 # --- Factory for creating temporary YAML files ---
@@ -41,10 +42,10 @@ def get_base_yaml_dict():
         "farm": {
             "yaw_min": -30,
             "yaw_max": 30,
-            "xDist": 5,
-            "yDist": 3,
-            "nx": 2,
-            "ny": 1,
+            # "xDist": 5,
+            # "yDist": 3,
+            # "nx": 2,
+            # "ny": 1,
         },
         "wind": {
             "ws_min": 8,
@@ -116,9 +117,14 @@ def test_initial_settings_loading(temp_yaml_file_factory, setting, value):
     config_dict[setting] = value
     yaml_content = yaml.dump(config_dict)
     yaml_filepath = temp_yaml_file_factory(yaml_content, f"initial_{setting}_{value}")
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
     env = WindFarmEnv(
-        turbine=V80(), yaml_path=yaml_filepath, reset_init=False
+        turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
+        yaml_path=yaml_filepath,
+        reset_init=False,
     )  # reset_init=False to speed up, only check config loading
 
     assert getattr(env, setting) == value
@@ -138,15 +144,18 @@ def test_farm_params_loading(temp_yaml_file_factory):
     }
     yaml_content = yaml.dump(config_dict)
     yaml_filepath = temp_yaml_file_factory(yaml_content, "farm_params")
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=3, ny=2, xDist=4, yDist=4)
 
-    env = WindFarmEnv(turbine=V80(), yaml_path=yaml_filepath, reset_init=False)
+    env = WindFarmEnv(
+        turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
+        yaml_path=yaml_filepath,
+        reset_init=False,
+    )
 
     assert env.yaw_min == -25
     assert env.yaw_max == 25
-    assert env.xDist == 4
-    assert env.yDist == 4
-    assert env.nx == 3
-    assert env.ny == 2
     assert env.n_turb == 6  # 3 * 2
     env.close()
 
@@ -164,8 +173,15 @@ def test_wind_params_loading(temp_yaml_file_factory):
     }
     yaml_content = yaml.dump(config_dict)
     yaml_filepath = temp_yaml_file_factory(yaml_content, "wind_params")
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
-    env = WindFarmEnv(turbine=V80(), yaml_path=yaml_filepath, reset_init=False)
+    env = WindFarmEnv(
+        turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
+        yaml_path=yaml_filepath,
+        reset_init=False,
+    )
 
     assert env.ws_min == 7
     assert env.ws_max == 12
@@ -194,8 +210,15 @@ def test_measurement_level_loading(
     yaml_filepath = temp_yaml_file_factory(
         yaml_content, f"mes_level_{mes_config_key}_{mes_config_value}"
     )
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
-    env = WindFarmEnv(turbine=V80(), yaml_path=yaml_filepath, reset_init=False)
+    env = WindFarmEnv(
+        turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
+        yaml_path=yaml_filepath,
+        reset_init=False,
+    )
 
     for attr_path, expected_val in expected_attr_dict.items():
         # Helper to navigate nested attributes if needed, e.g., "farm_measurements.turb_wd"
@@ -221,9 +244,14 @@ def test_ws_mes_settings_loading(temp_yaml_file_factory):
     }
     yaml_content = yaml.dump(config_dict)
     yaml_filepath = temp_yaml_file_factory(yaml_content, "ws_mes_custom")
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
     env = WindFarmEnv(
-        turbine=V80(), yaml_path=yaml_filepath, reset_init=False
+        turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
+        yaml_path=yaml_filepath,
+        reset_init=False,
     )  # Calls _init_farm_mes
 
     # Check attributes of the Mes object for ws in farm_measurements.farm_mes (and potentially turb_mes if farm_ws is True)

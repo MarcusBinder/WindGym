@@ -9,6 +9,7 @@ import gymnasium as gym
 from WindGym import WindFarmEnv  # Assuming WindFarmEnv is accessible
 from py_wake.examples.data.hornsrev1 import V80  # A standard turbine for init
 from gymnasium.utils.env_checker import check_env, data_equivalence
+from WindGym.utils.generate_layouts import generate_square_grid
 
 
 # Helper to get a base, mostly complete YAML dictionary for tests
@@ -28,10 +29,10 @@ def get_base_yaml_dict(
         "farm": {
             "yaw_min": -30,
             "yaw_max": 30,
-            "xDist": 5,
-            "yDist": 3,
-            "nx": nx,
-            "ny": ny,
+            # "xDist": 5,
+            # "yDist": 3,
+            # "nx": nx,
+            # "ny": ny,
         },
         "wind": {
             "ws_min": 8,
@@ -202,10 +203,14 @@ class TestSpecificFeatures:
             config_dict, f"fill_window_{str(fill_window_config_val).lower()}"
         )
 
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
+
         hist_max_calculated = base_hist_len
 
         env = WindFarmEnv(
             turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             fill_window=fill_window_config_val,
             reset_init=True,
@@ -293,8 +298,13 @@ class TestSpecificFeatures:
             config_dict,
             f"obs_wd_{turb_wd_enabled}_{farm_wd_enabled}_{wd_current}_{wd_rolling}_{wd_hist_n}",
         )
+
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
+
         env = WindFarmEnv(
             turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             reset_init=True,
             seed=42,
@@ -385,8 +395,13 @@ class TestSpecificFeatures:
             config_dict,
             f"obs_cfg_{mes_type_key}_{current_flag}_{rolling_flag}_{history_n_val}",
         )
+        x_pos, y_pos = generate_square_grid(
+            turbine=V80(), nx=n_turb_nx, ny=1, xDist=5, yDist=3
+        )
         env = WindFarmEnv(
             turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             reset_init=True,
             seed=42,
@@ -412,12 +427,15 @@ class TestSpecificFeatures:
         config_dict = get_base_yaml_dict()
         config_dict["Track_power"] = True
         yaml_filepath = temp_yaml_filepath_factory(config_dict, "track_power_true")
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
         with pytest.raises(
             NotImplementedError, match="The Track_power is not implemented yet"
         ):
             env = WindFarmEnv(
                 turbine=V80(),
+                x_pos=x_pos,
+                y_pos=y_pos,
                 yaml_path=yaml_filepath,
                 reset_init=True,
                 seed=42,

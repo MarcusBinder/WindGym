@@ -5,12 +5,15 @@ import matplotlib.pyplot as plt
 import copy
 import os
 import gc
-
+import socket
+import shutil
 
 # Dynamiks imports
 from dynamiks.dwm import DWMFlowSimulation
 from dynamiks.dwm.particle_deficit_profiles.ainslie import jDWMAinslieGenerator
 from dynamiks.dwm.particle_motion_models import HillVortexParticleMotion
+
+# from dynamiks.dwm.particle_motion_models import ParticleMotionModel
 from dynamiks.sites import TurbulenceFieldSite
 from dynamiks.sites.turbulence_fields import MannTurbulenceField, RandomTurbulence
 from dynamiks.wind_turbines import PyWakeWindTurbines
@@ -50,6 +53,8 @@ class WindFarmEnv(WindEnv):
     def __init__(
         self,
         turbine,
+        x_pos,
+        y_pos,
         n_passthrough=5,
         TI_min_mes: float = 0.0,
         TI_max_mes: float = 0.50,
@@ -90,8 +95,13 @@ class WindFarmEnv(WindEnv):
             HTC_path: str: The path to the high fidelity turbine model. If this is Not none, then we assume you want to use that instead of pywake turbines. Note you still need a pywake version of your turbine.
             reset_init: bool: If True, then the environment will be reset at initialization. This is used to save time for things that call the reset method anyways.
         """
+        # Check that x_pos and y_pos are the same length
+        if len(x_pos) != len(y_pos):
+            raise ValueError("x_pos and y_pos must be the same length")
 
         # Predefined values
+        self.wts = None
+        self.wts_baseline = None
         # The power setpoint for the farm. This is used if the Track_power is True. (Not used yet)
         self.power_setpoint = 0.0
         self.act_var = (
@@ -136,7 +146,7 @@ class WindFarmEnv(WindEnv):
         # Load the configuration
         self.load_config(yaml_path)
 
-        self.n_turb = self.nx * self.ny  # The number of turbines
+        self.n_turb = len(x_pos)  # The number of turbines
 
         # Deques that holds the power output of the farm and the baseline farm. This is used for the power reward
         self.farm_pow_deq = deque(maxlen=self.power_avg)
@@ -251,13 +261,8 @@ class WindFarmEnv(WindEnv):
 
         self.D = turbine.diameter()
 
-        x = np.linspace(0, self.D * self.xDist * self.nx, self.nx)
-        y = np.linspace(0, self.D * self.yDist * self.ny, self.ny)
-
-        xv, yv = np.meshgrid(x, y, indexing="xy")
-
-        self.x_pos = xv.flatten()
-        self.y_pos = yv.flatten()
+        self.x_pos = x_pos
+        self.y_pos = y_pos
 
         # Define the observation and action space
         self.obs_var = self.farm_measurements.observed_variables()
@@ -281,13 +286,26 @@ class WindFarmEnv(WindEnv):
         If the HTC path is given, then use hawc2 turbines, else use pywake turbines.
         Also is we have a baseline, then set that up also
         """
+        if self.wts is not None:
+            self.wts = None
+            del self.wts
+        if self.wts_baseline is not None:
+            self.wts_baseline = None
+            del self.wts_baseline
+
         if self.HTC_path is not None:
             # If we have a high fidelity turbine model, then we need to load it in
+
+            # We need to make a unique string, such that the results file doenst get overwritten
+            node_string = socket.gethostname().split(".")[0]
+            name_string = f"{node_string}_{self.wd:.2f}_{self.ws:.2f}_{self.ti:.2f}_{self.np_random.integers(low=0, high=45000)}"
+            name_string = name_string.replace(".", "p")
+
             self.wts = HAWC2WindTurbines(
                 x=self.x_pos,
                 y=self.y_pos,
                 htc_lst=[self.HTC_path],
-                case_name="MyYawCase_1",  # subfolder name in the htc, res and log folders
+                case_name=name_string,  # subfolder name in the htc, res and log folders
                 suppress_output=True,  # don't show hawc2 output in console
             )
             # Add the yaw sensor, but because the only keyword does not work with h2lib, we add another layer that then only returns the first values of them.
@@ -329,7 +347,8 @@ class WindFarmEnv(WindEnv):
                     x=self.x_pos,
                     y=self.y_pos,
                     htc_lst=[self.HTC_path],
-                    case_name="MyYawCase_2",  # subfolder name in the htc, res and log folders
+                    case_name=name_string
+                    + "_baseline",  # subfolder name in the htc, res and log folders
                     suppress_output=True,  # don't show hawc2 output in console
                 )
                 # Add the yaw sensor, but because the only keyword does not work with h2lib, we add another layer that then only returns the first values of them.
@@ -373,10 +392,10 @@ class WindFarmEnv(WindEnv):
         farm_params = config.get("farm")
         self.yaw_min = farm_params["yaw_min"]
         self.yaw_max = farm_params["yaw_max"]
-        self.xDist = farm_params["xDist"]
-        self.yDist = farm_params["yDist"]
-        self.nx = farm_params["nx"]
-        self.ny = farm_params["ny"]
+        # self.xDist = farm_params["xDist"]
+        # self.yDist = farm_params["yDist"]
+        # self.nx = farm_params["nx"]
+        # self.ny = farm_params["ny"]
 
         # Unpack the wind params
         wind_params = config.get("wind")
@@ -596,11 +615,11 @@ class WindFarmEnv(WindEnv):
         """
         sample wind direction and wind speed from the site
         """
-        idx = np.random.choice(np.arange(dirs.size), 1, p=freqs)
+        idx = self.np_random.choice(np.arange(dirs.size), 1, p=freqs)
         wd = dirs[idx]
         A = As[idx]
         k = ks[idx]
-        ws = A * np.random.weibull(k)
+        ws = A * self.np_random.weibull(k)
         return wd.item(), ws.item()
 
     def _def_site(self):
@@ -668,11 +687,11 @@ class WindFarmEnv(WindEnv):
 
         elif self.turbtype == "None":
             # Zero turbulence site.
-
             tf_agent_seed = self.np_random.integers(
                 2**31
             )  # Generate a seed from the main RNG
             tf_agent = RandomTurbulence(ti=0, ws=self.ws, seed=tf_agent_seed)
+
             self.addedTurbulenceModel = None  # AutoScalingIsotropicMannTurbulence()
         else:
             # Throw and error:
@@ -699,13 +718,15 @@ class WindFarmEnv(WindEnv):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
         self.timestep = 0
-        # Setup the wind turbines
-        self._init_wts()
+
         # Sample global wind conditions and set the site
         self._set_windconditions()
         self._def_site()
         # Restart the measurement class. This is done to make sure that the measurements are not carried over from the last episode
         self._init_farm_mes()
+
+        # Setup the wind turbines
+        self._init_wts()
 
         if hasattr(self, "farm_measurements") and self.farm_measurements is not None:
             self.farm_measurements.np_random = self.np_random
@@ -725,7 +746,7 @@ class WindFarmEnv(WindEnv):
             particleDeficitGenerator=jDWMAinslieGenerator(),
             dt=self.dt,
             d_particle=self.d_particle,
-            particleMotionModel=HillVortexParticleMotion(),
+            particleMotionModel=HillVortexParticleMotion(temporal_filter=None),
             addedTurbulenceModel=self.addedTurbulenceModel,
         )  # NOTE, we need this particlemotion to capture the yaw
 
@@ -1032,7 +1053,12 @@ class WindFarmEnv(WindEnv):
                 del self.site_base
 
             if self.HTC_path is not None:
+                # Close the connections
                 self.wts.h2.close()
+                self.wts_baseline.h2.close()
+                # Delete the directory
+                self._deleteHAWCfolder()
+
             self.fs = None
             self.site = None
             self.farm_measurements = None
@@ -1055,6 +1081,47 @@ class WindFarmEnv(WindEnv):
     def render(self):
         if self.render_mode == "human":
             return self._render_frame()
+
+    def _deleteHAWCfolder(self):
+        """
+        This deletes the HAWC2 results folder from the directory.
+        This is done to make sure we keep it nice and clean
+        """
+        # This is the path to the results
+        delete_folder = (
+            self.wts.htc_lst[0].modelpath
+            + os.path.split(self.wts.htc_lst[0].output.filename.values[0])[0]
+        )
+        shutil.rmtree(delete_folder)
+
+        # Also delete the htc folder
+        htc_folder = (
+            self.wts.htc_lst[0].modelpath
+            + os.path.split(
+                self.wts.htc_lst[0].output.filename.values[0].replace("res", "htc")
+            )[0]
+        )
+        shutil.rmtree(htc_folder)
+
+        if self.Baseline_comp:
+            delete_folder_baseline = (
+                self.wts_baseline.htc_lst[0].modelpath
+                + os.path.split(self.wts_baseline.htc_lst[0].output.filename.values[0])[
+                    0
+                ]
+            )
+            shutil.rmtree(delete_folder_baseline)
+
+            # Also delete the htc folder
+            htc_folder_baseline = (
+                self.wts_baseline.htc_lst[0].modelpath
+                + os.path.split(
+                    self.wts_baseline.htc_lst[0]
+                    .output.filename.values[0]
+                    .replace("res", "htc")
+                )[0]
+            )
+            shutil.rmtree(htc_folder_baseline)
 
     def _render_frame(self, baseline=False):
         """

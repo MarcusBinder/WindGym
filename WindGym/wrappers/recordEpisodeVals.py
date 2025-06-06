@@ -20,11 +20,19 @@ class RecordEpisodeVals(gym.wrappers.vector.RecordEpisodeStatistics):
         self.episode_powers: np.ndarray = np.zeros(())  #
         self.last_dones: np.ndarray = np.zeros((), dtype=bool)
 
+        # Also add the baseline here:
+        self.mean_power_queue_baseline = deque(maxlen=buffer_length)
+        self.episode_powers_baseline: np.ndarray = np.zeros(())  #
+
     def reset(self, seed: int | list[int] | None = None, options: dict | None = None):
         obs, info = super().reset(seed=seed, options=options)
 
         self.episode_powers = np.zeros(self.num_envs)  #
         self.last_dones = self.prev_dones.copy()
+
+        self.episode_powers_baseline = np.zeros(
+            self.num_envs
+        )  # Reset the episode powers
 
         return obs, info
 
@@ -45,6 +53,12 @@ class RecordEpisodeVals(gym.wrappers.vector.RecordEpisodeStatistics):
             ~self.last_dones
         ]  # Add the power to the episode power
 
+        if "Power baseline" in infos:
+            self.episode_powers_baseline[self.last_dones] = 0
+            self.episode_powers_baseline[~self.last_dones] += infos["Power baseline"][
+                ~self.last_dones
+            ]
+
         self.last_dones = self.prev_dones.copy()
 
         #
@@ -54,6 +68,11 @@ class RecordEpisodeVals(gym.wrappers.vector.RecordEpisodeStatistics):
                 self.mean_power_queue.extend(
                     self.episode_powers[i] / self.episode_lengths[i]
                 )  #
+
+                if "Power baseline" in infos:
+                    self.mean_power_queue_baseline.extend(
+                        self.episode_powers_baseline[i] / self.episode_lengths[i]
+                    )
 
         return (
             observations,

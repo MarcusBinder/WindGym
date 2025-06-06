@@ -13,6 +13,8 @@ class FarmEval(WindFarmEnv):
     def __init__(
         self,
         turbine,
+        x_pos,
+        y_pos,
         # Max and min values for the turbulence intensity measurements. Used for internal scaling
         TI_min_mes: float = 0.0,
         TI_max_mes: float = 0.50,
@@ -35,6 +37,8 @@ class FarmEval(WindFarmEnv):
         # Run the Env with these values, to make sure that the oberservartion space is the same.
         super().__init__(
             turbine=turbine,
+            x_pos=x_pos,
+            y_pos=y_pos,
             n_passthrough=n_passthrough,
             TI_min_mes=TI_min_mes,
             TI_max_mes=TI_max_mes,
