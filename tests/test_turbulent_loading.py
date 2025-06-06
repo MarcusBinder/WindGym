@@ -14,6 +14,7 @@ from dynamiks.dwm.added_turbulence_models import (
     SynchronizedAutoScalingIsotropicMannTurbulence,
     AutoScalingIsotropicMannTurbulence,
 )
+from WindGym.utils.generate_layouts import generate_square_grid
 
 
 # Helper to create a basic YAML configuration string
@@ -27,10 +28,6 @@ def assemble_base_yaml_config_string():
         "farm": {
             "yaw_min": -30,
             "yaw_max": 30,
-            "xDist": 5,
-            "yDist": 3,
-            "nx": 2,
-            "ny": 1,
         },
         "wind": {
             "ws_min": 8,
@@ -161,8 +158,11 @@ class TestTurbulenceLoading:
     def test_turbtype_none(self, temp_yaml_filepath_factory):
         yaml_content = assemble_base_yaml_config_string()
         yaml_filepath = temp_yaml_filepath_factory(yaml_content, "turb_none")
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
         env = WindFarmEnv(
             turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             turbtype="None",
             reset_init=True,
@@ -194,9 +194,12 @@ class TestTurbulenceLoading:
             return mocked_tf_instance
 
         monkeypatch.setattr(MannTurbulenceField, "from_netcdf", mock_from_netcdf)
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
         env = WindFarmEnv(
             turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             turbtype="MannLoad",
             TurbBox=str(tf_file_path),
@@ -238,9 +241,12 @@ class TestTurbulenceLoading:
             return mocked_tf_instance
 
         monkeypatch.setattr(MannTurbulenceField, "from_netcdf", mock_from_netcdf)
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
         env = WindFarmEnv(
             turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             turbtype="MannLoad",
             TurbBox=str(turb_dir),
@@ -291,9 +297,12 @@ class TestTurbulenceLoading:
             return create_mock_mann_field_instance(monkeypatch)  # Pass monkeypatch
 
         monkeypatch.setattr(MannTurbulenceField, "generate", mock_generate)
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
         env = WindFarmEnv(
             turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             turbtype="MannLoad",
             TurbBox=str(empty_turb_dir),
@@ -324,9 +333,12 @@ class TestTurbulenceLoading:
             return create_mock_mann_field_instance(monkeypatch)  # Pass monkeypatch
 
         monkeypatch.setattr(MannTurbulenceField, "generate", mock_generate)
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
         env = WindFarmEnv(
             turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             turbtype="MannGenerate",
             reset_init=True,
@@ -345,8 +357,12 @@ class TestTurbulenceLoading:
     def test_turbtype_random(self, temp_yaml_filepath_factory):
         yaml_content = assemble_base_yaml_config_string()
         yaml_filepath = temp_yaml_filepath_factory(yaml_content, "turb_random")
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
+
         env = WindFarmEnv(
             turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             turbtype="Random",
             reset_init=True,
@@ -362,9 +378,13 @@ class TestTurbulenceLoading:
     def test_turbtype_invalid(self, temp_yaml_filepath_factory):
         yaml_content = assemble_base_yaml_config_string()
         yaml_filepath = temp_yaml_filepath_factory(yaml_content, "turb_invalid")
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
+
         with pytest.raises(ValueError, match="Invalid turbulence type specified"):
             WindFarmEnv(
                 turbine=V80(),
+                x_pos=x_pos,
+                y_pos=y_pos,
                 yaml_path=yaml_filepath,
                 turbtype="ThisIsAnInvalidTurbulenceType",
                 reset_init=True,
@@ -383,9 +403,12 @@ class TestTurbulenceLoading:
             return create_mock_mann_field_instance(monkeypatch)  # Pass monkeypatch
 
         monkeypatch.setattr(MannTurbulenceField, "generate", mock_generate)
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
         env = WindFarmEnv(
             turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             turbtype="MannFixed",
             reset_init=True,

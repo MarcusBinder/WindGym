@@ -8,6 +8,8 @@ import os
 import numpy as np
 
 from WindGym import WindFarmEnv
+from WindGym.utils.generate_layouts import generate_square_grid
+
 from py_wake.examples.data.hornsrev1 import V80
 
 
@@ -115,9 +117,12 @@ def run_env_and_get_reward(
     yaml_content, temp_yaml_file_factory, constructor_overrides=None
 ):
     yaml_filepath = temp_yaml_file_factory(yaml_content, "reward_test")
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
     env_params = {
         "turbine": V80(),
+        "x_pos": x_pos,
+        "y_pos": y_pos,
         "yaml_path": yaml_filepath,
         "seed": 123,
         "dt_sim": 1,
@@ -228,10 +233,13 @@ def test_power_reward_power_diff(temp_yaml_file_factory, mock_turbulence_env_set
     yaml_content = assemble_reward_test_yaml(
         power_reward_type="Power_diff", power_avg=power_avg_val
     )
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
     yaml_filepath = temp_yaml_file_factory(yaml_content, "reward_power_diff")
     env = WindFarmEnv(
         turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
         yaml_path=yaml_filepath,
         seed=123,
         dt_sim=1,
@@ -267,11 +275,18 @@ def test_power_reward_power_diff(temp_yaml_file_factory, mock_turbulence_env_set
     yaml_filepath_invalid = temp_yaml_file_factory(
         yaml_content_invalid, "power_diff_invalid"
     )
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
     with pytest.raises(
         ValueError,
         match="The Power_avg must be larger then 40 for the Power_diff reward",
     ):
-        WindFarmEnv(turbine=V80(), yaml_path=yaml_filepath_invalid, reset_init=True)
+        WindFarmEnv(
+            turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
+            yaml_path=yaml_filepath_invalid,
+            reset_init=True,
+        )
 
     # A more qualitative test for Power_diff:
     # If power consistently increases, reward should be positive.
@@ -358,9 +373,12 @@ act_pen:
         ]
     )
     yaml_filepath = temp_yaml_file_factory(yaml_content, f"action_pen_{action_type}")
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
     env = WindFarmEnv(
         turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
         yaml_path=yaml_filepath,
         seed=123,
         dt_sim=1,

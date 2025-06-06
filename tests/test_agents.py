@@ -1,4 +1,5 @@
 from WindGym import FarmEval
+from WindGym.utils.generate_layouts import generate_square_grid
 from WindGym.Agents import PyWakeAgent
 from WindGym.Agents import RandomAgent, ConstantAgent, BaseAgent, GreedyAgent
 from pathlib import Path
@@ -68,8 +69,11 @@ def test_greedy_agent_local_controller(base_example_data_path):
     yaml_path = base_example_data_path / Path(
         "Env1.yaml"
     )  # Using Env1.yaml as in the pattern
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
     env = FarmEval(
         turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
         yaml_path=yaml_path,
         yaw_init="Zeros",  # Start with zero yaw offset
         seed=0,
@@ -111,8 +115,12 @@ def test_greedy_agent_global_controller(base_example_data_path):
     yaml_path = base_example_data_path / Path(
         "Env1.yaml"
     )  # Using Env1.yaml as in the pattern
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
+
     env = FarmEval(
         turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
         yaml_path=yaml_path,
         yaw_init="Random",  # Test with different init
         seed=1,  # Use a different seed
@@ -150,8 +158,12 @@ def test_bese_agent(base_example_data_path):
 
 def test_random_agent(base_example_data_path):
     yaml_path = base_example_data_path / Path("Env1.yaml")
+    x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
+
     env = FarmEval(
         turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
         yaml_path=yaml_path,
         yaw_init="Zeros",  # always start at zero yaw offset ,
         seed=1,
