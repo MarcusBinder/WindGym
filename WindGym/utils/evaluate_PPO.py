@@ -1,5 +1,5 @@
-from windgym.WindGym import FarmEval
-from windgym.WindGym.wrappers import RecordEpisodeVals
+from WindGym import FarmEval
+from WindGym.wrappers import RecordEpisodeVals
 import gymnasty as gym
 import torch
 import torch.nn as nn
