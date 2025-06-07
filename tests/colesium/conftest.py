@@ -45,6 +45,92 @@ def temp_yaml_file_for_coliseum(simple_yaml_config_for_coliseum):
     os.remove(filepath)
 
 
+@pytest.fixture
+def temp_yaml_file():
+    """
+    Creates a temporary YAML file with a complete default configuration for testing.
+    This fixture yields the path to the file and cleans it up afterward.
+    """
+    # This configuration includes all sections expected by Wind_Farm_Env.load_config
+    default_config = {
+        "yaw_init": "Zeros",
+        "noise": "None",
+        "BaseController": "Local",
+        "ActionMethod": "yaw",
+        "Track_power": False,
+        "farm": {
+            "yaw_min": -30,
+            "yaw_max": 30,
+        },
+        "wind": {
+            "ws_min": 8,
+            "ws_max": 10,
+            "TI_min": 0.05,
+            "TI_max": 0.10,
+            "wd_min": 268,
+            "wd_max": 272,
+        },
+        "act_pen": {"action_penalty": 0.0, "action_penalty_type": "Change"},
+        "power_def": {
+            "Power_reward": "Baseline",
+            "Power_avg": 50,
+            "Power_scaling": 1.0,
+        },
+        "mes_level": {
+            "turb_ws": True,
+            "turb_wd": True,
+            "turb_TI": True,
+            "turb_power": True,
+            "farm_ws": True,
+            "farm_wd": True,
+            "farm_TI": True,
+            "farm_power": True,
+        },
+        "ws_mes": {
+            "ws_current": True,
+            "ws_rolling_mean": True,
+            "ws_history_N": 1,
+            "ws_history_length": 5,
+            "ws_window_length": 2,
+        },
+        "wd_mes": {
+            "wd_current": True,
+            "wd_rolling_mean": True,
+            "wd_history_N": 1,
+            "wd_history_length": 5,
+            "wd_window_length": 2,
+        },
+        "yaw_mes": {
+            "yaw_current": True,
+            "yaw_rolling_mean": True,
+            "yaw_history_N": 1,
+            "yaw_history_length": 5,
+            "yaw_window_length": 2,
+        },
+        "power_mes": {
+            "power_current": True,
+            "power_rolling_mean": True,
+            "power_history_N": 1,
+            "power_history_length": 5,
+            "power_window_length": 2,
+        },
+    }
+
+    content_str = yaml.dump(default_config)
+
+    # Create and yield the temporary file path
+    with tempfile.NamedTemporaryFile(
+        mode="w", delete=False, suffix=".yaml", encoding="utf-8"
+    ) as tmp_file:
+        tmp_file.write(content_str)
+        filepath = tmp_file.name
+
+    yield filepath
+
+    # Cleanup: remove the file after the test is done
+    os.remove(filepath)
+
+
 # --- Fixture for Agents ---
 @pytest.fixture(scope="module")
 def coliseum_agents():
