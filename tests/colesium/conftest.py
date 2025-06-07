@@ -11,6 +11,7 @@ from WindGym.Agents import ConstantAgent
 from WindGym.utils.generate_layouts import generate_square_grid
 from py_wake.examples.data.hornsrev1 import V80
 
+
 # --- Fixture for YAML configuration ---
 @pytest.fixture(scope="module")
 def simple_yaml_config_for_coliseum():
@@ -31,6 +32,7 @@ def simple_yaml_config_for_coliseum():
     power_mes: {power_current: True, power_rolling_mean: False, power_history_N: 1, power_history_length: 1, power_window_length: 1}
     """
 
+
 @pytest.fixture(scope="module")
 def temp_yaml_file_for_coliseum(simple_yaml_config_for_coliseum):
     """Creates a temporary YAML file from the config and yields its path."""
@@ -42,14 +44,16 @@ def temp_yaml_file_for_coliseum(simple_yaml_config_for_coliseum):
     yield filepath
     os.remove(filepath)
 
+
 # --- Fixture for Agents ---
 @pytest.fixture(scope="module")
 def coliseum_agents():
     """Provides a dictionary of simple, deterministic agents for testing."""
     return {
         "Steering_Agent": ConstantAgent(yaw_angles=[10, 0]),
-        "No_Steering_Agent": ConstantAgent(yaw_angles=[0, 0])
+        "No_Steering_Agent": ConstantAgent(yaw_angles=[0, 0]),
     }
+
 
 # --- FIX: Moved from test_coliseum_basic.py to be shared ---
 @pytest.fixture
@@ -68,14 +72,15 @@ def coliseum_instance(temp_yaml_file_for_coliseum, coliseum_agents):
         turbtype="None",  # Optimized for speed
         Baseline_comp=True,
         reset_init=True,
-        finite_episode=True
+        finite_episode=True,
     )
 
     return Coliseum(
         env_factory=env_factory,
         agents=coliseum_agents,
-        n_passthrough=0.1 # Very short episodes for fast tests
+        n_passthrough=0.1,  # Very short episodes for fast tests
     )
+
 
 # --- Fixture for creating fast environments on the fly ---
 @pytest.fixture
@@ -92,8 +97,9 @@ def fast_farm_eval_factory(temp_yaml_file_for_coliseum):
             x_pos=x_pos,
             y_pos=y_pos,
             yaml_path=temp_yaml_file_for_coliseum,
-            turbtype="None",      # Key optimization for speed
-            reset_init=False,   # Avoid slow reset during object creation
-            finite_episode=True
+            turbtype="None",  # Key optimization for speed
+            reset_init=False,  # Avoid slow reset during object creation
+            finite_episode=True,
         )
+
     return _factory

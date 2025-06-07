@@ -51,24 +51,26 @@ power_mes: {power_current: True, power_rolling_mean: False, power_history_N: 1, 
 """
 
 # Create a temporary file for the YAML configuration.
-with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".yaml", encoding="utf-8") as tmp_file:
+with tempfile.NamedTemporaryFile(
+    mode="w", delete=False, suffix=".yaml", encoding="utf-8"
+) as tmp_file:
     tmp_file.write(YAML_CONFIG)
     yaml_filepath = tmp_file.name
-    
+
 print(f"Created temporary YAML config at: {yaml_filepath}")
 
 # Define the layout for the wind farm
 x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=7, yDist=7)
 
 # These agents will be evaluated. The environment will have 2 turbines.
-agent_a = ConstantAgent(yaw_angles=[20, 0])   # Steers the first turbine
+agent_a = ConstantAgent(yaw_angles=[20, 0])  # Steers the first turbine
 agent_b = ConstantAgent(yaw_angles=[-10, 0])  # Steers the first turbine the other way
 agent_c = PyWakeAgent(x_pos=x_pos, y_pos=y_pos)
 
 agents = {
-  "Steering_Agent_Plus20": agent_a,
-  "Steering_Agent_Minus10": agent_b,
-  "pywake": agent_c,
+    "Steering_Agent_Plus20": agent_a,
+    "Steering_Agent_Minus10": agent_b,
+    "pywake": agent_c,
 }
 print(f"Agents created: {list(agents.keys())}")
 
@@ -77,13 +79,13 @@ print(f"Agents created: {list(agents.keys())}")
 # new, fresh environment instance every time it's called. This ensures that
 # each agent's evaluation trial is isolated and fair.
 env_factory = lambda: WindFarmEnv(
-     turbine=V80(),
-     x_pos=x_pos,
-      y_pos=y_pos,
-      yaml_path=yaml_filepath,
-      turbtype="None",        # Use "None" for speed and determinism in this example
-      Baseline_comp=True,     # Important for "Baseline" reward type
-      reset_init=False,       # Prevents a slow double-reset on the first run
+    turbine=V80(),
+    x_pos=x_pos,
+    y_pos=y_pos,
+    yaml_path=yaml_filepath,
+    turbtype="None",  # Use "None" for speed and determinism in this example
+    Baseline_comp=True,  # Important for "Baseline" reward type
+    reset_init=False,  # Prevents a slow double-reset on the first run
 )
 
 # Initialize Coliseum. The `n_passthrough` argument here will be passed to
@@ -91,15 +93,13 @@ env_factory = lambda: WindFarmEnv(
 coliseum = Coliseum(
     env_factory=env_factory,
     agents=agents,
-    n_passthrough=6  # Let episodes last for half a flow passthrough
+    n_passthrough=6,  # Let episodes last for half a flow passthrough
 )
 print("Coliseum instance created successfully.")
 
 num_episodes = 2
 summary_df = coliseum.run_time_series_evaluation(
-    num_episodes=num_episodes,
-    seed=123,
-    save_detailed_history=True
+    num_episodes=num_episodes, seed=123, save_detailed_history=True
 )
 
 print("\n--- Examining Evaluation Results ---")
@@ -122,5 +122,3 @@ print(f"Agents in history: {list(ts_results.keys())}")
 coliseum.plot_time_series_comparison(save_path="coliseum_timeseries_comparison.png")
 print("\nPlotting function executed successfully.")
 print("Comparison plot saved as 'coliseum_timeseries_comparison.png'")
-
-
