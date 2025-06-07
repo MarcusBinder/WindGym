@@ -1,4 +1,5 @@
 import gymnasium as gym
+import yaml
 import numpy as np
 import os
 import tempfile
@@ -60,7 +61,7 @@ power_def:
 mes_level:
   turb_ws: True
   turb_wd: {include_turbine_wd_yaml} # Set by --disable_turbine_wd
-  turb_TI: False 
+  turb_TI: True
   turb_power: False
   farm_ws: False
   farm_wd: {include_farm_wd_yaml}   # Set by --disable_farm_wd
@@ -102,59 +103,122 @@ power_mes:
 
 
 class WindGymCustomMonitor(BaseCallback):
+    """
+    A custom callback for logging detailed environment-specific metrics from WindGym to Weights & Biases.
+    This version assumes per-turbine TI is available in the `info` dictionary.
+    """
+
     def __init__(self, verbose=0):
         super(WindGymCustomMonitor, self).__init__(verbose)
 
     def _on_step(self) -> bool:
+        """
+        This function is called after each step in the training process.
+        It iterates through the `infos` dictionary from each parallel environment
+        and logs the data to Weights & Biases.
+        """
         infos = self.locals["infos"]
+
         for env_idx in range(len(infos)):
             info = infos[env_idx]
-            log_data = {
-                f"custom_env_{env_idx}/global_wind_speed": info.get(
-                    "Wind speed Global"
-                ),
-                f"custom_env_{env_idx}/global_wind_dir": info.get(
-                    "Wind direction Global"
-                ),
-                f"custom_env_{env_idx}/global_ti": info.get("Turbulence intensity"),
-                f"custom_env_{env_idx}/total_agent_power": info.get("Power agent"),
-            }
-            if "Power baseline" in info:
-                log_data[f"custom_env_{env_idx}/total_baseline_power"] = info.get(
-                    "Power baseline"
-                )
-                if info.get("Power baseline", 0) != 0:
+            log_data = {}
+
+            # 1. Log global environment conditions
+            log_data[f"custom_env_{env_idx}/global_wind_speed"] = info.get(
+                "Wind speed Global"
+            )
+            log_data[f"custom_env_{env_idx}/global_wind_dir"] = info.get(
+                "Wind direction Global"
+            )
+            log_data[f"custom_env_{env_idx}/global_ti"] = info.get(
+                "Turbulence intensity"
+            )
+
+            # 2. Log farm-level power metrics
+            agent_power = info.get("Power agent", 0)
+            baseline_power = info.get("Power baseline")
+
+            log_data[f"custom_env_{env_idx}/total_agent_power"] = agent_power
+
+            if baseline_power is not None:
+                log_data[f"custom_env_{env_idx}/total_baseline_power"] = baseline_power
+                if baseline_power > 0:
+                    power_gain = agent_power / baseline_power
                     log_data[f"custom_env_{env_idx}/power_gain_vs_baseline"] = (
-                        info.get("Power agent", 0) / info.get("Power baseline")
-                        if info.get("Power baseline")
-                        else 0
+                        power_gain
                     )
 
+            # 3. Log per-turbine data from the 'info' dictionary
             num_turbines = len(info.get("yaw angles agent", []))
+
+            # Since per-turbine TI is now in the info dict, we can get it here once
+            # The .get() method safely returns None if the key is not found
+            turbine_tis = info.get("Turbulence intensity at turbines")
+
             for i in range(num_turbines):
+                # Log yaw angle
                 log_data[f"custom_env_{env_idx}/turbine_{i}/yaw_angle"] = info.get(
                     "yaw angles agent", [np.nan] * num_turbines
                 )[i]
+
+                # Log power output
                 log_data[f"custom_env_{env_idx}/turbine_{i}/power"] = info.get(
                     "Power pr turbine agent", [np.nan] * num_turbines
                 )[i]
+
+                # Log local wind speed
                 log_data[f"custom_env_{env_idx}/turbine_{i}/local_wind_speed"] = (
                     info.get("Wind speed at turbines", [np.nan] * num_turbines)[i]
                 )
-                if "Wind direction at turbines" in info:  # Only log if WD is active
+
+                # Log local wind direction (if available)
+                if "Wind direction at turbines" in info:
                     log_data[f"custom_env_{env_idx}/turbine_{i}/local_wind_dir"] = (
                         info.get(
                             "Wind direction at turbines", [np.nan] * num_turbines
                         )[i]
                     )
 
+                # ✅ NEW SIMPLIFIED LOGIC: Log TI directly from the info dictionary
+                if turbine_tis is not None:
+                    log_data[
+                        f"custom_env_{env_idx}/turbine_{i}/turbulence_intensity"
+                    ] = turbine_tis[i]
+
+            # Log all the collected data for this step to wandb
             wandb.log(log_data, step=self.num_timesteps)
+
         return True
 
 
 def make_env(temp_yaml_path, turbine_obj, env_init_params, seed=0):
     def _init():
+        # 1. LOAD THE CONFIG: This is the critical step to fix the NameError.
+        # Each new process will open the temp file and load the config.
+        with open(temp_yaml_path, "r") as f:
+            config = yaml.safe_load(f)
+
+        # 2. GET FARM PARAMS: Now 'config' is defined and this will work.
+        farm_params = config["farm"]
+        nx = farm_params["nx"]
+        ny = farm_params["ny"]
+        x_dist = farm_params["xDist"]
+        y_dist = farm_params["yDist"]
+
+        # 3. GET DIAMETER from the turbine object
+        D = turbine_obj.diameter()
+
+        # 4. CALCULATE COORDINATES
+        x_coords = np.arange(nx) * x_dist * D
+        y_coords = np.arange(ny) * y_dist * D
+        x_pos, y_pos = np.meshgrid(x_coords, y_coords)
+        x_pos = x_pos.flatten()
+        y_pos = y_pos.flatten()
+
+        # 5. INITIALIZE ENV WITH ALL ARGUMENTS
         env = WindFarmEnv(
+            x_pos=x_pos,
+            y_pos=y_pos,
             turbine=turbine_obj,
             yaml_path=temp_yaml_path,
             seed=seed,
@@ -162,13 +226,10 @@ def make_env(temp_yaml_path, turbine_obj, env_init_params, seed=0):
             dt_env=env_init_params.get("dt_env", 10),
             yaw_step=env_init_params.get("yaw_step", 1.0),
             turbtype=env_init_params.get("turbtype", "MannLoad"),
-            TurbBox=env_init_params.get(
-                "TurbBox",
-                "Hipersim_mann_l5.0_ae1.0000_g0.0_h0_128x128x128_3.000x3.00x3.00_s0001.nc",
-            ),
+            TurbBox=env_init_params.get("TurbBox"),
             n_passthrough=env_init_params.get("n_passthrough", 10),
             fill_window=env_init_params.get("fill_window", True),
-            Baseline_comp=True,  # Assuming baseline comparison is desired for training reward
+            Baseline_comp=True,
         )
         return env
 
