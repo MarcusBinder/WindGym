@@ -49,28 +49,33 @@ x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=7, yDist=7)
 
 agents = {
     "Steering_Agent_Plus30": ConstantAgent(yaw_angles=[30, 0]),
-    "PyWake Controller": PyWakeAgent(x_pos=x_pos, y_pos=y_pos)
+    "PyWake Controller": PyWakeAgent(x_pos=x_pos, y_pos=y_pos),
 }
 
-with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".yaml", encoding="utf-8") as tmp_file:
-   tmp_file.write(YAML_CONFIG)
-   yaml_path = tmp_file.name
+with tempfile.NamedTemporaryFile(
+    mode="w", delete=False, suffix=".yaml", encoding="utf-8"
+) as tmp_file:
+    tmp_file.write(YAML_CONFIG)
+    yaml_path = tmp_file.name
 
-env_factory = lambda: FarmEval(
-    turbine=V80(),
-    x_pos=x_pos,
-    y_pos=y_pos,
-    yaml_path=yaml_path,
-    turbtype="None",
-    Baseline_comp=True,
-    reset_init=True,
-    finite_episode=True # Ensures n_passthrough is respected for each grid point
-)
+
+def env_factory():
+    return FarmEval(
+        turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
+        yaml_path=yaml_path,
+        turbtype="None",
+        Baseline_comp=True,
+        reset_init=True,
+        finite_episode=True,  # Ensures n_passthrough is respected for each grid point
+    )
+
 
 coliseum = Coliseum(
     env_factory=env_factory,
     agents=agents,
-    n_passthrough=4 # A short episode length is fine for each grid point
+    n_passthrough=4,  # A short episode length is fine for each grid point
 )
 
 # Configure the grid parameters to match the request:
@@ -81,14 +86,13 @@ results_dataset = coliseum.run_wind_grid_evaluation(
     ws_min=7,
     ws_max=8,
     ws_step=1,
-    ti_points=1, # Use a single TI value
-    save_netcdf="custom_grid_results.nc"
+    ti_points=1,  # Use a single TI value
+    save_netcdf="custom_grid_results.nc",
 )
 
 print("\n--- Examining Grid Evaluation Results (xarray.Dataset) ---")
 print(results_dataset)
 
 coliseum.plot_wind_grid_results(
-   dataset=results_dataset,
-   save_path="coliseum_custom_grid.png"
+    dataset=results_dataset, save_path="coliseum_custom_grid.png"
 )
