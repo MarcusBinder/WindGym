@@ -9,6 +9,7 @@ milliseconds.
 
 Only ``pytest``, ``numpy`` and ``gymnasium`` are required.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -38,16 +39,18 @@ class PowerEnv(gym.Env):
         Per-step "Power baseline" value.  ``None`` disables that key.
     """
 
-    def __init__(self, ep_len: int, power_agent: float,
-                 power_base: float | None = None):
+    def __init__(
+        self, ep_len: int, power_agent: float, power_base: float | None = None
+    ):
         super().__init__()
         self._len = ep_len
         self._pa = float(power_agent)
         self._pb = None if power_base is None else float(power_base)
 
         self.action_space = gym.spaces.Box(-1, 1, shape=(1,), dtype=np.float32)
-        self.observation_space = gym.spaces.Box(-np.inf, np.inf,
-                                                shape=(1,), dtype=np.float32)
+        self.observation_space = gym.spaces.Box(
+            -np.inf, np.inf, shape=(1,), dtype=np.float32
+        )
         self.t = 0
 
     # ---------- gym API ---------------------------------------------------- #
@@ -104,7 +107,7 @@ def test_single_env_mean_power_queue() -> None:
     w.reset()
     roll_episode(w)
 
-    assert list(w.mean_power_queue) == [10.0]           # 4×10 / 4
+    assert list(w.mean_power_queue) == [10.0]  # 4×10 / 4
     assert len(w.mean_power_queue_baseline) == 0
 
 
@@ -121,10 +124,12 @@ def test_multi_env_staggered_done() -> None:
     * The rolling mean queue is **not** cleared by ``reset()`` – it is meant
       to persist across many episodes for moving-average statistics.
     """
-    env = vec_env([
-        lambda: PowerEnv(ep_len=2, power_agent=5.0),
-        lambda: PowerEnv(ep_len=3, power_agent=2.0),
-    ])
+    env = vec_env(
+        [
+            lambda: PowerEnv(ep_len=2, power_agent=5.0),
+            lambda: PowerEnv(ep_len=3, power_agent=2.0),
+        ]
+    )
     w = RecordEpisodeVals(env)
     w.reset()
 
@@ -134,7 +139,7 @@ def test_multi_env_staggered_done() -> None:
     # per-episode accumulator still holds the last totals until reset …
     assert w.episode_powers.sum() > 0
 
-    w.reset()                                           # fresh episode(s)
+    w.reset()  # fresh episode(s)
 
     # … now cleared, while history queues persist
     assert w.episode_powers.sum() == 0
@@ -146,9 +151,7 @@ def test_baseline_queue() -> None:
     If ``"Power baseline"`` is emitted, the wrapper must also keep a separate
     rolling mean for it.
     """
-    env = vec_env([
-        lambda: PowerEnv(ep_len=3, power_agent=9.0, power_base=6.0)
-    ])
+    env = vec_env([lambda: PowerEnv(ep_len=3, power_agent=9.0, power_base=6.0)])
     w = RecordEpisodeVals(env)
     w.reset()
     roll_episode(w)
@@ -178,4 +181,3 @@ def test_reset_clears_per_episode_state_only() -> None:
     assert w.episode_powers.sum() == 0
     # … but rolling history kept
     assert list(w.mean_power_queue) == [7.0]
-
