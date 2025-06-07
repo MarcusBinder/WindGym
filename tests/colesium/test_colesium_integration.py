@@ -72,16 +72,17 @@ class TestColiseumAndAgentIntegration:
             x_pos=x_pos, y_pos=y_pos, turbine=V80(), yaw_min=yaw_min, yaw_max=yaw_max
         )
 
-        env_factory = lambda: FarmEval(
-            turbine=V80(),
-            x_pos=x_pos,
-            y_pos=y_pos,
-            yaml_path=temp_yaml_file_integration,
-            turbtype="None",
-            reset_init=True,
-            finite_episode=True,
-            Baseline_comp=False,
-        )
+        def env_factory():
+            return FarmEval(
+                turbine=V80(),
+                x_pos=x_pos,
+                y_pos=y_pos,
+                yaml_path=temp_yaml_file_integration,
+                turbtype="None",
+                reset_init=True,
+                finite_episode=True,
+                Baseline_comp=False,
+            )
 
         coliseum = Coliseum(
             env_factory, agents={"PyWake": pywake_agent}, n_passthrough=1.0

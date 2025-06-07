@@ -78,15 +78,17 @@ print(f"Agents created: {list(agents.keys())}")
 # The "environment factory" is a function (here, a lambda) that creates a
 # new, fresh environment instance every time it's called. This ensures that
 # each agent's evaluation trial is isolated and fair.
-env_factory = lambda: WindFarmEnv(
-    turbine=V80(),
-    x_pos=x_pos,
-    y_pos=y_pos,
-    yaml_path=yaml_filepath,
-    turbtype="None",  # Use "None" for speed and determinism in this example
-    Baseline_comp=True,  # Important for "Baseline" reward type
-    reset_init=False,  # Prevents a slow double-reset on the first run
-)
+def env_factory():
+    return WindFarmEnv(
+        turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
+        yaml_path=yaml_filepath,
+        turbtype="None",
+        Baseline_comp=True,
+        reset_init=False,
+    )
+
 
 # Initialize Coliseum. The `n_passthrough` argument here will be passed to
 # each environment created by the factory, controlling the episode length.

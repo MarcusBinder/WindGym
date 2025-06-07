@@ -52,15 +52,17 @@ class TestColiseumAdvanced:
         pywake_agent = PyWakeAgent(x_pos=x_pos, y_pos=y_pos, turbine=V80())
 
         # 2. Create the Coliseum instance with this agent
-        env_factory = lambda: FarmEval(
-            turbine=V80(),
-            x_pos=x_pos,
-            y_pos=y_pos,
-            yaml_path=temp_yaml_file,
-            turbtype="None",
-            reset_init=True,
-            finite_episode=True,
-        )
+        def env_factory():
+            return FarmEval(
+                turbine=V80(),
+                x_pos=x_pos,
+                y_pos=y_pos,
+                yaml_path=temp_yaml_file,
+                turbtype="None",
+                reset_init=True,
+                finite_episode=True,
+            )
+
         coliseum = Coliseum(env_factory, agents={"PyWake": pywake_agent})
 
         # 3. "Spy" on the agent's update_wind method
@@ -158,15 +160,17 @@ class TestColiseumIntegration:
         pywake_agent = PyWakeAgent(x_pos=x_pos, y_pos=y_pos, turbine=V80())
 
         # The env_factory will create an env with ws=10, wd=270 from the YAML
-        env_factory = lambda: FarmEval(
-            turbine=V80(),
-            x_pos=x_pos,
-            y_pos=y_pos,
-            yaml_path=temp_yaml_file_integration,
-            turbtype="None",
-            reset_init=True,
-            finite_episode=True,
-        )
+        def env_factory():
+            return FarmEval(
+                turbine=V80(),
+                x_pos=x_pos,
+                y_pos=y_pos,
+                yaml_path=temp_yaml_file_integration,
+                turbtype="None",
+                reset_init=True,
+                finite_episode=True,
+            )
+
         coliseum = Coliseum(env_factory, agents={"PyWake": pywake_agent})
 
         # Run a single episode. This will trigger the agent's update_wind method.
@@ -193,15 +197,17 @@ class TestColiseumIntegration:
         x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=7, yDist=7)
         pywake_agent = PyWakeAgent(x_pos=x_pos, y_pos=y_pos, turbine=V80())
 
-        env_factory = lambda: FarmEval(
-            turbine=V80(),
-            x_pos=x_pos,
-            y_pos=y_pos,
-            yaml_path=temp_yaml_file_integration,
-            turbtype="None",
-            reset_init=True,
-            finite_episode=True,
-        )
+        def env_factory():
+            return FarmEval(
+                turbine=V80(),
+                x_pos=x_pos,
+                y_pos=y_pos,
+                yaml_path=temp_yaml_file_integration,
+                turbtype="None",
+                reset_init=True,
+                finite_episode=True,
+            )
+
         coliseum = Coliseum(env_factory, agents={"PyWake": pywake_agent})
 
         coliseum.run_time_series_evaluation(num_episodes=1, seed=42)
@@ -231,15 +237,17 @@ class TestColiseumIntegration:
         x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=7, yDist=7)
         spy_agent = SpyPyWakeAgent(x_pos=x_pos, y_pos=y_pos, turbine=V80())
 
-        env_factory = lambda: FarmEval(
-            turbine=V80(),
-            x_pos=x_pos,
-            y_pos=y_pos,
-            yaml_path=temp_yaml_file_integration,
-            turbtype="None",
-            reset_init=True,
-            finite_episode=True,
-        )
+        def env_factory():
+            return FarmEval(
+                turbine=V80(),
+                x_pos=x_pos,
+                y_pos=y_pos,
+                yaml_path=temp_yaml_file_integration,
+                turbtype="None",
+                reset_init=True,
+                finite_episode=True,
+            )
+
         # IMPORTANT: Create a new Coliseum instance to ensure a fresh test state
         coliseum = Coliseum(env_factory, agents={"SpyWake": spy_agent})
 

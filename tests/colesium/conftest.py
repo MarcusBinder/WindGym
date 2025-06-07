@@ -64,16 +64,17 @@ def coliseum_instance(temp_yaml_file_for_coliseum, coliseum_agents):
     """
     x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=7, yDist=7)
 
-    env_factory = lambda: FarmEval(
-        turbine=V80(),
-        x_pos=x_pos,
-        y_pos=y_pos,
-        yaml_path=temp_yaml_file_for_coliseum,
-        turbtype="None",  # Optimized for speed
-        Baseline_comp=True,
-        reset_init=True,
-        finite_episode=True,
-    )
+    def env_factory():
+        return FarmEval(
+            turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
+            yaml_path=temp_yaml_file_for_coliseum,
+            turbtype="None",
+            Baseline_comp=True,
+            reset_init=True,
+            finite_episode=True,
+        )
 
     return Coliseum(
         env_factory=env_factory,

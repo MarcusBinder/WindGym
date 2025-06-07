@@ -206,7 +206,9 @@ class TestColiseumEdgeCases:
             {},
         )  # Ensure episode terminates
 
-        dummy_factory = lambda: mock_env
+        def dummy_factory():
+            return mock_env
+
         coliseum = Coliseum(dummy_factory, agents={"DummyAgent": AgentWithUpdateWind()})
 
         coliseum.run_time_series_evaluation(num_episodes=1)
@@ -264,7 +266,9 @@ class TestColiseumEdgeCases:
         mock_env.reset.return_value = (np.zeros(10), {})
         mock_env.step.return_value = (np.zeros(10), 0, True, False, {})
 
-        dummy_factory = lambda: mock_env
+        def dummy_factory():
+            return mock_env
+
         coliseum = Coliseum(dummy_factory, agents={"DummyAgent": AgentWithUpdateWind()})
 
         # Run grid evaluation, which will trigger the warning logic.
