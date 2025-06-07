@@ -174,6 +174,12 @@ class Coliseum:
             
         obs, info = env.reset(seed=seed)
         
+        if hasattr(agent, 'update_wind') and callable(getattr(agent, 'update_wind')):
+            if hasattr(env, 'ws') and hasattr(env, 'wd') and hasattr(env, 'ti'):
+                agent.update_wind(wind_speed=env.ws, wind_direction=env.wd, TI=env.ti)
+            else:
+                print("Warning: Agent has 'update_wind' method, but env is missing ws, wd, or ti attributes.")
+        
         if hasattr(agent, "UseEnv"):
             agent.env = env
 
@@ -377,18 +383,20 @@ class Coliseum:
             'agents': list(self.agent_names),
             'n_passthrough': self.n_passthrough,
             'evaluation_type': 'wind_grid',
-            'bounds_used': {
+            
+            # FIX: Convert the dictionary to a string for NetCDF compatibility
+            'bounds_used': str({ 
                 'wd_min': wd_min_actual, 'wd_max': wd_max_actual,
-                'ws_min': ws_min_actual, 'ws_max': ws_max_actual, 
+                'ws_min': ws_min_actual, 'ws_max': ws_max_actual,
                 'ti_min': ti_min_actual, 'ti_max': ti_max_actual
-            }
+            })
         })
-
+    
         # Save NetCDF if requested
         if save_netcdf:
             dataset.to_netcdf(save_netcdf)
             print(f"Results saved to {save_netcdf}")
-
+    
         return dataset
 
     def plot_time_series_comparison(self, episodes_to_plot: Optional[List[int]] = None, save_path: str = "time_series_comparison.png"):
@@ -483,30 +491,32 @@ class Coliseum:
         n_agents = len(agents_to_plot)
         n_ti = len(dataset.ti)
         
-        fig, axes = plt.subplots(n_agents, n_ti, figsize=(4*n_ti, 4*n_agents))
-        if n_agents == 1 and n_ti == 1:
-            axes = [[axes]]
-        elif n_agents == 1:
-            axes = [axes]
-        elif n_ti == 1:
-            axes = [[ax] for ax in axes]
+        # Create subplots, one for each agent and TI combination
+        fig, axes = plt.subplots(n_agents, n_ti, figsize=(7 * n_ti, 5 * n_agents), squeeze=False)
 
         for i, agent in enumerate(agents_to_plot):
             for j, ti_val in enumerate(dataset.ti.values):
-                ax = axes[i][j]
+                ax = axes[i, j]
                 
-                data = dataset[f'{agent}_mean_reward'].sel(ti=ti_val)
-                im = ax.imshow(data.values, aspect='auto', origin='lower',
-                              extent=[data.ws.min(), data.ws.max(), 
-                                    data.wd.min(), data.wd.max()])
+                # Select the data for the current agent and TI value
+                data_for_ti = dataset[f'{agent}_mean_reward'].sel(ti=ti_val)
                 
-                ax.set_title(f'{agent} (TI={ti_val:.3f})')
-                ax.set_xlabel('Wind Speed (m/s)')
-                ax.set_ylabel('Wind Direction (deg)')
-                
-                plt.colorbar(im, ax=ax, label='Mean Reward')
+                # Loop through each wind speed to plot it as a separate line
+                for ws_val in data_for_ti.ws.values:
+                    # Select the data for this specific wind speed
+                    data_for_ws = data_for_ti.sel(ws=ws_val)
+                    
+                    # Plot Reward vs. Wind Direction
+                    ax.plot(data_for_ws.wd, data_for_ws.values, marker='o', linestyle='-', label=f'WS = {ws_val} m/s')
 
-        plt.tight_layout()
+                ax.set_title(f'{agent} (TI={ti_val:.3f})')
+                ax.set_xlabel('Wind Direction (deg)')
+                ax.set_ylabel('Mean Reward')
+                ax.legend()
+                ax.grid(True, alpha=0.4)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.96]) # Adjust layout to make space for suptitle
+        fig.suptitle('Agent Performance Across Wind Conditions', fontsize=16, weight='bold')
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
         print(f"Wind grid plot saved to {save_path}")
         plt.clf()
