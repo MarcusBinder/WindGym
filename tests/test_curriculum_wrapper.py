@@ -1,5 +1,5 @@
 """
-Unit tests for CurriculumWrapper (fixed version)
+Unit tests for CurriculumWrapper 
 
 pytest, numpy, gymnasium are the only run-time deps.
 """
