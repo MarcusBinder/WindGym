@@ -15,6 +15,7 @@ class FarmEval(WindFarmEnv):
         turbine,
         x_pos,
         y_pos,
+        finite_episode: bool = False,
         # Max and min values for the turbulence intensity measurements. Used for internal scaling
         TI_min_mes: float = 0.0,
         TI_max_mes: float = 0.50,
@@ -32,7 +33,9 @@ class FarmEval(WindFarmEnv):
         HTC_path=None,
         reset_init=True,
         fill_window=True,
+        sample_site=None,
     ):
+        self.finite_episode = finite_episode
         # TODO There must be a better way to set all these valuesm **kwargs???
         # Run the Env with these values, to make sure that the oberservartion space is the same.
         super().__init__(
@@ -55,6 +58,7 @@ class FarmEval(WindFarmEnv):
             HTC_path=HTC_path,
             reset_init=reset_init,
             fill_window=fill_window,
+            sample_site=sample_site,
         )
         self.yaml_path = yaml_path
 
@@ -62,8 +66,10 @@ class FarmEval(WindFarmEnv):
         # Overwrite the reset function so that we never terminates.
         # observation, info = WindFarmEnv.reset(self, seed, options)
         observation, info = super().reset(seed=seed, options=options)
-        # Just set to a very high number, so that we never terminate.
-        self.time_max = 9999999
+        # Only set an "infinite" time_max if the finite_episode flag is False.
+        if not self.finite_episode:
+            # This maintains the original "sandbox" behavior for fixed-step evaluations.
+            self.time_max = 9999999
 
         return observation, info
 
