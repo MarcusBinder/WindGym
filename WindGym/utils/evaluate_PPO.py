@@ -102,6 +102,13 @@ class Coliseum:
         
         obs, info = env.reset(seed=seed)
         
+        # If the agent needs to be updated with the environment's wind conditions, do so now.
+        if hasattr(agent, 'update_wind') and callable(getattr(agent, 'update_wind')):
+            if hasattr(env, 'ws') and hasattr(env, 'wd') and hasattr(env, 'ti'):
+                agent.update_wind(env.ws, env.wd, env.ti)
+            else:
+                print("Warning: Agent has 'update_wind' method, but env is missing ws, wd, or ti attributes.")
+      
         if hasattr(agent, "UseEnv"):
             agent.env = env
 
