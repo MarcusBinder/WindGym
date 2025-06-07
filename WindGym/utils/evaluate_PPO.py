@@ -1,177 +1,555 @@
-from WindGym import FarmEval
-from WindGym.wrappers import RecordEpisodeVals
-import gymnasty as gym
-import torch
-import torch.nn as nn
+"""
+Enhanced Coliseum Evaluation Framework
+=====================================
+
+A flexible evaluation framework for comparing multiple agents in WindFarm environments.
+
+Wind Sampling Behavior:
+- Time Series Evaluation: Uses sample_site for realistic stochastic wind sampling
+- Wind Grid Evaluation: Uses fixed wind conditions across the specified grid
+
+Supports time series evaluation with mean cumulative rewards and wind condition grid evaluation.
+"""
+
+import pandas as pd
 import numpy as np
-from torch.distributions.normal import Normal
+import matplotlib.pyplot as plt
+import xarray as xr
+from tqdm.auto import tqdm
+from typing import Callable, Dict, List, Optional, Union, Any
+from collections import defaultdict
+import copy
 
 
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, bias_const)
-    return layer
-
-
-class Agent(nn.Module):
-    def __init__(self, envs):
-        super().__init__()
-        self.critic = nn.Sequential(
-            layer_init(
-                nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)
-            ),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 1), std=1.0),
-        )
-        self.actor_mean = nn.Sequential(
-            layer_init(
-                nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)
-            ),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
-            nn.Tanh(),
-            layer_init(
-                nn.Linear(64, np.prod(envs.single_action_space.shape)), std=0.01
-            ),
-        )
-        self.actor_logstd = nn.Parameter(
-            torch.zeros(1, np.prod(envs.single_action_space.shape))
-        )
-
-    def get_value(self, x):
-        return self.critic(x)
-
-    def get_action_and_value(self, x, action=None):
-        action_mean = self.actor_mean(x)
-        action_logstd = self.actor_logstd.expand_as(action_mean)
-        action_std = torch.exp(action_logstd)
-        probs = Normal(action_mean, action_std)
-        if action is None:
-            action = probs.sample()
-        return (
-            action,
-            probs.log_prob(action).sum(1),
-            probs.entropy().sum(1),
-            self.critic(x),
-        )
-
-
-def make_eval_env(idx, wind_turbine, yaml_path, dt_sim, dt_env):
+class Coliseum:
     """
-    Makes the evaluation environment. Used for the evaluation of the model
-    """
-    ws_list = [
-        10,
-        11,
-        12,
-        10,
-        11,
-        12,
-        10,
-        11,
-        12,
-        10,
-        11,
-        12,
-        10,
-        11,
-        12,
-        10,
-        11,
-        12,
-        10,
-        11,
-        12,
-    ]
-    wd_list = [
-        255,
-        260,
-        265,
-        270,
-        275,
-        280,
-        285,
-        255,
-        260,
-        265,
-        270,
-        275,
-        280,
-        285,
-        255,
-        260,
-        265,
-        270,
-        275,
-        280,
-        285,
-    ]
-    env = FarmEval(
-        turbine=wind_turbine(),
-        n_passthrough=4000,  # this value is not used, as it is overridden in the env.
-        yaw_init="Zeros",
-        #   TurbBox="/work/users/manils/wesc/Boxes/V80env/",
-        TurbBox="/work/users/manils/p2t2t/Boxes/V80env/",
-        yaml_path=yaml_path,
-        dt_sim=dt_sim,
-        dt_env=dt_env,
-        reset_init=False,
-        turbtype="None",  # the type of turbulence.
-    )
-
-    ws = ws_list[idx]
-    wd = wd_list[idx]
-
-    env.set_wind_vals(ws=ws, ti=0.05, wd=wd)
-    return env
-
-
-def evaluate(
-    trained_agent,
-    n_envs=21,
-    n_steps=1000,
-):
-    """Function to evaluate the performance of the model.
-    Heavily based on the code from cleanrl. https://github.com/vwxyzjn/cleanrl/blob/master/cleanrl_utils/evals/ppo_eval.py
+    Enhanced evaluation framework to compare multiple agents in WindFarm environments.
+    
+    Features:
+    - Time series evaluation with detailed episode history
+    - Wind condition grid evaluation with NetCDF export
+    - Mean cumulative reward tracking
+    - Flexible agent management with custom labels
+    - Comprehensive plotting capabilities
     """
 
-    # First we make the eval envs.
-    eval_envs = gym.vector.AsyncVectorEnv(
-        [lambda: make_eval_env(idx) for idx in range(n_envs)],
-        autoreset_mode=gym.vector.AutoresetMode.SAME_STEP,
-    )
-    eval_envs = RecordEpisodeVals(eval_envs)
+    def __init__(
+        self,
+        env_factory: Callable,
+        agents: Union[Dict[str, object], List[object]],
+        agent_labels: Optional[List[str]] = None,
+        n_passthrough: float = 1.0,
+    ):
+        """
+        Initialize the Coliseum evaluation framework.
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        Args:
+            env_factory (Callable): Function that returns a new environment instance.
+                                   Example: `lambda: WindFarmEnv(...)`
+            agents (Union[Dict[str, object], List[object]]): 
+                   Either a dictionary {name: agent} or list of agent objects.
+                   All agents must have a `.predict(obs, deterministic)` method.
+            agent_labels (Optional[List[str]]): Custom labels for agents when using list input.
+                                              If None, defaults to "Agent_0", "Agent_1", etc.
+            n_passthrough (float, optional): Number of flow passthroughs for episode length.
+                                           Defaults to 1.0.
+        """
+        # Handle different agent input formats
+        if isinstance(agents, dict):
+            self.agents = agents
+            self.agent_names = list(agents.keys())
+        elif isinstance(agents, list):
+            if agent_labels is not None:
+                if len(agent_labels) != len(agents):
+                    raise ValueError("Number of agent_labels must match number of agents")
+                self.agent_names = agent_labels
+            else:
+                self.agent_names = [f"Agent_{i}" for i in range(len(agents))]
+            self.agents = dict(zip(self.agent_names, agents))
+        else:
+            raise ValueError("agents must be a dictionary or list")
 
-    # Make the agent that we want to evaluate, and copy the weights from the trained agent.
-    eval_agent = Agent(eval_envs).to(device)
+        if not self.agents:
+            raise ValueError("At least one agent must be provided")
 
-    eval_agent.load_state_dict(trained_agent.state_dict())
+        self.env_factory = env_factory
+        self.n_passthrough = n_passthrough
+        self.results: Optional[pd.DataFrame] = None
+        self.time_series_results: Optional[Dict[str, Any]] = None
 
-    eval_agent.eval()
+    def _run_single_episode_with_history(
+        self, 
+        env: Any, 
+        agent: object, 
+        agent_name: str,
+        seed: int, 
+        deterministic: bool = True,
+        use_stochastic_wind: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Run a single episode and return detailed history including mean cumulative reward.
+        
+        Args:
+            use_stochastic_wind: If True, uses sample_site for realistic wind sampling.
+                               If False, relies on any pre-set wind conditions.
+        
+        Returns:
+            Dictionary with episode history and final statistics
+        """
+        # For stochastic evaluation, ensure sample_site is used for realistic wind sampling
+        if use_stochastic_wind and hasattr(env, 'sample_site') and env.sample_site is None:
+            print("Warning: No sample_site configured for realistic wind sampling. Using uniform sampling.")
+        
+        obs, info = env.reset(seed=seed)
+        
+        if hasattr(agent, "UseEnv"):
+            agent.env = env
 
-    # Now the agent is ready to be trained. We then reset the environment, and do n_steps.
-    obs, _ = eval_envs.reset()
+        # Initialize tracking
+        history = {
+            'step': [],
+            'reward': [],
+            'mean_cumulative_reward': [],
+            'info': []
+        }
+        
+        cumulative_reward = 0.0
+        step_count = 0
+        terminated = truncated = False
 
-    for _ in range(n_steps):
-        actions, _, _, _ = eval_agent.get_action_and_value(torch.Tensor(obs).to(device))
-        next_obs, _, _, _, infos = eval_envs.step(actions.cpu().numpy())
-        obs = next_obs
+        while not (terminated or truncated):
+            # Get action
+            action, _ = agent.predict(obs, deterministic=deterministic)
+            
+            # Step environment
+            obs, reward, terminated, truncated, info = env.step(action)
+            
+            # Update tracking
+            cumulative_reward += reward
+            step_count += 1
+            mean_cumulative_reward = cumulative_reward / step_count
+            
+            # Record history
+            history['step'].append(step_count - 1)
+            history['reward'].append(reward)
+            history['mean_cumulative_reward'].append(mean_cumulative_reward)
+            history['info'].append(copy.deepcopy(info))
 
-    # The eval score is the total power produced by the wind farm, divided by the number of environments and the number of turbines, and the steps.
-    eval_score = (
-        eval_envs.episode_powers.sum()
-        / eval_envs.num_envs
-        / eval_envs.single_action_space.shape[0]
-        / n_steps
-    )
+        # Convert to numpy arrays
+        for key in ['step', 'reward', 'mean_cumulative_reward']:
+            history[key] = np.array(history[key])
 
-    # Clean up
-    eval_envs.close()
-    del eval_envs
-    del eval_agent
+        return {
+            'history': history,
+            'final_mean_reward': mean_cumulative_reward,
+            'total_reward': cumulative_reward,
+            'episode_length': step_count,
+            'agent_name': agent_name
+        }
 
-    return eval_score
+    def _run_single_episode_summary(
+        self, 
+        env: Any, 
+        agent: object, 
+        seed: int, 
+        deterministic: bool = True,
+        use_stochastic_wind: bool = True
+    ) -> float:
+        """
+        Run a single episode and return only the final mean cumulative reward.
+        
+        Args:
+            use_stochastic_wind: If True, uses sample_site for realistic wind sampling.
+        """
+        # For stochastic evaluation, ensure sample_site is used
+        if use_stochastic_wind and hasattr(env, 'sample_site') and env.sample_site is None:
+            print("Warning: No sample_site configured for realistic wind sampling. Using uniform sampling.")
+            
+        obs, info = env.reset(seed=seed)
+        
+        if hasattr(agent, "UseEnv"):
+            agent.env = env
+
+        cumulative_reward = 0.0
+        step_count = 0
+        terminated = truncated = False
+
+        while not (terminated or truncated):
+            action, _ = agent.predict(obs, deterministic=deterministic)
+            obs, reward, terminated, truncated, info = env.step(action)
+            cumulative_reward += reward
+            step_count += 1
+
+        return cumulative_reward / step_count if step_count > 0 else 0.0
+
+    def run_time_series_evaluation(
+        self,
+        num_episodes: int = 10,
+        seed: int = 42,
+        deterministic: bool = True,
+        save_detailed_history: bool = True
+    ) -> pd.DataFrame:
+        """
+        Run time series evaluation with stochastic wind conditions using sample_site.
+        
+        This method relies on the environment's sample_site for realistic wind sampling.
+        Each episode will have different wind conditions sampled from the site's
+        wind resource distributions (Weibull for wind speed, frequency for direction).
+
+        Args:
+            num_episodes (int): Number of episodes to run
+            seed (int): Master seed for reproducibility
+            deterministic (bool): Whether to use deterministic agent policies
+            save_detailed_history (bool): Whether to save detailed time series data
+
+        Returns:
+            pd.DataFrame: Summary results with mean cumulative rewards
+        """
+        rng = np.random.default_rng(seed)
+        results_data = []
+        
+        if save_detailed_history:
+            self.time_series_results = defaultdict(list)
+
+        # Check if any environment has sample_site configured
+        temp_env = self.env_factory()
+        has_sample_site = hasattr(temp_env, 'sample_site') and temp_env.sample_site is not None
+        temp_env.close()
+        
+        if not has_sample_site:
+            print("Warning: No sample_site configured in environment. Time series evaluation")
+            print("will use uniform wind sampling instead of realistic site-based sampling.")
+            print("Consider configuring sample_site for more realistic wind conditions.")
+
+        print(f"Running time series evaluation for {num_episodes} episodes...")
+        print(f"Wind sampling: {'Site-based (realistic)' if has_sample_site else 'Uniform (simplified)'}")
+        
+        for episode in tqdm(range(num_episodes), desc="Time Series Evaluation"):
+            episode_seed = int(rng.integers(2**31))
+            episode_results = {"episode": episode}
+            
+            for agent_name in self.agent_names:
+                # Create fresh environment for each agent
+                env = self.env_factory()
+                env.n_passthrough = self.n_passthrough
+                
+                try:
+                    agent = self.agents[agent_name]
+                    
+                    if save_detailed_history:
+                        # Run with full history tracking and stochastic wind
+                        result = self._run_single_episode_with_history(
+                            env, agent, agent_name, episode_seed, deterministic, 
+                            use_stochastic_wind=True
+                        )
+                        self.time_series_results[agent_name].append(result)
+                        episode_results[agent_name] = result['final_mean_reward']
+                    else:
+                        # Run summary only with stochastic wind
+                        mean_reward = self._run_single_episode_summary(
+                            env, agent, episode_seed, deterministic,
+                            use_stochastic_wind=True
+                        )
+                        episode_results[agent_name] = mean_reward
+                        
+                finally:
+                    env.close()
+            
+            results_data.append(episode_results)
+
+        self.results = pd.DataFrame(results_data)
+        return self.results
+
+    def run_wind_grid_evaluation(
+        self,
+        wd_step: int = 10,
+        ws_step: int = 2,
+        ti_points: int = 3,
+        wd_min: Optional[float] = None,
+        wd_max: Optional[float] = None,
+        ws_min: Optional[float] = None,
+        ws_max: Optional[float] = None,
+        ti_min: Optional[float] = None,
+        ti_max: Optional[float] = None,
+        deterministic: bool = True,
+        save_netcdf: Optional[str] = None
+    ) -> xr.Dataset:
+        """
+        Run evaluation over a grid of wind conditions and return as xarray Dataset.
+
+        Args:
+            wd_step (int): Wind direction step size in degrees
+            ws_step (int): Wind speed step size in m/s  
+            ti_points (int): Number of turbulence intensity points
+            wd_min (Optional[float]): Minimum wind direction. If None, uses env.wd_min
+            wd_max (Optional[float]): Maximum wind direction. If None, uses env.wd_max
+            ws_min (Optional[float]): Minimum wind speed. If None, uses env.ws_min
+            ws_max (Optional[float]): Maximum wind speed. If None, uses env.ws_max
+            ti_min (Optional[float]): Minimum turbulence intensity. If None, uses env.TI_min
+            ti_max (Optional[float]): Maximum turbulence intensity. If None, uses env.TI_max
+            deterministic (bool): Whether to use deterministic policies
+            save_netcdf (Optional[str]): Path to save NetCDF file
+
+        Returns:
+            xr.Dataset: Results with dimensions (wd, ws, ti) and variables for each agent
+        """
+        # Get environment bounds (use as defaults)
+        temp_env = self.env_factory()
+        
+        # Use user-provided bounds or fall back to environment defaults
+        wd_min_actual = wd_min if wd_min is not None else temp_env.wd_min
+        wd_max_actual = wd_max if wd_max is not None else temp_env.wd_max
+        ws_min_actual = ws_min if ws_min is not None else temp_env.ws_min
+        ws_max_actual = ws_max if ws_max is not None else temp_env.ws_max
+        ti_min_actual = ti_min if ti_min is not None else temp_env.TI_min
+        ti_max_actual = ti_max if ti_max is not None else temp_env.TI_max
+        
+        temp_env.close()
+        
+        # Create grids using actual bounds
+        wd_grid = np.arange(wd_min_actual, wd_max_actual + 1, wd_step)
+        ws_grid = np.arange(ws_min_actual, ws_max_actual + 1, ws_step)
+        ti_grid = np.linspace(ti_min_actual, ti_max_actual, ti_points)
+
+        total_cases = len(wd_grid) * len(ws_grid) * len(ti_grid)
+        print(f"Running wind grid evaluation over {total_cases} conditions...")
+        print(f"  Wind Direction: {wd_min_actual}° to {wd_max_actual}° (step: {wd_step}°)")
+        print(f"  Wind Speed: {ws_min_actual} to {ws_max_actual} m/s (step: {ws_step} m/s)")
+        print(f"  Turbulence Intensity: {ti_min_actual:.3f} to {ti_max_actual:.3f} ({ti_points} points)")
+
+        # Initialize result arrays
+        results = {}
+        for agent_name in self.agent_names:
+            results[agent_name] = np.full((len(wd_grid), len(ws_grid), len(ti_grid)), np.nan)
+
+        # Run evaluation
+        with tqdm(total=total_cases, desc="Wind Grid Evaluation") as pbar:
+            for i, wd in enumerate(wd_grid):
+                for j, ws in enumerate(ws_grid):
+                    for k, ti in enumerate(ti_grid):
+                        # Use condition-based seed for reproducibility
+                        condition_seed = int(wd * 100 + ws * 10 + ti * 1000) % (2**31)
+
+                        for agent_name in self.agent_names:
+                            env = self.env_factory()
+                            env.n_passthrough = self.n_passthrough
+                            
+                            try:
+                                # Set fixed wind conditions (overrides sample_site)
+                                env.set_wind_vals(ws=ws, ti=ti, wd=wd)
+                                agent = self.agents[agent_name]
+                                
+                                # Run episode with fixed conditions (no stochastic sampling)
+                                mean_reward = self._run_single_episode_summary(
+                                    env, agent, condition_seed, deterministic,
+                                    use_stochastic_wind=False  # Use fixed conditions
+                                )
+                                results[agent_name][i, j, k] = mean_reward
+                                
+                            finally:
+                                env.close()
+                        
+                        pbar.update(1)
+
+        # Create xarray Dataset
+        coords = {
+            'wd': wd_grid,
+            'ws': ws_grid, 
+            'ti': ti_grid
+        }
+        
+        data_vars = {}
+        for agent_name in self.agent_names:
+            data_vars[f'{agent_name}_mean_reward'] = (('wd', 'ws', 'ti'), results[agent_name])
+
+        dataset = xr.Dataset(data_vars, coords=coords)
+        
+        # Add metadata including actual bounds used
+        dataset.attrs.update({
+            'description': 'Wind farm agent evaluation results',
+            'agents': list(self.agent_names),
+            'n_passthrough': self.n_passthrough,
+            'evaluation_type': 'wind_grid',
+            'bounds_used': {
+                'wd_min': wd_min_actual, 'wd_max': wd_max_actual,
+                'ws_min': ws_min_actual, 'ws_max': ws_max_actual, 
+                'ti_min': ti_min_actual, 'ti_max': ti_max_actual
+            }
+        })
+
+        # Save NetCDF if requested
+        if save_netcdf:
+            dataset.to_netcdf(save_netcdf)
+            print(f"Results saved to {save_netcdf}")
+
+        return dataset
+
+    def plot_time_series_comparison(self, episodes_to_plot: Optional[List[int]] = None, save_path: str = "time_series_comparison.png"):
+        """
+        Plot time series comparison of mean cumulative rewards.
+        
+        Args:
+            episodes_to_plot (Optional[List[int]]): Specific episodes to plot. 
+                                                  If None, plots first 3 episodes.
+            save_path (str): Path to save the figure
+        """
+        if self.time_series_results is None:
+            print("No time series data available. Run time series evaluation first.")
+            return
+
+        if episodes_to_plot is None:
+            episodes_to_plot = list(range(min(3, len(list(self.time_series_results.values())[0]))))
+
+        fig, axes = plt.subplots(len(episodes_to_plot), 1, figsize=(12, 4 * len(episodes_to_plot)))
+        if len(episodes_to_plot) == 1:
+            axes = [axes]
+
+        colors = plt.cm.viridis(np.linspace(0, 1, len(self.agent_names)))
+
+        for ep_idx, episode in enumerate(episodes_to_plot):
+            ax = axes[ep_idx]
+            
+            for agent_idx, agent_name in enumerate(self.agent_names):
+                if episode < len(self.time_series_results[agent_name]):
+                    result = self.time_series_results[agent_name][episode]
+                    history = result['history']
+                    
+                    ax.plot(history['step'], history['mean_cumulative_reward'],
+                           color=colors[agent_idx], label=agent_name, linewidth=2)
+            
+            ax.set_title(f'Episode {episode}: Mean Cumulative Reward')
+            ax.set_xlabel('Step')
+            ax.set_ylabel('Mean Cumulative Reward')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Time series plot saved to {save_path}")
+        plt.clf()
+        plt.close(fig)
+
+    def plot_summary_comparison(self, save_path: str = "summary_comparison.png"):
+        """
+        Plot summary comparison showing average performance across all episodes.
+        
+        Args:
+            save_path (str): Path to save the figure
+        """
+        if self.results is None:
+            print("No results to plot. Run an evaluation first.")
+            return
+
+        mean_rewards = self.results[self.agent_names].mean()
+        std_rewards = self.results[self.agent_names].std()
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        
+        bars = ax.bar(mean_rewards.index, mean_rewards.values, 
+                     yerr=std_rewards.values, capsize=5,
+                     color=plt.cm.viridis(np.linspace(0.3, 0.9, len(self.agent_names))))
+        
+        ax.bar_label(bars, fmt='{:.3f}', padding=3)
+        
+        ax.set_ylabel("Mean Cumulative Reward", fontsize=12)
+        ax.set_title("Agent Performance Comparison", fontsize=14, weight='bold')
+        ax.tick_params(axis='x', rotation=15)
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Summary plot saved to {save_path}")
+        plt.clf()
+        plt.close(fig)
+
+    def plot_wind_grid_results(self, dataset: xr.Dataset, agent_name: Optional[str] = None, save_path: str = "wind_grid_results.png"):
+        """
+        Plot wind grid evaluation results as heatmaps.
+        
+        Args:
+            dataset (xr.Dataset): Results from wind grid evaluation
+            agent_name (Optional[str]): Specific agent to plot. If None, plots all agents.
+            save_path (str): Path to save the figure
+        """
+        agents_to_plot = [agent_name] if agent_name else self.agent_names
+        
+        n_agents = len(agents_to_plot)
+        n_ti = len(dataset.ti)
+        
+        fig, axes = plt.subplots(n_agents, n_ti, figsize=(4*n_ti, 4*n_agents))
+        if n_agents == 1 and n_ti == 1:
+            axes = [[axes]]
+        elif n_agents == 1:
+            axes = [axes]
+        elif n_ti == 1:
+            axes = [[ax] for ax in axes]
+
+        for i, agent in enumerate(agents_to_plot):
+            for j, ti_val in enumerate(dataset.ti.values):
+                ax = axes[i][j]
+                
+                data = dataset[f'{agent}_mean_reward'].sel(ti=ti_val)
+                im = ax.imshow(data.values, aspect='auto', origin='lower',
+                              extent=[data.ws.min(), data.ws.max(), 
+                                    data.wd.min(), data.wd.max()])
+                
+                ax.set_title(f'{agent} (TI={ti_val:.3f})')
+                ax.set_xlabel('Wind Speed (m/s)')
+                ax.set_ylabel('Wind Direction (deg)')
+                
+                plt.colorbar(im, ax=ax, label='Mean Reward')
+
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Wind grid plot saved to {save_path}")
+        plt.clf()
+        plt.close(fig)
+
+    def get_summary_statistics(self) -> pd.DataFrame:
+        """Get summary statistics for all agents across all episodes."""
+        if self.results is None:
+            print("No results available. Run an evaluation first.")
+            return pd.DataFrame()
+
+        summary_stats = []
+        for agent_name in self.agent_names:
+            agent_results = self.results[agent_name]
+            stats = {
+                'Agent': agent_name,
+                'Mean': agent_results.mean(),
+                'Std': agent_results.std(),
+                'Min': agent_results.min(),
+                'Max': agent_results.max(),
+                'Median': agent_results.median()
+            }
+            summary_stats.append(stats)
+
+        return pd.DataFrame(summary_stats)
+
+    @staticmethod
+    def create_env_factory_with_site(env_class, site, **env_kwargs):
+        """
+        Helper method to create an environment factory with sample_site configured.
+        
+        Args:
+            env_class: Environment class (e.g., WindFarmEnv, EvaluationEnv)
+            site: PyWake site object for realistic wind sampling
+            **env_kwargs: Additional environment parameters
+            
+        Returns:
+            Callable: Environment factory function
+            
+        Example:
+            from py_wake.examples.data.hornsrev1 import Hornsrev1Site
+            
+            site = Hornsrev1Site()
+            env_factory = Coliseum.create_env_factory_with_site(
+                WindFarmEnv, site,
+                turbine=V80(), x_pos=x_pos, y_pos=y_pos,
+                yaml_path="config.yaml"
+            )
+            coliseum = Coliseum(env_factory, agents)
+        """
+        def factory():
+            return env_class(sample_site=site, **env_kwargs)
+        return factory
