@@ -110,13 +110,19 @@ class Coliseum:
 
         obs, info = env.reset(seed=seed)
 
+        base_env = env.unwrapped
         # If the agent needs to be updated with the environment's wind conditions, do so now.
         if hasattr(agent, "update_wind") and callable(getattr(agent, "update_wind")):
-            if hasattr(env, "ws") and hasattr(env, "wd") and hasattr(env, "ti"):
-                agent.update_wind(env.ws, env.wd, env.ti)
+            # Check the base_env for the attributes, not the wrapper
+            if (
+                hasattr(base_env, "ws")
+                and hasattr(base_env, "wd")
+                and hasattr(base_env, "ti")
+            ):
+                agent.update_wind(base_env.ws, base_env.wd, base_env.ti)
             else:
                 print(
-                    "Warning: Agent has 'update_wind' method, but env is missing ws, wd, or ti attributes."
+                    f"Warning: Agent '{agent_name}' has 'update_wind' method, but the base env is missing ws, wd, or ti attributes."
                 )
 
         if hasattr(agent, "UseEnv"):
@@ -166,6 +172,7 @@ class Coliseum:
         seed: int,
         deterministic: bool = True,
         use_stochastic_wind: bool = True,
+        agent_name: str = "agent",
     ) -> float:
         """
         Run a single episode and return only the final mean cumulative reward.
@@ -185,12 +192,18 @@ class Coliseum:
 
         obs, info = env.reset(seed=seed)
 
+        base_env = env.unwrapped
         if hasattr(agent, "update_wind") and callable(getattr(agent, "update_wind")):
-            if hasattr(env, "ws") and hasattr(env, "wd") and hasattr(env, "ti"):
-                agent.update_wind(wind_speed=env.ws, wind_direction=env.wd, TI=env.ti)
+            if (
+                hasattr(base_env, "ws")
+                and hasattr(base_env, "wd")
+                and hasattr(base_env, "ti")
+            ):
+                agent.update_wind(base_env.ws, base_env.wd, base_env.ti)
             else:
+                # This warning should no longer appear with the corrected check.
                 print(
-                    "Warning: Agent has 'update_wind' method, but env is missing ws, wd, or ti attributes."
+                    f"Warning: Agent '{agent_name}' has 'update_wind' method, but the base env is missing ws, wd, or ti attributes."
                 )
 
         if hasattr(agent, "UseEnv"):
@@ -205,6 +218,8 @@ class Coliseum:
             obs, reward, terminated, truncated, info = env.step(action)
             cumulative_reward += reward
             step_count += 1
+            if step_count % 50 == 0:
+                print(step_count)
 
         return cumulative_reward / step_count if step_count > 0 else 0.0
 
@@ -284,6 +299,7 @@ class Coliseum:
                             episode_seed,
                             deterministic,
                             use_stochastic_wind=True,
+                            agent_name=agent_name,
                         )
                         self.time_series_results[agent_name].append(result)
                         episode_results[agent_name] = result["final_mean_reward"]
