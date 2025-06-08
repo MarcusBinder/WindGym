@@ -270,6 +270,9 @@ class Coliseum:
                 env.n_passthrough = self.n_passthrough
 
                 try:
+                    if hasattr(env.unwrapped, 'n_passthrough'):
+                        env.unwrapped.n_passthrough = self.n_passthrough
+        
                     agent = self.agents[agent_name]
 
                     if save_detailed_history:
