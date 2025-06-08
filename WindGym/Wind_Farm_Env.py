@@ -207,20 +207,21 @@ class WindFarmEnv(WindEnv):
         if turbtype == "MannLoad":
             if TurbBox is None or not os.path.exists(TurbBox):
                 raise FileNotFoundError(
-                    f"turbtype is 'MannLoad' but a valid path was not provided to 'TurbBox'. "
-                    f"Please provide a path to your turbulence files or use turbtype='MannGenerate'."
+                    "turbtype is 'MannLoad' but a valid path was not provided to 'TurbBox'. "
+                    "Please provide a path to your turbulence files or use turbtype='MannGenerate'."
                 )
-        
+
             if os.path.isfile(TurbBox):
                 self.TF_files.append(TurbBox)
             else:
                 for f in os.listdir(TurbBox):
-                    if f.startswith("TF_") and f.endswith(".nc"): # Be more specific
-                         self.TF_files.append(os.path.join(TurbBox, f))
-        
-            if not self.TF_files:
-                raise FileNotFoundError(f"No valid turbulence files (TF_*.nc) found in directory: {TurbBox}")
+                    if f.startswith("TF_") and f.endswith(".nc"):  # Be more specific
+                        self.TF_files.append(os.path.join(TurbBox, f))
 
+            if not self.TF_files:
+                raise FileNotFoundError(
+                    f"No valid turbulence files (TF_*.nc) found in directory: {TurbBox}"
+                )
 
         # If we need to have a "baseline" farm, then we need to set up the baseline controller
         # This could be moved to the Power_reward check, but I have a feeling this will be expanded in the future, when we include damage.

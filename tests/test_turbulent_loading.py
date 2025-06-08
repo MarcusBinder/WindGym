@@ -279,9 +279,9 @@ class TestTurbulenceLoading:
         yaml_filepath = temp_yaml_filepath_factory(yaml_content, "mann_dir_empty")
         empty_turb_dir = tmp_path / "empty_turbulence_boxes"
         empty_turb_dir.mkdir()
-        
+
         x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
-    
+
         # Use pytest.raises to assert that the expected exception is thrown
         with pytest.raises(FileNotFoundError, match="No valid turbulence files"):
             WindFarmEnv(
@@ -294,7 +294,7 @@ class TestTurbulenceLoading:
                 reset_init=True,
                 seed=42,
             )
-    
+
     def test_turbtype_manngenerate(self, temp_yaml_filepath_factory, monkeypatch):
         yaml_content = assemble_base_yaml_config_string()
         yaml_filepath = temp_yaml_filepath_factory(yaml_content, "mann_gen")
@@ -398,13 +398,15 @@ class TestTurbulenceLoading:
         check_env(env, skip_render_check=True)
         env.close()
 
-    def test_turbtype_mannload_raises_error_on_invalid_path(self, temp_yaml_filepath_factory):
+    def test_turbtype_mannload_raises_error_on_invalid_path(
+        self, temp_yaml_filepath_factory
+    ):
         yaml_content = assemble_base_yaml_config_string()
         yaml_filepath = temp_yaml_filepath_factory(yaml_content, "mann_invalid_path")
         x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
-        
+
         invalid_path = "./this/path/does/not/exist"
-        
+
         # Test with a non-existent path
         with pytest.raises(FileNotFoundError, match="a valid path was not provided"):
             WindFarmEnv(
@@ -415,7 +417,7 @@ class TestTurbulenceLoading:
                 turbtype="MannLoad",
                 TurbBox=invalid_path,
             )
-    
+
         # Test with TurbBox=None
         with pytest.raises(FileNotFoundError, match="a valid path was not provided"):
             WindFarmEnv(
