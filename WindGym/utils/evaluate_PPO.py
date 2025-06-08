@@ -119,7 +119,10 @@ class Coliseum:
                 and hasattr(base_env, "wd")
                 and hasattr(base_env, "ti")
             ):
-                agent.update_wind(base_env.ws, base_env.wd, base_env.ti)
+                agent.update_wind(
+                    wind_speed=base_env.ws, wind_direction=base_env.wd, TI=base_env.ti
+                )
+
             else:
                 print(
                     f"Warning: Agent '{agent_name}' has 'update_wind' method, but the base env is missing ws, wd, or ti attributes."
@@ -199,7 +202,10 @@ class Coliseum:
                 and hasattr(base_env, "wd")
                 and hasattr(base_env, "ti")
             ):
-                agent.update_wind(base_env.ws, base_env.wd, base_env.ti)
+                agent.update_wind(
+                    wind_speed=base_env.ws, wind_direction=base_env.wd, TI=base_env.ti
+                )
+
             else:
                 # This warning should no longer appear with the corrected check.
                 print(
@@ -299,7 +305,6 @@ class Coliseum:
                             episode_seed,
                             deterministic,
                             use_stochastic_wind=True,
-                            agent_name=agent_name,
                         )
                         self.time_series_results[agent_name].append(result)
                         episode_results[agent_name] = result["final_mean_reward"]
