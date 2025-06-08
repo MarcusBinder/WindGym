@@ -272,55 +272,29 @@ class TestTurbulenceLoading:
         check_env(env, skip_render_check=True)
         env.close()
 
-    def test_turbtype_mannload_directory_empty_fallback(
-        self, tmp_path, temp_yaml_filepath_factory, monkeypatch
+    def test_turbtype_mannload_raises_error_for_empty_directory(
+        self, tmp_path, temp_yaml_filepath_factory
     ):
         yaml_content = assemble_base_yaml_config_string()
         yaml_filepath = temp_yaml_filepath_factory(yaml_content, "mann_dir_empty")
         empty_turb_dir = tmp_path / "empty_turbulence_boxes"
         empty_turb_dir.mkdir()
-
-        from_netcdf_called_count = 0
-
-        def mock_from_netcdf_fail(filename):
-            nonlocal from_netcdf_called_count
-            from_netcdf_called_count += 1
-            pytest.fail("from_netcdf was called unexpectedly during fallback test")
-
-        monkeypatch.setattr(MannTurbulenceField, "from_netcdf", mock_from_netcdf_fail)
-
-        generate_called_count = 0
-
-        def mock_generate(*args, **kwargs):
-            nonlocal generate_called_count
-            generate_called_count += 1
-            return create_mock_mann_field_instance(monkeypatch)  # Pass monkeypatch
-
-        monkeypatch.setattr(MannTurbulenceField, "generate", mock_generate)
+        
         x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
-
-        env = WindFarmEnv(
-            turbine=V80(),
-            x_pos=x_pos,
-            y_pos=y_pos,
-            yaml_path=yaml_filepath,
-            turbtype="MannLoad",
-            TurbBox=str(empty_turb_dir),
-            reset_init=True,
-            seed=42,
-        )
-
-        assert env.turbtype == "MannGenerate"
-        assert from_netcdf_called_count == 0
-        assert generate_called_count > 0
-        assert len(env.TF_files) == 0
-        assert isinstance(
-            env.addedTurbulenceModel, SynchronizedAutoScalingIsotropicMannTurbulence
-        )
-        assert isinstance(env.site.turbulenceField, MannTurbulenceField)
-        check_env(env, skip_render_check=True)
-        env.close()
-
+    
+        # Use pytest.raises to assert that the expected exception is thrown
+        with pytest.raises(FileNotFoundError, match="No valid turbulence files"):
+            WindFarmEnv(
+                turbine=V80(),
+                x_pos=x_pos,
+                y_pos=y_pos,
+                yaml_path=yaml_filepath,
+                turbtype="MannLoad",
+                TurbBox=str(empty_turb_dir),
+                reset_init=True,
+                seed=42,
+            )
+    
     def test_turbtype_manngenerate(self, temp_yaml_filepath_factory, monkeypatch):
         yaml_content = assemble_base_yaml_config_string()
         yaml_filepath = temp_yaml_filepath_factory(yaml_content, "mann_gen")
@@ -423,3 +397,32 @@ class TestTurbulenceLoading:
         assert isinstance(env.site.turbulenceField, MannTurbulenceField)
         check_env(env, skip_render_check=True)
         env.close()
+
+    def test_turbtype_mannload_raises_error_on_invalid_path(self, temp_yaml_filepath_factory):
+        yaml_content = assemble_base_yaml_config_string()
+        yaml_filepath = temp_yaml_filepath_factory(yaml_content, "mann_invalid_path")
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
+        
+        invalid_path = "./this/path/does/not/exist"
+        
+        # Test with a non-existent path
+        with pytest.raises(FileNotFoundError, match="a valid path was not provided"):
+            WindFarmEnv(
+                turbine=V80(),
+                x_pos=x_pos,
+                y_pos=y_pos,
+                yaml_path=yaml_filepath,
+                turbtype="MannLoad",
+                TurbBox=invalid_path,
+            )
+    
+        # Test with TurbBox=None
+        with pytest.raises(FileNotFoundError, match="a valid path was not provided"):
+            WindFarmEnv(
+                turbine=V80(),
+                x_pos=x_pos,
+                y_pos=y_pos,
+                yaml_path=yaml_filepath,
+                turbtype="MannLoad",
+                TurbBox=None,
+            )
