@@ -7,7 +7,11 @@ from dynamiks.views import XYView, EastNorthView
 from dynamiks.visualizers.flow_visualizers import Flow2DVisualizer
 from py_wake.utils.plotting import setup_plot
 import os
+
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as path_effects
+from matplotlib.patches import Ellipse
+
 from collections import deque
 from py_wake.wind_turbines import WindTurbines as WindTurbinesPW
 
@@ -178,7 +182,7 @@ def eval_single_fast(
         ws_min = 3
 
         # Define the x and y values for the flow field plot
-        a = np.linspace(-200 + min(env.x_pos), 200 + max(env.x_pos), 200)
+        a = np.linspace(-200 + min(env.x_pos), 400 + max(env.x_pos), 200)
         b = np.linspace(-200 + min(env.y_pos), 200 + max(env.y_pos), 200)
 
     # Run the simulation
@@ -242,17 +246,44 @@ def eval_single_fast(
                 vmin=3,
                 vmax=env.ws + 2,
             )
-            plt.colorbar().set_label("Wind speed, u [m/s]")
-            WindTurbinesPW.plot_xy(
-                wt,
-                x_turb,
-                y_turb,
-                types=wt.types,
-                wd=env.fs.wind_direction,
-                ax=ax1,
-                yaw=yaw,
-                tilt=tilt,
-            )
+            plt.colorbar().set_label("Wind speed [m/s]")
+
+            # This is code taken from PyWake, but slightly modified to fit our needs.
+            colors = ["k", "gray", "r", "g"] * 5
+
+            x, y, D = [np.asarray(v) for v in [x_turb, y_turb, wt.diameter()]]
+            R = D / 2
+            types = np.zeros_like(
+                x, dtype=int
+            )  # Assuming all turbines are of the same type
+            for i, (x_, y_, r, t, yaw_, tilt_) in enumerate(
+                zip(x, y, R, types, yaw, tilt)
+            ):
+                for wd_ in np.atleast_1d(env.fs.wind_direction):
+                    circle = Ellipse(
+                        (x_, y_),
+                        2 * r * np.sin(np.deg2rad(tilt_)),
+                        2 * r,
+                        angle=90 - wd_ + yaw_,
+                        ec=colors[t],
+                        fc="None",
+                    )
+                    ax1.add_artist(circle)
+                    ax1.plot(x_, y_, ".", color=colors[t])
+
+                for i, (x_, y_, r) in enumerate(zip(x, y, R)):
+                    text = ax1.annotate(
+                        i + 1,
+                        (x_ - r, y_ + r),
+                        fontsize=10,
+                        color="white",
+                    )
+                    text.set_path_effects(
+                        [
+                            path_effects.Stroke(linewidth=2, foreground="black"),
+                            path_effects.Normal(),
+                        ]
+                    )
 
             ax1.set_title("Flow field at {} s".format(env.fs.time))
             plt.gca().xaxis.set_major_locator(plt.NullLocator())
@@ -278,11 +309,15 @@ def eval_single_fast(
             # Plot the yaws in ax3
             ax3.plot(time_deq, yaw_deq, label=np.arange(n_turb))
             ax3.set_title("Turbine yaws [deg]")
-            ax3.legend(loc="upper left")
+            ax3.legend(
+                [f"T{i+1}" for i in range(n_turb)],
+                loc="upper left",
+                bbox_to_anchor=(1, 1),
+            )
 
             # Plot the rotor windspeeds in ax4
             ax4.plot(time_deq, ws_deq, label=np.arange(n_turb))
-            ax4.set_title("Rotor windspeeds [m/s]")
+            ax4.set_title("Local wind speed [m/s]")
             ax4.set_xlabel("Time [s]")
 
             # Set the x limits for the plots
@@ -302,11 +337,18 @@ def eval_single_fast(
             ax2.set_ylim(pow_min, pow_max)
             ax3.set_ylim(yaw_min, yaw_max)
             ax4.set_ylim(ws_min, ws_max)
-            ax2.set_xticks([])
-            ax3.set_xticks([])
+            # ax2.set_xticks([])
+            # ax3.set_xticks([])
+
+            ax2.tick_params(axis="x", colors="white")
+            ax3.tick_params(axis="x", colors="white")
 
             # Set the number of ticks on the x-axis to 5
             ax4.locator_params(axis="x", nbins=5)
+
+            ax2.grid()
+            ax3.grid()
+            ax4.grid()
 
             img_name = FOLDER + "img_{:05d}.png".format(i)
 
