@@ -128,7 +128,7 @@ class WindFarmEnv(WindEnv):
         # The distance between the particles. This is used in the flow simulation.
         self.d_particle = 0.2
         self.n_particles = None
-        self.temporal_filter=CutOffFrqLio2021
+        self.temporal_filter = CutOffFrqLio2021
         self.turbtype = turbtype
 
         # Saves to self
@@ -755,7 +755,9 @@ class WindFarmEnv(WindEnv):
             dt=self.dt,
             n_particles=self.n_particles,
             d_particle=self.d_particle,
-            particleMotionModel=HillVortexParticleMotion(temporal_filter=self.temporal_filter),
+            particleMotionModel=HillVortexParticleMotion(
+                temporal_filter=self.temporal_filter
+            ),
             addedTurbulenceModel=self.addedTurbulenceModel,
         )  # NOTE, we need this particlemotion to capture the yaw
 
@@ -840,7 +842,9 @@ class WindFarmEnv(WindEnv):
                 dt=self.dt,
                 n_particles=self.n_particles,
                 d_particle=self.d_particle,
-                particleMotionModel=HillVortexParticleMotion(temporal_filter=self.temporal_filter),
+                particleMotionModel=HillVortexParticleMotion(
+                    temporal_filter=self.temporal_filter
+                ),
                 addedTurbulenceModel=self.addedTurbulenceModel,
             )
 
@@ -989,24 +993,32 @@ class WindFarmEnv(WindEnv):
 
         # Save the old yaw angles, so we can calculate the change in yaw angles
         self.old_yaws = copy.copy(self.fs.windTurbines.yaw)
-        
+
         # Run multiple simulation steps for each environment step
         # Initialize list to store observations
 
         time_array = np.zeros(self.sim_steps_per_env_step, dtype=np.float32)
-        windspeeds = np.zeros((self.sim_steps_per_env_step, self.n_turb), dtype=np.float32)
-        winddirs = np.zeros((self.sim_steps_per_env_step, self.n_turb), dtype=np.float32)
+        windspeeds = np.zeros(
+            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
+        )
+        winddirs = np.zeros(
+            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
+        )
         yaws = np.zeros((self.sim_steps_per_env_step, self.n_turb), dtype=np.float32)
         powers = np.zeros((self.sim_steps_per_env_step, self.n_turb), dtype=np.float32)
-        baseline_powers = np.zeros((self.sim_steps_per_env_step, self.n_turb), dtype=np.float32)
-        yaws_baseline = np.zeros((self.sim_steps_per_env_step, self.n_turb), dtype=np.float32)
-        windspeeds_baseline = np.zeros((self.sim_steps_per_env_step, self.n_turb), dtype=np.float32)
-
+        baseline_powers = np.zeros(
+            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
+        )
+        yaws_baseline = np.zeros(
+            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
+        )
+        windspeeds_baseline = np.zeros(
+            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
+        )
 
         for j in range(self.sim_steps_per_env_step):
-            
             self._adjust_yaws(action)  # Adjust the yaw angles of the agent farm
-      
+
             # Step the flow simulation
             self.fs.step()
 
@@ -1018,7 +1030,7 @@ class WindFarmEnv(WindEnv):
                 self.fs_baseline.windTurbines.yaw = new_baseline_yaws
                 self.fs_baseline.step()
 
-                baseline_powers[j]=self.fs_baseline.windTurbines.power()
+                baseline_powers[j] = self.fs_baseline.windTurbines.power()
                 yaws_baseline[j] = self.fs_baseline.windTurbines.yaw
                 windspeeds_baseline[j] = np.linalg.norm(
                     self.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
@@ -1062,14 +1074,14 @@ class WindFarmEnv(WindEnv):
         info = self._get_info()
 
         # Add extra vals to info dict. Used for the agent_eval_fast
-        info['time_array'] = time_array
-        info['windspeeds'] = windspeeds
+        info["time_array"] = time_array
+        info["windspeeds"] = windspeeds
         # info['winddirs'] = winddirs
-        info['yaws'] = yaws
-        info['powers'] = powers
-        info['baseline_powers'] = baseline_powers
-        info['yaws_baseline'] = yaws_baseline
-        info['windspeeds_baseline'] = windspeeds_baseline
+        info["yaws"] = yaws
+        info["powers"] = powers
+        info["baseline_powers"] = baseline_powers
+        info["yaws_baseline"] = yaws_baseline
+        info["windspeeds_baseline"] = windspeeds_baseline
 
         # self.fs_time = self.fs.time  # Save the flow simulation timestep.
         # Save the power output of the farm

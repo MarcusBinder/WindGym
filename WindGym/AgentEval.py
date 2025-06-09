@@ -102,11 +102,15 @@ def eval_single_fast(
         AssertionError("You need to specify a model to evaluate the agent.")
 
     # Calculate the correct number of steps
-    step_val = env.sim_steps_per_env_step   # This is the number of steps per environment step
-    total_steps = t_sim // step_val + 1     # This is the total number of steps to simulate
+    step_val = (
+        env.sim_steps_per_env_step
+    )  # This is the number of steps per environment step
+    total_steps = t_sim // step_val + 1  # This is the total number of steps to simulate
 
     # Unpack some variables, to make the code more readable
-    time = total_steps * step_val + 1  # Time to simulate. +1 as we have the intial state also
+    time = (
+        total_steps * step_val + 1
+    )  # Time to simulate. +1 as we have the intial state also
     n_turb = env.n_turb  # Number of turbines
     n_ws = 1  # Number of wind speeds to simulate
     n_wd = 1  # Number of wind direction simulate
@@ -205,21 +209,35 @@ def eval_single_fast(
         obs, reward, terminated, truncated, info = env.step(action)
 
         # Put the values in the arrays
-        powerF_a[i*step_val+1: i*step_val+step_val+1] = info["powers"].sum(axis=1)
-        powerT_a[i*step_val+1: i*step_val+step_val+1] = info["powers"]
-        yaw_a[i*step_val+1: i*step_val+step_val+1] = info["yaws"]
-        ws_a[i*step_val+1: i*step_val+step_val+1] = info["windspeeds"]
-        time_plot[i*step_val+1: i*step_val+step_val+1] = info["time_array"]
-        rew_plot[i*step_val+1: i*step_val+step_val+1] = reward
+        powerF_a[i * step_val + 1 : i * step_val + step_val + 1] = info["powers"].sum(
+            axis=1
+        )
+        powerT_a[i * step_val + 1 : i * step_val + step_val + 1] = info["powers"]
+        yaw_a[i * step_val + 1 : i * step_val + step_val + 1] = info["yaws"]
+        ws_a[i * step_val + 1 : i * step_val + step_val + 1] = info["windspeeds"]
+        time_plot[i * step_val + 1 : i * step_val + step_val + 1] = info["time_array"]
+        rew_plot[i * step_val + 1 : i * step_val + step_val + 1] = reward
 
         if baseline_comp:
-            powerF_b[i*step_val+1: i*step_val+step_val+1] = info["baseline_powers"].sum(axis=1)
-            powerT_b[i*step_val+1: i*step_val+step_val+1] = info["baseline_powers"]
-            yaw_b[i*step_val+1: i*step_val+step_val+1] = info["yaws_baseline"] 
-            ws_b[i*step_val+1: i*step_val+step_val+1] = info["windspeeds_baseline"]
+            powerF_b[i * step_val + 1 : i * step_val + step_val + 1] = info[
+                "baseline_powers"
+            ].sum(axis=1)
+            powerT_b[i * step_val + 1 : i * step_val + step_val + 1] = info[
+                "baseline_powers"
+            ]
+            yaw_b[i * step_val + 1 : i * step_val + step_val + 1] = info[
+                "yaws_baseline"
+            ]
+            ws_b[i * step_val + 1 : i * step_val + step_val + 1] = info[
+                "windspeeds_baseline"
+            ]
 
-            pct_inc[i*step_val+1: i*step_val+step_val+1] = (
-                ((info["powers"].sum(axis=1) - info["baseline_powers"].sum(axis=1)) / info["baseline_powers"].sum(axis=1) ) * 100
+            pct_inc[i * step_val + 1 : i * step_val + step_val + 1] = (
+                (
+                    (info["powers"].sum(axis=1) - info["baseline_powers"].sum(axis=1))
+                    / info["baseline_powers"].sum(axis=1)
+                )
+                * 100
             )  # Percentage increase in power output. This should be zero (or close to zero) at the first time step.
 
         if save_figs:
