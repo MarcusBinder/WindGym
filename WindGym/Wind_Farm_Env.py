@@ -35,6 +35,9 @@ from collections import deque
 import itertools
 import yaml
 from dynamiks.wind_turbines.hawc2_windturbine import HAWC2WindTurbines
+from dynamiks.dwm.particle_motion_models import CutOffFrq
+
+CutOffFrqLio2021 = CutOffFrq(4)
 
 """
 This is the base for the wind farm environment. This is where the magic happens.
@@ -125,7 +128,7 @@ class WindFarmEnv(WindEnv):
         # The distance between the particles. This is used in the flow simulation.
         self.d_particle = 0.2
         self.n_particles = None
-
+        self.temporal_filter=CutOffFrqLio2021
         self.turbtype = turbtype
 
         # Saves to self
@@ -752,7 +755,7 @@ class WindFarmEnv(WindEnv):
             dt=self.dt,
             n_particles=self.n_particles,
             d_particle=self.d_particle,
-            particleMotionModel=HillVortexParticleMotion(temporal_filter=None),
+            particleMotionModel=HillVortexParticleMotion(temporal_filter=self.temporal_filter),
             addedTurbulenceModel=self.addedTurbulenceModel,
         )  # NOTE, we need this particlemotion to capture the yaw
 
@@ -837,7 +840,7 @@ class WindFarmEnv(WindEnv):
                 dt=self.dt,
                 n_particles=self.n_particles,
                 d_particle=self.d_particle,
-                particleMotionModel=HillVortexParticleMotion(temporal_filter=None),
+                particleMotionModel=HillVortexParticleMotion(temporal_filter=self.temporal_filter),
                 addedTurbulenceModel=self.addedTurbulenceModel,
             )
 
