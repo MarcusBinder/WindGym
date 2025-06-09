@@ -3,8 +3,8 @@
 import pytest
 import numpy as np
 import yaml
-from WindGym import WindFarmEnv # Assuming your project structure
-from py_wake.examples.data.hornsrev1 import V80 # Using a sample turbine
+from WindGym import WindFarmEnv  # Assuming your project structure
+from py_wake.examples.data.hornsrev1 import V80  # Using a sample turbine
 from unittest.mock import PropertyMock
 
 # A minimal YAML config for testing purposes
@@ -67,12 +67,14 @@ ActionMethod: "yaw"
 Track_power: False
 """
 
+
 @pytest.fixture
 def test_config_file(tmp_path):
     """Create a temporary YAML config file for the test."""
     p = tmp_path / "config.yaml"
     p.write_text(TEST_CONFIG)
     return p
+
 
 def test_step_workflow_runs_without_crashing_and_logs_plausible_data(test_config_file):
     """
@@ -92,16 +94,16 @@ def test_step_workflow_runs_without_crashing_and_logs_plausible_data(test_config
         yaml_path=str(test_config_file),
         dt_sim=1,
         dt_env=1,
-        turbtype='None', # Use the simplest simulation type
+        turbtype="None",  # Use the simplest simulation type
         fill_window=2,
-        reset_init=True, # Let it fully initialize
+        reset_init=True,  # Let it fully initialize
     )
-    
+
     # ==========================================================================
     # 2. ACT: Perform a step using the real, un-mocked workflow.
     # ==========================================================================
     action = np.zeros(env.action_space.shape)
-    
+
     # We wrap the `step` call in a try/except block to give a clear
     # error message if the workflow itself crashes.
     try:
@@ -112,12 +114,12 @@ def test_step_workflow_runs_without_crashing_and_logs_plausible_data(test_config
     # ==========================================================================
     # 3. ASSERT: Check for plausible data, not specific values.
     # ==========================================================================
-    
+
     # --- Check Farm-Level Buffer ---
     farm_hf_buffer = env.farm_measurements.farm_mes.ws_hf_buffer
     assert len(farm_hf_buffer) == 3, "Farm buffer was not populated correctly."
     last_farm_ws = farm_hf_buffer[-1]
-    
+
     # Sanity checks: Is it a valid number? Is it non-negative?
     assert isinstance(last_farm_ws, float), "Farm buffer logged a non-float value."
     assert not np.isnan(last_farm_ws), "Farm buffer logged a NaN value."
@@ -126,10 +128,14 @@ def test_step_workflow_runs_without_crashing_and_logs_plausible_data(test_config
     # --- Check Turbine-Specific Buffers ---
     for i in range(env.n_turb):
         turb_hf_buffer = env.farm_measurements.turb_mes[i].ws_hf_buffer
-        assert len(turb_hf_buffer) == 3, f"Turbine {i} buffer was not populated correctly."
+        assert (
+            len(turb_hf_buffer) == 3
+        ), f"Turbine {i} buffer was not populated correctly."
         last_turb_ws = turb_hf_buffer[-1]
 
-        assert isinstance(last_turb_ws, float), f"Turbine {i} buffer logged a non-float value."
+        assert isinstance(
+            last_turb_ws, float
+        ), f"Turbine {i} buffer logged a non-float value."
         assert not np.isnan(last_turb_ws), f"Turbine {i} buffer logged a NaN value."
         assert last_turb_ws >= 0, f"Turbine {i} buffer logged a negative wind speed."
 

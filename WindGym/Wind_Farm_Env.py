@@ -856,12 +856,6 @@ class WindFarmEnv(WindEnv):
                     self.fs_baseline.step()
                     baseline_powers.append(self.fs_baseline.windTurbines.power().sum())
 
-                    #if self.farm_measurements.farm_TI:
-                    #    baseline_ws = np.linalg.norm(
-                    #        self.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
-                    #    )
-                    #    self.farm_measurements.farm_mes.add_hf_ws(np.mean(baseline_ws))
-
                 self.base_pow_deq.append(np.mean(baseline_powers, axis=0))
 
         observation = self._get_obs()
@@ -1021,10 +1015,6 @@ class WindFarmEnv(WindEnv):
                 self.fs_baseline.windTurbines.yaw = new_baseline_yaws
                 self.fs_baseline.step()
                 baseline_powers.append(self.fs_baseline.windTurbines.power().sum())
-                #baseline_ws = np.linalg.norm(
-                #    self.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
-                #)
-                #self.farm_measurements.farm_mes.add_hf_ws(np.mean(baseline_ws))
 
             # Make the measurements from the sensor
             self._take_measurements()
