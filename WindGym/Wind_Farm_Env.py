@@ -1079,9 +1079,11 @@ class WindFarmEnv(WindEnv):
         # info['winddirs'] = winddirs
         info["yaws"] = yaws
         info["powers"] = powers
-        info["baseline_powers"] = baseline_powers
-        info["yaws_baseline"] = yaws_baseline
-        info["windspeeds_baseline"] = windspeeds_baseline
+
+        if self.Baseline_comp:
+            info["baseline_powers"] = baseline_powers
+            info["yaws_baseline"] = yaws_baseline
+            info["windspeeds_baseline"] = windspeeds_baseline
 
         # self.fs_time = self.fs.time  # Save the flow simulation timestep.
         # Save the power output of the farm
