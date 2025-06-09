@@ -411,6 +411,8 @@ class WindFarmEnv(WindEnv):
         self.yaw_mes = config.get("yaw_mes")
         self.power_mes = config.get("power_mes")
 
+        self.ti_sample_count = self.mes_level.get("ti_sample_count", 30)
+
         # unpack some more, because we use these later.
         self.action_penalty = self.act_pen["action_penalty"]
         self.action_penalty_type = self.act_pen["action_penalty_type"]
@@ -468,6 +470,7 @@ class WindFarmEnv(WindEnv):
             self.TI_min_mes,
             self.TI_max_mes,
             power_max=self.maxturbpower,
+            ti_sample_count=self.ti_sample_count,
         )
 
     def _init_spaces(self):
@@ -560,6 +563,7 @@ class WindFarmEnv(WindEnv):
             "Power pr turbine agent": self.fs.windTurbines.power(),
             "Turbine x positions": self.fs.windTurbines.positions_xyz[0],
             "Turbine y positions": self.fs.windTurbines.positions_xyz[1],
+            "Turbulence intensity at turbines": self.farm_measurements.get_TI_turb(),
         }
 
         if self.Baseline_comp:
@@ -763,6 +767,14 @@ class WindFarmEnv(WindEnv):
 
         # Max allowed timesteps
         self.time_max = int(t_inflow * self.n_passthrough)
+
+        if self.n_turb == 1:
+            # For a single turbine, base the time on flow passing the rotor diameter
+            self.time_max = int((self.D * self.n_passthrough) / self.ws)
+
+        # Ensure time_max is at least 1 to allow at least one step
+        self.time_max = max(1, self.time_max)
+
         # first we run the simulation the time it takes the flow to develop
         self.fs.run(t_developed)
 
@@ -779,6 +791,14 @@ class WindFarmEnv(WindEnv):
 
                 # Make the measurements from the sensor
                 self._take_measurements()
+
+                if self.farm_measurements.turb_TI or self.farm_measurements.farm_TI:
+                    for i in range(self.n_turb):
+                        self.farm_measurements.turb_mes[i].add_hf_ws(self.current_ws[i])
+                    if self.farm_measurements.farm_TI:
+                        self.farm_measurements.farm_mes.add_hf_ws(
+                            np.mean(self.current_ws)
+                        )
 
                 # Put them into the lists
                 windspeeds.append(self.current_ws)
@@ -825,6 +845,12 @@ class WindFarmEnv(WindEnv):
                     # self.fs_baseline.windTurbines.yaw = new_baseline_yaws
                     self.fs_baseline.step()
                     baseline_powers.append(self.fs_baseline.windTurbines.power().sum())
+
+                    if self.farm_measurements.farm_TI:
+                        baseline_ws = np.linalg.norm(
+                            self.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
+                        )
+                        self.farm_measurements.farm_mes.add_hf_ws(np.mean(baseline_ws))
 
                 self.base_pow_deq.append(np.mean(baseline_powers, axis=0))
 
@@ -985,9 +1011,20 @@ class WindFarmEnv(WindEnv):
                 self.fs_baseline.windTurbines.yaw = new_baseline_yaws
                 self.fs_baseline.step()
                 baseline_powers.append(self.fs_baseline.windTurbines.power().sum())
+                baseline_ws = np.linalg.norm(
+                    self.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
+                )
+                self.farm_measurements.farm_mes.add_hf_ws(np.mean(baseline_ws))
 
             # Make the measurements from the sensor
             self._take_measurements()
+
+            if self.farm_measurements.turb_TI or self.farm_measurements.farm_TI:
+                for i in range(self.n_turb):
+                    self.farm_measurements.turb_mes[i].add_hf_ws(self.current_ws[i])
+                # Also populate the farm-level hf buffer if it's being used for farm_TI
+                if self.farm_measurements.farm_TI:
+                    self.farm_measurements.farm_mes.add_hf_ws(np.mean(self.current_ws))
 
             # Put them into the lists
             windspeeds.append(self.current_ws)

@@ -163,6 +163,7 @@ class turb_mes:
         TI_max=0.50,
         include_TI=True,
         power_max=2000000,  # 2 MW
+        ti_sample_count=30,
     ):
         self.ws = Mes(
             current=ws_current,
@@ -193,6 +194,7 @@ class turb_mes:
             window_length=power_window_length,
         )
 
+        self.ws_hf_buffer = deque(maxlen=ti_sample_count)
         self.ws_max = ws_max
         self.ws_min = ws_min
         self.wd_min = wd_min
@@ -211,6 +213,10 @@ class turb_mes:
             # If not, then we just add an empty array. This is skipped in the np.concatenate function, so it should not matter
             self.get_TI = self.empty_np
 
+    def add_hf_ws(self, measurement):
+        """Appends a single wind speed measurement to the high-frequency buffer."""
+        self.ws_hf_buffer.append(measurement)
+
     def empty_np(self, scaled=False):
         """
         Return an empty array
@@ -222,13 +228,19 @@ class turb_mes:
         Calcualte TI from the wind speed measurements
         """
 
+        if len(self.ws_hf_buffer) < 2:
+            return np.array([0.0], dtype=np.float32)
+
         u = np.array(
-            self.ws.measurements
-        )  # First we get the wind speed measurements and turn them into an array
+            self.ws_hf_buffer
+        )  # Get measurements from the high-frequency buffer
         U = u.mean()  # Then we calculate the mean wind speed
 
+        if U == 0:
+            return np.array([0.0], dtype=np.float32)
+
         # Then we calculate the TI
-        TI = np.array([np.std(u - U) / U], dtype=np.float32)
+        TI = np.array([np.std(u) / U], dtype=np.float32)
 
         if scaled:
             # Scale the measurements
@@ -398,6 +410,7 @@ class farm_mes(WindEnv):
         TI_min=0.00,
         TI_max=0.50,
         power_max=2000000,  # 2 MW
+        ti_sample_count=30,
     ):
         self.n_turbines = n_turbines
         self.turb_mes = []
@@ -424,12 +437,10 @@ class farm_mes(WindEnv):
         self.power_max = power_max
 
         if turb_TI or farm_TI:
-            # If we return the TI, then we check for the number of data points, and then set the TI_fun to the get_TI function
-            if (
-                ws_history_length < 60
-            ):  # TODO figure out the best number of data points to use
+            # If we return the TI, then we check for the number of data points.
+            if ti_sample_count < 10:  # A small number might lead to a noisy TI signal.
                 print(
-                    f"Warning: You are only saving the last {ws_history_length} data measurements of wind speed. It is these data points that are used for the TI calculations, so you might need more data points to get a good estimate of the TI. "
+                    f"Warning: You are only using the last {ti_sample_count} high-frequency samples for TI calculations. A low number might result in a noisy estimate."
                 )
 
         # TODO Add Ornstein–Uhlenbeck process for noise
@@ -485,6 +496,7 @@ class farm_mes(WindEnv):
                     TI_max,
                     turb_TI,
                     power_max,
+                    ti_sample_count=ti_sample_count,
                 )
             )
 
@@ -520,6 +532,7 @@ class farm_mes(WindEnv):
             TI_max,
             farm_TI,
             power_max=power_max * n_turbines,
+            ti_sample_count=ti_sample_count,
         )  # The max power is the sum of all the turbines
 
         if self.farm_TI:
