@@ -161,6 +161,9 @@ def test_agent_eval_multiple_save_load(
     x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
     # --- Check individual dataset time length ---
     temp_env_for_single_check_yaml_path = basic_farm_eval_env.yaml_path
+
+    dt_sim = 1
+    dt_env = 10
     temp_env_for_single_check = FarmEval(
         turbine=V80(),
         x_pos=x_pos,
@@ -168,8 +171,8 @@ def test_agent_eval_multiple_save_load(
         yaml_path=temp_env_for_single_check_yaml_path,
         turbtype="None",
         seed=43,
-        dt_sim=1,
-        dt_env=10,
+        dt_sim=dt_sim,
+        dt_env=dt_env,
         Baseline_comp=True,
         reset_init=True,
         fill_window=1,
@@ -184,8 +187,10 @@ def test_agent_eval_multiple_save_load(
         t_sim=eval_t_sim,
         name="SingleCheck",
     )
+    step_val = temp_env_for_single_check.sim_steps_per_env_step
+    total_steps = eval_t_sim // step_val + 1
     assert (
-        len(single_run_ds.coords["time"]) == eval_t_sim
+        len(single_run_ds.coords["time"]) == (total_steps * step_val + 1)
     ), f"An individual evaluation run (AgentEvalFast) should have {eval_t_sim} time points."
     temp_env_for_single_check.close()
     # --- End Check ---

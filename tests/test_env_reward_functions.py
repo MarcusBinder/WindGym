@@ -336,9 +336,9 @@ def test_power_reward_power_diff(temp_yaml_file_factory, mock_turbulence_env_set
         (
             "Total",
             0.1,
-            10.0,
+            20.0,
             np.array([-1.0, -1.0]),
-            (10.0 - 1.0) / 30.0,
+            0.1 * (20.0 - 10.0) / 30,
         ),  # new yaw = 9.0
     ],
 )
@@ -412,7 +412,9 @@ act_pen:
     # Here, env.action_penalty is `penalty_value` from parametrize.
 
     actual_penalty_component = -reward
-    expected_calculated_penalty = penalty_value * expected_penalty_factor
+    expected_calculated_penalty = (
+        penalty_value * expected_penalty_factor * env.sim_steps_per_env_step
+    )
 
     assert np.isclose(
         actual_penalty_component, expected_calculated_penalty, atol=1e-5

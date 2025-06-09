@@ -35,6 +35,9 @@ from collections import deque
 import itertools
 import yaml
 from dynamiks.wind_turbines.hawc2_windturbine import HAWC2WindTurbines
+from dynamiks.dwm.particle_motion_models import CutOffFrq
+
+CutOffFrqLio2021 = CutOffFrq(4)
 
 """
 This is the base for the wind farm environment. This is where the magic happens.
@@ -125,7 +128,7 @@ class WindFarmEnv(WindEnv):
         # The distance between the particles. This is used in the flow simulation.
         self.d_particle = 0.2
         self.n_particles = None
-
+        self.temporal_filter = CutOffFrqLio2021
         self.turbtype = turbtype
 
         # Saves to self
@@ -752,7 +755,9 @@ class WindFarmEnv(WindEnv):
             dt=self.dt,
             n_particles=self.n_particles,
             d_particle=self.d_particle,
-            particleMotionModel=HillVortexParticleMotion(temporal_filter=None),
+            particleMotionModel=HillVortexParticleMotion(
+                temporal_filter=self.temporal_filter
+            ),
             addedTurbulenceModel=self.addedTurbulenceModel,
         )  # NOTE, we need this particlemotion to capture the yaw
 
@@ -837,7 +842,9 @@ class WindFarmEnv(WindEnv):
                 dt=self.dt,
                 n_particles=self.n_particles,
                 d_particle=self.d_particle,
-                particleMotionModel=HillVortexParticleMotion(),
+                particleMotionModel=HillVortexParticleMotion(
+                    temporal_filter=self.temporal_filter
+                ),
                 addedTurbulenceModel=self.addedTurbulenceModel,
             )
 
@@ -847,12 +854,6 @@ class WindFarmEnv(WindEnv):
             for __ in range(self.hist_max):
                 baseline_powers = []
                 for _ in range(self.sim_steps_per_env_step):
-                    # Outcommented to ensure they start at the same yaw angles
-                    # Step the flow simulation
-                    # new_baseline_yaws = self._base_controller(
-                    #     fs=self.fs_baseline, yaw_step=self.yaw_step
-                    # )
-                    # self.fs_baseline.windTurbines.yaw = new_baseline_yaws
                     self.fs_baseline.step()
                     baseline_powers.append(self.fs_baseline.windTurbines.power().sum())
 
@@ -860,7 +861,6 @@ class WindFarmEnv(WindEnv):
 
         observation = self._get_obs()
         info = self._get_info()
-        self.fs_time = self.fs.time
 
         return observation, info
 
@@ -994,16 +994,31 @@ class WindFarmEnv(WindEnv):
         # Save the old yaw angles, so we can calculate the change in yaw angles
         self.old_yaws = copy.copy(self.fs.windTurbines.yaw)
 
-        self._adjust_yaws(action)  # Adjust the yaw angles of the agent farm
         # Run multiple simulation steps for each environment step
-
         # Initialize list to store observations
-        windspeeds = []
-        winddirs = []
-        yaws = []
-        powers = []
-        baseline_powers = []
-        for _ in range(self.sim_steps_per_env_step):
+
+        time_array = np.zeros(self.sim_steps_per_env_step, dtype=np.float32)
+        windspeeds = np.zeros(
+            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
+        )
+        winddirs = np.zeros(
+            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
+        )
+        yaws = np.zeros((self.sim_steps_per_env_step, self.n_turb), dtype=np.float32)
+        powers = np.zeros((self.sim_steps_per_env_step, self.n_turb), dtype=np.float32)
+        baseline_powers = np.zeros(
+            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
+        )
+        yaws_baseline = np.zeros(
+            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
+        )
+        windspeeds_baseline = np.zeros(
+            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
+        )
+
+        for j in range(self.sim_steps_per_env_step):
+            self._adjust_yaws(action)  # Adjust the yaw angles of the agent farm
+
             # Step the flow simulation
             self.fs.step()
 
@@ -1014,8 +1029,12 @@ class WindFarmEnv(WindEnv):
                 )
                 self.fs_baseline.windTurbines.yaw = new_baseline_yaws
                 self.fs_baseline.step()
-                baseline_powers.append(self.fs_baseline.windTurbines.power().sum())
 
+                baseline_powers[j] = self.fs_baseline.windTurbines.power()
+                yaws_baseline[j] = self.fs_baseline.windTurbines.yaw
+                windspeeds_baseline[j] = np.linalg.norm(
+                    self.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
+                )
             # Make the measurements from the sensor
             self._take_measurements()
 
@@ -1027,10 +1046,11 @@ class WindFarmEnv(WindEnv):
                     self.farm_measurements.farm_mes.add_hf_ws(np.mean(self.current_ws))
 
             # Put them into the lists
-            windspeeds.append(self.current_ws)
-            winddirs.append(self.current_wd)
-            yaws.append(self.current_yaw)
-            powers.append(self.current_powers)
+            windspeeds[j] = self.current_ws
+            winddirs[j] = self.current_wd
+            yaws[j] = self.current_yaw
+            powers[j] = self.current_powers
+            time_array[j] = self.fs.time
 
         mean_windspeed = np.mean(windspeeds, axis=0)
         mean_winddir = np.mean(winddirs, axis=0)
@@ -1046,13 +1066,26 @@ class WindFarmEnv(WindEnv):
             mean_power.sum()
         )  # Do the sum, because we want for the whole farm.
         if self.Baseline_comp:
-            self.base_pow_deq.append(np.mean(baseline_powers, axis=0))
+            self.base_pow_deq.append(np.mean(baseline_powers, axis=0).sum())
         if np.any(np.isnan(self.farm_pow_deq)):
             raise Exception("NaN Power")
 
         observation = self._get_obs()
         info = self._get_info()
-        self.fs_time = self.fs.time  # Save the flow simulation timestep.
+
+        # Add extra vals to info dict. Used for the agent_eval_fast
+        info["time_array"] = time_array
+        info["windspeeds"] = windspeeds
+        # info['winddirs'] = winddirs
+        info["yaws"] = yaws
+        info["powers"] = powers
+
+        if self.Baseline_comp:
+            info["baseline_powers"] = baseline_powers
+            info["yaws_baseline"] = yaws_baseline
+            info["windspeeds_baseline"] = windspeeds_baseline
+
+        # self.fs_time = self.fs.time  # Save the flow simulation timestep.
         # Save the power output of the farm
         # Calculate the reward
         # The power production reward with the scaling
