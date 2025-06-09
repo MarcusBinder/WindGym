@@ -101,8 +101,12 @@ def eval_single_fast(
     if model is None:
         AssertionError("You need to specify a model to evaluate the agent.")
 
+    # Calculate the correct number of steps
+    step_val = env.sim_steps_per_env_step   # This is the number of steps per environment step
+    total_steps = t_sim // step_val + 1     # This is the total number of steps to simulate
+
     # Unpack some variables, to make the code more readable
-    time = t_sim  # Time to simulate
+    time = total_steps * step_val + 1  # Time to simulate. +1 as we have the intial state also
     n_turb = env.n_turb  # Number of turbines
     n_ws = 1  # Number of wind speeds to simulate
     n_wd = 1  # Number of wind direction simulate
@@ -111,19 +115,19 @@ def eval_single_fast(
 
     # Initialize the arrays to store the results
     # _a is the agent and _b is the baseline
-    powerF_a = np.zeros((time))
-    powerT_a = np.zeros((time, n_turb))
-    yaw_a = np.zeros((time, n_turb))
-    ws_a = np.zeros((time, n_turb))
-    time_plot = np.zeros((time))
-    rew_plot = np.zeros((time))
+    powerF_a = np.zeros((time), dtype=np.float32)
+    powerT_a = np.zeros((time, n_turb), dtype=np.float32)
+    yaw_a = np.zeros((time, n_turb), dtype=np.float32)
+    ws_a = np.zeros((time, n_turb), dtype=np.float32)
+    time_plot = np.zeros((time), dtype=int)
+    rew_plot = np.zeros((time), dtype=np.float32)
 
     if baseline_comp:
-        powerF_b = np.zeros((time))
-        powerT_b = np.zeros((time, n_turb))
-        yaw_b = np.zeros((time, n_turb))
-        ws_b = np.zeros((time, n_turb))
-        pct_inc = np.zeros((time))
+        powerF_b = np.zeros((time), dtype=np.float32)
+        powerT_b = np.zeros((time, n_turb), dtype=np.float32)
+        yaw_b = np.zeros((time, n_turb), dtype=np.float32)
+        ws_b = np.zeros((time, n_turb), dtype=np.float32)
+        pct_inc = np.zeros((time), dtype=np.float32)
 
     # Initialize the environment
     obs, info = env.reset()
@@ -186,7 +190,7 @@ def eval_single_fast(
         b = np.linspace(-200 + min(env.y_pos), 200 + max(env.y_pos), 200)
 
     # Run the simulation
-    for i in range(1, time):
+    for i in range(0, total_steps):
         if hasattr(model, "model_type"):
             if model.model_type == "CleanRL":
                 obs = np.expand_dims(obs, 0)
@@ -201,22 +205,21 @@ def eval_single_fast(
         obs, reward, terminated, truncated, info = env.step(action)
 
         # Put the values in the arrays
-        powerF_a[i] = env.fs.windTurbines.power().sum()
-        powerT_a[i] = env.fs.windTurbines.power()
-        yaw_a[i] = env.fs.windTurbines.yaw
-        ws_a[i] = np.linalg.norm(env.fs.windTurbines.rotor_avg_windspeed, axis=1)
-        time_plot[i] = env.fs.time
-        rew_plot[i] = reward  #
+        powerF_a[i*step_val+1: i*step_val+step_val+1] = info["powers"].sum(axis=1)
+        powerT_a[i*step_val+1: i*step_val+step_val+1] = info["powers"]
+        yaw_a[i*step_val+1: i*step_val+step_val+1] = info["yaws"]
+        ws_a[i*step_val+1: i*step_val+step_val+1] = info["windspeeds"]
+        time_plot[i*step_val+1: i*step_val+step_val+1] = info["time_array"]
+        rew_plot[i*step_val+1: i*step_val+step_val+1] = reward
 
         if baseline_comp:
-            powerF_b[i] = env.fs_baseline.windTurbines.power().sum()
-            powerT_b[i] = env.fs_baseline.windTurbines.power()
-            yaw_b[i] = env.fs_baseline.windTurbines.yaw
-            ws_b[i] = np.linalg.norm(
-                env.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
-            )
-            pct_inc[i] = (
-                ((powerF_a[i] - powerF_b[i]) / powerF_b[i]) * 100
+            powerF_b[i*step_val+1: i*step_val+step_val+1] = info["baseline_powers"].sum(axis=1)
+            powerT_b[i*step_val+1: i*step_val+step_val+1] = info["baseline_powers"]
+            yaw_b[i*step_val+1: i*step_val+step_val+1] = info["yaws_baseline"] 
+            ws_b[i*step_val+1: i*step_val+step_val+1] = info["windspeeds_baseline"]
+
+            pct_inc[i*step_val+1: i*step_val+step_val+1] = (
+                ((info["powers"].sum(axis=1) - info["baseline_powers"].sum(axis=1)) / info["baseline_powers"].sum(axis=1) ) * 100
             )  # Percentage increase in power output. This should be zero (or close to zero) at the first time step.
 
         if save_figs:
