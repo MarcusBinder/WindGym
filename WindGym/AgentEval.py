@@ -182,7 +182,7 @@ def eval_single_fast(
         ws_min = 3
 
         # Define the x and y values for the flow field plot
-        a = np.linspace(-200 + min(env.x_pos), 400 + max(env.x_pos), 200)
+        a = np.linspace(-200 + min(env.x_pos), 300 + max(env.x_pos), 200)
         b = np.linspace(-200 + min(env.y_pos), 200 + max(env.y_pos), 200)
 
     # Run the simulation
@@ -256,7 +256,7 @@ def eval_single_fast(
             types = np.zeros_like(
                 x, dtype=int
             )  # Assuming all turbines are of the same type
-            for i, (x_, y_, r, t, yaw_, tilt_) in enumerate(
+            for ii, (x_, y_, r, t, yaw_, tilt_) in enumerate(
                 zip(x, y, R, types, yaw, tilt)
             ):
                 for wd_ in np.atleast_1d(env.fs.wind_direction):
@@ -271,9 +271,9 @@ def eval_single_fast(
                     ax1.add_artist(circle)
                     ax1.plot(x_, y_, ".", color=colors[t])
 
-                for i, (x_, y_, r) in enumerate(zip(x, y, R)):
+                for ii, (x_, y_, r) in enumerate(zip(x, y, R)):
                     text = ax1.annotate(
-                        i + 1,
+                        ii + 1,
                         (x_ - r, y_ + r),
                         fontsize=10,
                         color="white",

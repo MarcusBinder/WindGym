@@ -124,6 +124,7 @@ class WindFarmEnv(WindEnv):
         self.yaw_step = yaw_step
         # The distance between the particles. This is used in the flow simulation.
         self.d_particle = 0.2
+        self.n_particles = None
 
         self.turbtype = turbtype
 
@@ -749,6 +750,7 @@ class WindFarmEnv(WindEnv):
             wind_direction=self.wd,
             particleDeficitGenerator=jDWMAinslieGenerator(),
             dt=self.dt,
+            n_particles=self.n_particles,
             d_particle=self.d_particle,
             particleMotionModel=HillVortexParticleMotion(temporal_filter=None),
             addedTurbulenceModel=self.addedTurbulenceModel,
@@ -833,6 +835,7 @@ class WindFarmEnv(WindEnv):
                 wind_direction=self.wd,
                 particleDeficitGenerator=jDWMAinslieGenerator(),
                 dt=self.dt,
+                n_particles=self.n_particles,
                 d_particle=self.d_particle,
                 particleMotionModel=HillVortexParticleMotion(),
                 addedTurbulenceModel=self.addedTurbulenceModel,
