@@ -336,9 +336,9 @@ def test_power_reward_power_diff(temp_yaml_file_factory, mock_turbulence_env_set
         (
             "Total",
             0.1,
-            10.0,
+            20.0,
             np.array([-1.0, -1.0]),
-            (10.0 - 1.0) / 30.0,
+            0.1 * (20.0 - 10.0) / 30,
         ),  # new yaw = 9.0
     ],
 )
