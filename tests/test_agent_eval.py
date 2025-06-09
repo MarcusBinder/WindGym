@@ -190,7 +190,7 @@ def test_agent_eval_multiple_save_load(
     step_val = temp_env_for_single_check.sim_steps_per_env_step
     total_steps = eval_t_sim // step_val + 1
     assert (
-        len(single_run_ds.coords["time"]) == (total_steps * step_val + 1)   
+        len(single_run_ds.coords["time"]) == (total_steps * step_val + 1)
     ), f"An individual evaluation run (AgentEvalFast) should have {eval_t_sim} time points."
     temp_env_for_single_check.close()
     # --- End Check ---
