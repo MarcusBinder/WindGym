@@ -21,3 +21,11 @@ class BaseAgent:
         action = (yaws - self.yaw_min) / (self.yaw_max - self.yaw_min) * 2 - 1
 
         return action
+
+    def unscale_yaw(self, action):
+        """
+        Unscale the action to the yaw range.
+        """
+        yaws = (action + 1.0) / 2.0 * (self.yaw_max - self.yaw_min) + self.yaw_min
+
+        return yaws
