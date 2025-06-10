@@ -27,8 +27,8 @@ class PyWakeAgent(BaseAgent):
         TI=0.07,
         yaw_max=45,
         yaw_min=-45,
-        refine_pass_n=8,
-        yaw_n=9,
+        refine_pass_n=6,
+        yaw_n=7,
         turbine=V80(),
     ):
         # This is used in a hasattr in the AgentEval class.
@@ -120,6 +120,17 @@ class PyWakeAgent(BaseAgent):
             self.action = self.scale_yaw(self.optimized_yaws)
 
         return self.action, None
+
+    def calc_power(self, yaws):
+        """
+        Calculates the power of the farm, given the yaw angles.
+        Inputs are the yaw angles in degrees.
+        Returns the total power of the farm.
+        """
+        power = self.wf_model(x=self.x_pos, y=self.y_pos, 
+                      ws=self.wsp, wd=self.wdir, 
+                      TI=self.TI, tilt=0, yaw=yaws)["Power"].sum().values
+        return power
 
     def plot_flow(self):
         """
