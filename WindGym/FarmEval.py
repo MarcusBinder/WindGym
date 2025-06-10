@@ -24,7 +24,7 @@ class FarmEval(WindFarmEnv):
         yaml_path=None,
         Baseline_comp=False,
         render_mode=None,
-        turbtype="MannLoad",
+        turbtype="MannGenerate",
         seed=None,
         dt_sim=1,  # Simulation timestep in seconds
         dt_env=1,  # Environment timestep in seconds
