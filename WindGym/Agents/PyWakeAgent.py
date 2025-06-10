@@ -127,9 +127,19 @@ class PyWakeAgent(BaseAgent):
         Inputs are the yaw angles in degrees.
         Returns the total power of the farm.
         """
-        power = self.wf_model(x=self.x_pos, y=self.y_pos, 
-                      ws=self.wsp, wd=self.wdir, 
-                      TI=self.TI, tilt=0, yaw=yaws)["Power"].sum().values
+        power = (
+            self.wf_model(
+                x=self.x_pos,
+                y=self.y_pos,
+                ws=self.wsp,
+                wd=self.wdir,
+                TI=self.TI,
+                tilt=0,
+                yaw=yaws,
+            )["Power"]
+            .sum()
+            .values
+        )
         return power
 
     def plot_flow(self):
