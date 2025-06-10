@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 # Import the class to be tested
 from WindGym.wrappers.powerWrapper import PowerWrapper
 
+
 @pytest.fixture
 def mock_env():
     """Create a mock environment that simulates WindFarmEnv."""
