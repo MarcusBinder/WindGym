@@ -159,7 +159,9 @@ def test_step_reward_weighting(MockPyWakeAgent, mock_env):
     action = np.array([0.1, 0.1])
 
     # Create a weight function that returns 0.25
-    weight_function = lambda step: 0.25
+    def weight_function(step):
+        return 0.25
+
     wrapper = PowerWrapper(env=mock_env, n_envs=1, weight_function=weight_function)
     wrapper.reset()
     obs, new_reward, terminated, truncated, info = wrapper.step(action)
@@ -189,7 +191,9 @@ def test_step_counter_and_info(MockPyWakeAgent, mock_env):
 
     _, _, _, _, info = wrapper.step(action)
     assert wrapper.current_step == 4
-    assert info["current_step"] == 0 # The info dict shows the step *before* the increment
+    assert (
+        info["current_step"] == 0
+    )  # The info dict shows the step *before* the increment
 
     _, _, _, _, info = wrapper.step(action)
     assert wrapper.current_step == 8
