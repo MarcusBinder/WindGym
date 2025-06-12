@@ -125,11 +125,11 @@ class PyWakeAgent(BaseAgent):
 
         if self.env.ActionMethod == "wind":
             # If the action method is 'wind', we return the set point yaw angles directly.
-            print("Using wind action method")
+            # print("Using wind action method")
             action = self.scale_yaw(self.optimized_yaws)
         elif self.env.ActionMethod == "yaw":
             # If using yaw based steering, we need to retun the yaw angles differently
-            print("Using yaw action method")
+            # print("Using yaw action method")
 
             yaw_goal = self.optimized_yaws
             yaw_offset = self.env.current_yaw
