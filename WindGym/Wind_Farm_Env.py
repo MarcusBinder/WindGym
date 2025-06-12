@@ -1030,7 +1030,7 @@ class WindFarmEnv(WindEnv):
             self.action_remaining = (
                 action * self.yaw_step_env
             )  # Over all steps we want to move this ammout
-            print("We want to move for a total of: ", self.action_remaining)
+            # print("We want to move for a total of: ", self.action_remaining)
 
         for j in range(self.sim_steps_per_env_step):
             self._adjust_yaws(action)  # Adjust the yaw angles of the agent farm
