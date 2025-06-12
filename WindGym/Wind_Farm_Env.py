@@ -70,7 +70,8 @@ class WindFarmEnv(WindEnv):
         seed=None,
         dt_sim=1,  # Simulation timestep in seconds
         dt_env=1,  # Environment timestep in seconds
-        yaw_step=1,  # How many degrees the yaw angles can change pr. step
+        yaw_step_sim=1,  # How many degrees the yaw angles can change pr. simulation step
+        # yaw_step_env=1,  # How many degrees the yaw angles can change pr. environment step
         fill_window=True,
         sample_site=None,
         HTC_path=None,
@@ -92,7 +93,7 @@ class WindFarmEnv(WindEnv):
             seed: int: The seed for the environment. If None, then the seed will be random.
             dt_sim: float: The simulation timestep in seconds. Can be used to speed up the simulation, if the DWM solver can take larger steps
             dt_env: float: The environment timestep in seconds. This is the timestep that the agent sees. The environment will run the simulation for dt_sim/dt_env steps pr. timestep.
-            yaw_step: float: The step size for the yaw angles. How manny degress the yaw angles can change pr. step
+            yaw_step_sim: float: The step size for the yaw angles. How manny degress the yaw angles can change pr. step
             fill_window: bool: If True, then the measurements will be filled up at reset.
             sample_site: pywake site that includes information about the wind conditions. If None we sample uniformly from within the limits.
             HTC_path: str: The path to the high fidelity turbine model. If this is Not none, then we assume you want to use that instead of pywake turbines. Note you still need a pywake version of your turbine.
@@ -124,12 +125,14 @@ class WindFarmEnv(WindEnv):
         # Max power pr turbine. Used in the measurement class
         self.maxturbpower = max(turbine.power(np.arange(10, 25, 1)))
         # The step size for the yaw angles. How manny degress the yaw angles can change pr. step
-        self.yaw_step = yaw_step
         # The distance between the particles. This is used in the flow simulation.
         self.d_particle = 0.2
         self.n_particles = None
         self.temporal_filter = CutOffFrqLio2021
         self.turbtype = turbtype
+        self.yaw_step_sim = yaw_step_sim  # How many degrees the yaw angles can change pr. simulation step
+        self.yaw_step_env = yaw_step_sim * self.sim_steps_per_env_step  # How many degrees the yaw angles can change pr. environment step
+
 
         # Saves to self
         self.TI_min_mes = TI_min_mes
@@ -640,7 +643,6 @@ class WindFarmEnv(WindEnv):
             # Load the turbbox from predefined folder somewhere
             # selects one at random from the files that were already discovered in __init__
             tf_file = self.np_random.choice(self.TF_files)
-
             tf_agent = MannTurbulenceField.from_netcdf(filename=tf_file)
             tf_agent.scale_TI(TI=self.ti, U=self.ws)
             self.addedTurbulenceModel = SynchronizedAutoScalingIsotropicMannTurbulence()
@@ -885,11 +887,17 @@ class WindFarmEnv(WindEnv):
             # The new yaw angles are the old yaw angles + the action, scaled with the yaw_step
             # 0 action means no change
             # the new yaw angles are the old yaw angles + the action, scaled with the yaw_step
-            self.fs.windTurbines.yaw += action * self.yaw_step
+            
+            # This is how much the yaw can change pr sim step
+            yaw_change = np.clip(self.action_remaining, -self.yaw_step_sim, self.yaw_step_sim, dtype=np.float32)
+
+            self.fs.windTurbines.yaw += yaw_change
             # clip the yaw angles to be between -30 and 30
             self.fs.windTurbines.yaw = np.clip(
                 self.fs.windTurbines.yaw, self.yaw_min, self.yaw_max
             )
+
+            self.action_remaining -= yaw_change
 
         elif self.ActionMethod == "wind":
             # The new yaw angles are the action, scaled to be between the min and max yaw angles
@@ -902,13 +910,15 @@ class WindFarmEnv(WindEnv):
                 self.HTC_path is None
             ):  # This clip is only usefull for the pywake turbine model, as the hawc2 model has inertia anyways
                 # The bounds for the yaw angles are:
-                yaw_max = self.fs.windTurbines.yaw + self.yaw_step
-                yaw_min = self.fs.windTurbines.yaw - self.yaw_step
+                yaw_max = self.fs.windTurbines.yaw + self.yaw_step_sim
+                yaw_min = self.fs.windTurbines.yaw - self.yaw_step_sim
 
                 # The new yaw angles are the new yaw angles, but clipped to be between the yaw_max and yaw_min
                 self.fs.windTurbines.yaw = np.clip(
                     np.clip(new_yaws, yaw_min, yaw_max), self.yaw_min, self.yaw_max
                 )
+
+                
             else:
                 # The new yaw angles are the new yaw angles, but clipped to be between the yaw_min and yaw_max
                 self.fs.windTurbines.yaw = np.clip(new_yaws, self.yaw_min, self.yaw_max)
@@ -1009,6 +1019,10 @@ class WindFarmEnv(WindEnv):
             (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
         )
 
+        if self.ActionMethod == "yaw":
+            self.action_remaining = action * self.yaw_step_env  # Over all steps we want to move this ammout 
+            print("We want to move for a total of: ", self.action_remaining)
+
         for j in range(self.sim_steps_per_env_step):
             self._adjust_yaws(action)  # Adjust the yaw angles of the agent farm
 
@@ -1018,7 +1032,7 @@ class WindFarmEnv(WindEnv):
             # If we have baseline comparison, step it too
             if self.Baseline_comp:
                 new_baseline_yaws = self._base_controller(
-                    fs=self.fs_baseline, yaw_step=self.yaw_step
+                    fs=self.fs_baseline, yaw_step=self.yaw_step_sim
                 )
                 self.fs_baseline.windTurbines.yaw = new_baseline_yaws
                 self.fs_baseline.step()

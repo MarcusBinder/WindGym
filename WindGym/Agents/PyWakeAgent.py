@@ -129,17 +129,16 @@ class PyWakeAgent(BaseAgent):
             action = self.scale_yaw(self.optimized_yaws)
         elif self.env.ActionMethod == "yaw":
             # If using yaw based steering, we need to retun the yaw angles differently
-            # print("Using yaw action method")
 
             yaw_goal = self.optimized_yaws
             yaw_offset = self.env.current_yaw
-            yaw_step = self.env.yaw_step  # How much we can change pr step
+            yaw_step = self.env.yaw_step_env  # How much we can change pr step
 
             step_dir = np.sign(yaw_goal - yaw_offset)
             step_scale = np.abs(yaw_goal - yaw_offset)
             # here we replace all values that are larger then the max, with the max
             step_scale[step_scale > yaw_step] = yaw_step
-            action = step_dir * step_scale
+            action = step_dir * step_scale / self.env.yaw_step_env 
 
         return action, None
 

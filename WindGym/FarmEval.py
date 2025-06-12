@@ -28,7 +28,7 @@ class FarmEval(WindFarmEnv):
         seed=None,
         dt_sim=1,  # Simulation timestep in seconds
         dt_env=1,  # Environment timestep in seconds
-        yaw_step=1,  # Environment timestep in seconds
+        yaw_step_sim=1,  # Environment timestep in seconds
         n_passthrough=5,
         HTC_path=None,
         reset_init=True,
@@ -54,7 +54,7 @@ class FarmEval(WindFarmEnv):
             seed=seed,
             dt_sim=dt_sim,  # Simulation timestep in seconds
             dt_env=dt_env,  # Environment timestep in seconds
-            yaw_step=yaw_step,
+            yaw_step_sim=yaw_step_sim,
             HTC_path=HTC_path,
             reset_init=reset_init,
             fill_window=fill_window,
