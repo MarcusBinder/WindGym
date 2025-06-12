@@ -363,7 +363,7 @@ def eval_pretrained_agent(base_example_data_path):
 
     tester.save_performance()
 
-    model = PyWakeAgent(x_pos=env.x_pos, y_pos=env.y_pos)
+    model = PyWakeAgent(x_pos=env.x_pos, y_pos=env.y_pos, env=env)
     tester = AgentEval(env=env, model=model, name="PyWakeAgent", t_sim=t_sim)
 
     tester.set_conditions(
@@ -505,7 +505,7 @@ def test_fast_eval_debug():
     WD_SIM = 270  # Wind direction in degrees
     TI_SIM = 0.07  # Turbulence intensity
 
-    model = PyWakeAgent(x_pos=env.x_pos, y_pos=env.y_pos)
+    model = PyWakeAgent(x_pos=env.x_pos, y_pos=env.y_pos, env=env)
 
     ds = AgentEvalFast(
         env,

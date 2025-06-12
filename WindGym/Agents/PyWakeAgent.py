@@ -30,12 +30,17 @@ class PyWakeAgent(BaseAgent):
         refine_pass_n=6,
         yaw_n=7,
         turbine=V80(),
+        env=None,
     ):
         # This is used in a hasattr in the AgentEval class.
         self.pywakeagent = True
         self.optimized = False  # Is false before we have optimized the farm.
         self.yaw_max = yaw_max
         self.yaw_min = yaw_min
+
+        self.UseEnv = True
+        self.env = env
+
         # choosing the flow cases for the optimization
         self.wsp = np.asarray([wind_speed])
         self.wdir = np.asarray([wind_dir])
@@ -117,9 +122,25 @@ class PyWakeAgent(BaseAgent):
 
         if self.optimized is False:
             self.optimize()
-            self.action = self.scale_yaw(self.optimized_yaws)
 
-        return self.action, None
+        if self.env.ActionMethod == "wind":
+            # If the action method is 'wind', we return the set point yaw angles directly.
+            # print("Using wind action method")
+            action = self.scale_yaw(self.optimized_yaws)
+        elif self.env.ActionMethod == "yaw":
+            # If using yaw based steering, we need to retun the yaw angles differently
+
+            yaw_goal = self.optimized_yaws
+            yaw_offset = self.env.current_yaw
+            yaw_step = self.env.yaw_step_env  # How much we can change pr step
+
+            step_dir = np.sign(yaw_goal - yaw_offset)
+            step_scale = np.abs(yaw_goal - yaw_offset)
+            # here we replace all values that are larger then the max, with the max
+            step_scale[step_scale > yaw_step] = yaw_step
+            action = step_dir * step_scale / self.env.yaw_step_env
+
+        return action, None
 
     def calc_power(self, yaws):
         """

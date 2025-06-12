@@ -25,7 +25,10 @@ class PowerWrapper(gym.Wrapper):
         self.n_envs = n_envs
         # initialize PyWake agent
         self.pywake_agent = PyWakeAgent(
-            x_pos=self.env.x_pos, y_pos=self.env.y_pos, turbine=self.env.turbine
+            x_pos=self.env.x_pos,
+            y_pos=self.env.y_pos,
+            turbine=self.env.turbine,
+            env=env,
         )
 
         # state

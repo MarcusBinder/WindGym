@@ -127,7 +127,7 @@ def run_env_and_get_reward(
         "seed": 123,
         "dt_sim": 1,
         "dt_env": 10,  # Gives some steps for DWM to run
-        "yaw_step": 1.0,
+        "yaw_step_sim": 1.0,
         "turbtype": "None",  # Simplifies flow, focuses on power output based on yaw
         "fill_window": 1,  # Ensures deques are populated minimally and predictably
         "reset_init": True,
@@ -383,7 +383,7 @@ act_pen:
         seed=123,
         dt_sim=1,
         dt_env=10,
-        yaw_step=1.0,  # yaw_step = 1.0 for direct action mapping
+        yaw_step_sim=1.0,  # yaw_step = 1.0 for direct action mapping
         turbtype="None",
         fill_window=1,
         reset_init=True,

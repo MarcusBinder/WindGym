@@ -39,7 +39,10 @@ def test_initialization(MockPyWakeAgent, mock_env):
 
     # Assert PyWakeAgent was initialized correctly
     MockPyWakeAgent.assert_called_once_with(
-        x_pos=mock_env.x_pos, y_pos=mock_env.y_pos, turbine=mock_env.turbine
+        x_pos=mock_env.x_pos,
+        y_pos=mock_env.y_pos,
+        turbine=mock_env.turbine,
+        env=mock_env,
     )
 
     # Assert wrapper attributes are set
