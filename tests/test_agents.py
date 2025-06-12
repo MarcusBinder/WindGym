@@ -89,7 +89,7 @@ def test_greedy_agent_local_controller(base_example_data_path):
         type="local",
         yaw_max=env.yaw_max,  # Use env's yaw limits
         yaw_min=env.yaw_min,
-        yaw_step=env.yaw_step,
+        yaw_step=env.yaw_step_sim,
     )
 
     action, state = agent.predict()
@@ -133,7 +133,7 @@ def test_greedy_agent_global_controller(base_example_data_path):
         type="global",
         yaw_max=env.yaw_max,
         yaw_min=env.yaw_min,
-        yaw_step=env.yaw_step,
+        yaw_step=env.yaw_step_sim,
     )
 
     action, state = agent.predict()

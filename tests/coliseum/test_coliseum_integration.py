@@ -127,7 +127,7 @@ class TestColiseumAndAgentIntegration:
             turbtype="None",
             reset_init=True,
             Baseline_comp=False,
-            yaw_step=YAW_STEP,
+            yaw_step_sim=YAW_STEP,
         )
         obs, info = env.reset(seed=42)  # Initial yaw starts at 0.0
 
