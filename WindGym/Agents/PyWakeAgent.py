@@ -138,7 +138,7 @@ class PyWakeAgent(BaseAgent):
             step_scale = np.abs(yaw_goal - yaw_offset)
             # here we replace all values that are larger then the max, with the max
             step_scale[step_scale > yaw_step] = yaw_step
-            action = step_dir * step_scale / self.env.yaw_step_env 
+            action = step_dir * step_scale / self.env.yaw_step_env
 
         return action, None
 

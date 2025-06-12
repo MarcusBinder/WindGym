@@ -890,9 +890,14 @@ class WindFarmEnv(WindEnv):
             # The new yaw angles are the old yaw angles + the action, scaled with the yaw_step
             # 0 action means no change
             # the new yaw angles are the old yaw angles + the action, scaled with the yaw_step
-            
+
             # This is how much the yaw can change pr sim step
-            yaw_change = np.clip(self.action_remaining, -self.yaw_step_sim, self.yaw_step_sim, dtype=np.float32)
+            yaw_change = np.clip(
+                self.action_remaining,
+                -self.yaw_step_sim,
+                self.yaw_step_sim,
+                dtype=np.float32,
+            )
 
             self.fs.windTurbines.yaw += yaw_change
             # clip the yaw angles to be between -30 and 30
@@ -921,7 +926,6 @@ class WindFarmEnv(WindEnv):
                     np.clip(new_yaws, yaw_min, yaw_max), self.yaw_min, self.yaw_max
                 )
 
-                
             else:
                 # The new yaw angles are the new yaw angles, but clipped to be between the yaw_min and yaw_max
                 self.fs.windTurbines.yaw = np.clip(new_yaws, self.yaw_min, self.yaw_max)
@@ -1023,7 +1027,9 @@ class WindFarmEnv(WindEnv):
         )
 
         if self.ActionMethod == "yaw":
-            self.action_remaining = action * self.yaw_step_env  # Over all steps we want to move this ammout 
+            self.action_remaining = (
+                action * self.yaw_step_env
+            )  # Over all steps we want to move this ammout
             print("We want to move for a total of: ", self.action_remaining)
 
         for j in range(self.sim_steps_per_env_step):
