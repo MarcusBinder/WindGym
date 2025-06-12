@@ -103,7 +103,7 @@ def eval_single_fast(
 
     # Calculate the correct number of steps
     step_val = (
-        env.sim_steps_per_env_step
+        env.dt_env
     )  # This is the number of steps per environment step
     total_steps = t_sim // step_val + 1  # This is the total number of steps to simulate
 
