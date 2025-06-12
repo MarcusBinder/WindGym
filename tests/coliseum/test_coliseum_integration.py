@@ -68,10 +68,6 @@ class TestColiseumAndAgentIntegration:
         yaw_min = config["farm"]["yaw_min"]
         yaw_max = config["farm"]["yaw_max"]
 
-        pywake_agent = PyWakeAgent(
-            x_pos=x_pos, y_pos=y_pos, turbine=V80(), yaw_min=yaw_min, yaw_max=yaw_max
-        )
-
         def env_factory():
             return FarmEval(
                 turbine=V80(),
@@ -83,6 +79,15 @@ class TestColiseumAndAgentIntegration:
                 finite_episode=True,
                 Baseline_comp=False,
             )
+
+        pywake_agent = PyWakeAgent(
+            x_pos=x_pos,
+            y_pos=y_pos,
+            turbine=V80(),
+            yaw_min=yaw_min,
+            yaw_max=yaw_max,
+            env=env_factory(),
+        )
 
         coliseum = Coliseum(
             env_factory, agents={"PyWake": pywake_agent}, n_passthrough=1.0
@@ -112,13 +117,7 @@ class TestColiseumAndAgentIntegration:
         yaw_min = config["farm"]["yaw_min"]
         yaw_max = config["farm"]["yaw_max"]
 
-        # 1. Initialize the agent and find its optimal target
-        pywake_agent = PyWakeAgent(
-            x_pos=x_pos, y_pos=y_pos, turbine=V80(), yaw_min=yaw_min, yaw_max=yaw_max
-        )
-        pywake_agent.update_wind(wind_speed=10, wind_direction=270, TI=0.07)
-
-        # 2. Setup the environment with a specific yaw_step for a predictable outcome
+        # 1. Setup the environment with a specific yaw_step for a predictable outcome
         YAW_STEP = 2.0
         env = FarmEval(
             turbine=V80(),
@@ -131,6 +130,17 @@ class TestColiseumAndAgentIntegration:
             yaw_step=YAW_STEP,
         )
         obs, info = env.reset(seed=42)  # Initial yaw starts at 0.0
+
+        # 2. Initialize the agent and find its optimal target
+        pywake_agent = PyWakeAgent(
+            x_pos=x_pos,
+            y_pos=y_pos,
+            turbine=V80(),
+            yaw_min=yaw_min,
+            yaw_max=yaw_max,
+            env=env,
+        )
+        pywake_agent.update_wind(wind_speed=10, wind_direction=270, TI=0.07)
 
         # 3. Get the agent's action and take one step in the environment
         action, _ = pywake_agent.predict(obs)
