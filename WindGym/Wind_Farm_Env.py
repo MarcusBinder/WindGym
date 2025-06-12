@@ -71,7 +71,7 @@ class WindFarmEnv(WindEnv):
         dt_sim=1,  # Simulation timestep in seconds
         dt_env=1,  # Environment timestep in seconds
         yaw_step_sim=1,  # How many degrees the yaw angles can change pr. simulation step
-        # yaw_step_env=1,  # How many degrees the yaw angles can change pr. environment step
+        yaw_step_env=None,  # How many degrees the yaw angles can change pr. environment step
         fill_window=True,
         sample_site=None,
         HTC_path=None,
@@ -131,8 +131,11 @@ class WindFarmEnv(WindEnv):
         self.temporal_filter = CutOffFrqLio2021
         self.turbtype = turbtype
         self.yaw_step_sim = yaw_step_sim  # How many degrees the yaw angles can change pr. simulation step
-        self.yaw_step_env = yaw_step_sim * self.sim_steps_per_env_step  # How many degrees the yaw angles can change pr. environment step
 
+        if yaw_step_env is None:
+            self.yaw_step_env = yaw_step_sim * self.sim_steps_per_env_step
+        else:
+            self.yaw_step_env = yaw_step_env
 
         # Saves to self
         self.TI_min_mes = TI_min_mes
