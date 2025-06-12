@@ -45,7 +45,10 @@ class CurriculumWrapper(gym.Wrapper):
         self.yaw_check = yaw_check
         # initialize PyWake agent
         self.pywake_agent = PyWakeAgent(
-            x_pos=self.env.x_pos, y_pos=self.env.y_pos, turbine=self.env.turbine, env=env,
+            x_pos=self.env.x_pos,
+            y_pos=self.env.y_pos,
+            turbine=self.env.turbine,
+            env=env,
         )
 
         # maximum possible L2 distance: sqrt(N) * max_yaw_range
