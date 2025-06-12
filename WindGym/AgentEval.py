@@ -102,9 +102,7 @@ def eval_single_fast(
         AssertionError("You need to specify a model to evaluate the agent.")
 
     # Calculate the correct number of steps
-    step_val = (
-        env.dt_env
-    )  # This is the number of steps per environment step
+    step_val = env.dt_env  # This is the number of steps per environment step
     total_steps = t_sim // step_val + 1  # This is the total number of steps to simulate
 
     # Unpack some variables, to make the code more readable
