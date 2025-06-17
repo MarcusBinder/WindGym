@@ -68,7 +68,7 @@ def test_greedy_agent_local_controller(base_example_data_path):
     """
     yaml_path = base_example_data_path / Path(
         "Env1.yaml"
-    )  # Using Env1.yaml as in the pattern
+    )  
     x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=2, xDist=2, yDist=2)
     env = FarmEval(
         turbine=V80(),
@@ -77,17 +77,14 @@ def test_greedy_agent_local_controller(base_example_data_path):
         yaml_path=yaml_path,
         yaw_init="Zeros",  # Start with zero yaw offset
         seed=0,
-        # Ensure Baseline_comp is False or the environment is set up to handle fs_baseline
-        # For GreedyAgent, the baseline farm isn't directly used by the agent's logic itself,
-        # but FarmEval might initialize it.
-        Baseline_comp=False,  # Or True, if fs_baseline is properly mocked/handled in FarmEval for this simple test
+        Baseline_comp=False,  
     )
     env.reset()  # Initialize flow simulation `fs`
 
     agent = GreedyAgent(
         env=env,
         type="local",
-        yaw_max=env.yaw_max,  # Use env's yaw limits
+        yaw_max=env.yaw_max, 
         yaw_min=env.yaw_min,
         yaw_step=env.yaw_step_sim,
     )
@@ -114,7 +111,7 @@ def test_greedy_agent_global_controller(base_example_data_path):
     """
     yaml_path = base_example_data_path / Path(
         "Env1.yaml"
-    )  # Using Env1.yaml as in the pattern
+    )  
     x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=2, xDist=4, yDist=4)
 
     env = FarmEval(
