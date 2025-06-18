@@ -71,7 +71,7 @@ def wind_farm_env(turbine, mann_turbulence_field, monkeypatch):
         y_pos=y_pos,
         n_passthrough=0.1,
         yaml_path=Path("examples/EnvConfigs/2turb.yaml"),
-        turbtype="None",  # Using fixed turbulence type
+        turbtype="None",
         burn_in_passthroughs=0.001,
     )
 
