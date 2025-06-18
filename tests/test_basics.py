@@ -449,6 +449,8 @@ def eval_pretrained_agent(base_example_data_path):
         yaml_path=yaml_path,
         yaw_init="Zeros",  # always start at zero yaw offset ,
         seed=SEED,
+        n_passthrough=0.1,
+        burn_in_passthroughs=0.01,
     )
 
     model = PPO.load(model_step)
@@ -540,6 +542,8 @@ def test_fast_eval():
         turbtype="None",
         yaw_init="Zeros",  # always start at zero yaw offset ,
         seed=SEED,
+        n_passthrough=0.1,
+        burn_in_passthroughs=0.0001,
     )
     n_turb = env.n_turb  # The Env1.yams file has 4 turbines
     WS_SIM = 10  # Wind speed in m/s
@@ -619,7 +623,7 @@ def test_fast_eval_debug():
         ws=WS_SIM,
         ti=TI_SIM,
         wd=WD_SIM,
-        turbbox="Default",  # BARE EN STRING
+        turbbox="None",
         t_sim=5,
         deterministic=True,
         debug=True,
