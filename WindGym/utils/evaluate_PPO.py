@@ -54,7 +54,7 @@ class Coliseum:
                                               If None, defaults to "Agent_0", "Agent_1", etc.
             n_passthrough (float, optional): Number of flow passthroughs for episode length.
                                            Defaults to 1.0.
-            burn_in_passthroughs (float, optional): Number of flow passthroughs before episode 
+            burn_in_passthroughs (float, optional): Number of flow passthroughs before episode
         """
         # Handle different agent input formats
         if isinstance(agents, dict):

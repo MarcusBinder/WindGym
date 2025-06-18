@@ -790,7 +790,7 @@ class WindFarmEnv(WindEnv):
         self.time_max = max(1, self.time_max)
 
         # first we run the simulation the time it takes the flow to develop
-        print('burning ', t_developed)
+        print("burning ", t_developed)
         self.fs.run(t_developed)
 
         # Fill up our measurement queue first, with the ammount of steps we need to fill up
