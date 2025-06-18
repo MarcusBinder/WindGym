@@ -778,8 +778,6 @@ class WindFarmEnv(WindEnv):
         t_inflow = dist / self.ws
         # The time it takes for the flow to develop. Also a bit extra.
         t_developed = int(t_inflow * self.burn_in_passthroughs)
-        print('burn ', self.burn_in_passthroughs)
-        print('pass ', self.n_passthrough)
 
         # Max allowed timesteps
         self.time_max = int(t_inflow * self.n_passthrough)
