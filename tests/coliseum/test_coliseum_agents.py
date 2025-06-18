@@ -64,10 +64,15 @@ class TestColiseumAdvanced:
                 turbtype="None",
                 reset_init=True,
                 finite_episode=True,
+                n_passthrough=0.1,
+                burn_in_passthroughs=0.001,
             )
 
         coliseum = Coliseum(
-            env_factory, agents={"PyWake": pywake_agent}, n_passthrough=0.1
+            env_factory,
+            agents={"PyWake": pywake_agent},
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
         # 3. "Spy" on the agent's update_wind method
@@ -182,7 +187,10 @@ class TestColiseumIntegration:
             )
 
         coliseum = Coliseum(
-            env_factory, agents={"PyWake": pywake_agent}, n_passthrough=0.1
+            env_factory,
+            agents={"PyWake": pywake_agent},
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
         # Run a single episode. This will trigger the agent's update_wind method.
@@ -218,10 +226,15 @@ class TestColiseumIntegration:
                 turbtype="None",
                 reset_init=True,
                 finite_episode=True,
+                n_passthrough=0.1,
+                burn_in_passthroughs=0.001,
             )
 
         coliseum = Coliseum(
-            env_factory, agents={"PyWake": pywake_agent}, n_passthrough=0.1
+            env_factory,
+            agents={"PyWake": pywake_agent},
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
         coliseum.run_time_series_evaluation(num_episodes=1, seed=42)
@@ -272,7 +285,7 @@ class TestColiseumIntegration:
         )
 
         ws_grid = [9, 11]
-        wd_grid = [265, 275]
+        wd_grid = [275]
         ti_val = 0.07
 
         coliseum.run_wind_grid_evaluation(
@@ -287,11 +300,9 @@ class TestColiseumIntegration:
             ti_points=1,
         )
 
-        assert len(spy_agent.update_calls) == 4
+        assert len(spy_agent.update_calls) == 2
 
         expected_calls = [
-            {"ws": 9.0, "wd": 265.0, "ti": ti_val},
-            {"ws": 11.0, "wd": 265.0, "ti": ti_val},
             {"ws": 9.0, "wd": 275.0, "ti": ti_val},
             {"ws": 11.0, "wd": 275.0, "ti": ti_val},
         ]

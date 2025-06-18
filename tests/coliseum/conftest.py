@@ -162,6 +162,8 @@ def coliseum_instance(temp_yaml_file_for_coliseum, coliseum_agents):
             finite_episode=True,
             dt_env=1,
             dt_sim=1,
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
     return Coliseum(
