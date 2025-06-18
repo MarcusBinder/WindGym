@@ -29,6 +29,9 @@ class TestColiseumAdvanced:
             "y_pos": [0],
             "turbine": V80(),
             "yaml_path": temp_yaml_file,
+            "n_passthrough": 0.05,
+            "burn_in_passthroughs": 0.01,
+            "turbtype": "None",
         }
 
         factory = Coliseum.create_env_factory_with_site(
@@ -141,6 +144,9 @@ class TestColiseumIntegration:
             "y_pos": [0],
             "turbine": V80(),
             "yaml_path": temp_yaml_file_integration,
+            "n_passthrough": 0.05,
+            "burn_in_passthroughs": 0.01,
+            "turbtype": "None",
         }
 
         factory = Coliseum.create_env_factory_with_site(
@@ -171,6 +177,8 @@ class TestColiseumIntegration:
                 turbtype="None",
                 reset_init=True,
                 finite_episode=True,
+                n_passthrough=0.1,
+                burn_in_passthroughs=0.001,
             )
 
         coliseum = Coliseum(
@@ -252,10 +260,15 @@ class TestColiseumIntegration:
                 turbtype="None",
                 reset_init=True,
                 finite_episode=True,
+                n_passthrough=0.1,
+                burn_in_passthroughs=0.01,
             )
 
         coliseum = Coliseum(
-            env_factory, agents={"SpyWake": spy_agent}, n_passthrough=0.1
+            env_factory,
+            agents={"SpyWake": spy_agent},
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
         ws_grid = [9, 11]
