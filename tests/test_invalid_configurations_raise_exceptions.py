@@ -324,6 +324,9 @@ class TestInvalidConfigurations:
                     yaml_path=yaml_path,
                     seed=123,
                     reset_init=True,
+                    turbtype="None",
+                    n_passthrough=0.1,
+                    burn_in_passthroughs=0.01,
                 )
                 if requires_step:
                     if env.action_space is None:
