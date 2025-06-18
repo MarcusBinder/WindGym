@@ -35,6 +35,7 @@ class FarmEval(WindFarmEnv):
         reset_init=True,
         fill_window=True,
         sample_site=None,
+        burn_in_passthroughs=2,
     ):
         self.finite_episode = finite_episode
         # TODO There must be a better way to set all these valuesm **kwargs???
@@ -44,6 +45,7 @@ class FarmEval(WindFarmEnv):
             x_pos=x_pos,
             y_pos=y_pos,
             n_passthrough=n_passthrough,
+            burn_in_passthroughs=burn_in_passthroughs,
             TI_min_mes=TI_min_mes,
             TI_max_mes=TI_max_mes,
             TurbBox=TurbBox,

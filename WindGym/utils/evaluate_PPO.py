@@ -39,6 +39,7 @@ class Coliseum:
         agents: Union[Dict[str, object], List[object]],
         agent_labels: Optional[List[str]] = None,
         n_passthrough: float = 1.0,
+        burn_in_passthroughs: float = 2.0,
     ):
         """
         Initialize the Coliseum evaluation framework.
@@ -53,6 +54,7 @@ class Coliseum:
                                               If None, defaults to "Agent_0", "Agent_1", etc.
             n_passthrough (float, optional): Number of flow passthroughs for episode length.
                                            Defaults to 1.0.
+            burn_in_passthroughs (float, optional): Number of flow passthroughs before episode 
         """
         # Handle different agent input formats
         if isinstance(agents, dict):
@@ -76,6 +78,7 @@ class Coliseum:
 
         self.env_factory = env_factory
         self.n_passthrough = n_passthrough
+        self.burn_in_passthroughs = burn_in_passthroughs
         self.results: Optional[pd.DataFrame] = None
         self.time_series_results: Optional[Dict[str, Any]] = None
 
@@ -289,10 +292,12 @@ class Coliseum:
                 # Create fresh environment for each agent
                 env = self.env_factory()
                 env.n_passthrough = self.n_passthrough
+                env.burn_in_passthroughs = self.burn_in_passthroughs
 
                 try:
                     if hasattr(env.unwrapped, "n_passthrough"):
                         env.unwrapped.n_passthrough = self.n_passthrough
+                        env.unwrapped.burn_in_passthroughs = self.burn_in_passthroughs
 
                     agent = self.agents[agent_name]
 
@@ -408,6 +413,7 @@ class Coliseum:
                         for agent_name in self.agent_names:
                             env = self.env_factory()
                             env.n_passthrough = self.n_passthrough
+                            env.burn_in_passthroughs = self.burn_in_passthroughs
 
                             try:
                                 # Set fixed wind conditions (overrides sample_site)
@@ -447,6 +453,7 @@ class Coliseum:
                 "description": "Wind farm agent evaluation results",
                 "agents": list(self.agent_names),
                 "n_passthrough": self.n_passthrough,
+                "burn_in_passthroughs": self.burn_in_passthroughs,
                 "evaluation_type": "wind_grid",
                 # FIX: Convert the dictionary to a string for NetCDF compatibility
                 "bounds_used": str(
