@@ -190,6 +190,8 @@ def fast_farm_eval_factory(temp_yaml_file_for_coliseum):
             turbtype="None",  # Key optimization for speed
             reset_init=False,  # Avoid slow reset during object creation
             finite_episode=True,
+            n_passthrough=0.1,  # Very short episodes for fast tests
+            burn_in_passthroughs=0.0001,
         )
 
     return _factory
