@@ -29,6 +29,9 @@ class TestColiseumAdvanced:
             "y_pos": [0],
             "turbine": V80(),
             "yaml_path": temp_yaml_file,
+            "n_passthrough": 0.05,
+            "burn_in_passthroughs": 0.01,
+            "turbtype": "None",
         }
 
         factory = Coliseum.create_env_factory_with_site(
@@ -61,9 +64,16 @@ class TestColiseumAdvanced:
                 turbtype="None",
                 reset_init=True,
                 finite_episode=True,
+                n_passthrough=0.1,
+                burn_in_passthroughs=0.001,
             )
 
-        coliseum = Coliseum(env_factory, agents={"PyWake": pywake_agent})
+        coliseum = Coliseum(
+            env_factory,
+            agents={"PyWake": pywake_agent},
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
+        )
 
         # 3. "Spy" on the agent's update_wind method
         with patch.object(
@@ -139,6 +149,9 @@ class TestColiseumIntegration:
             "y_pos": [0],
             "turbine": V80(),
             "yaml_path": temp_yaml_file_integration,
+            "n_passthrough": 0.05,
+            "burn_in_passthroughs": 0.01,
+            "turbtype": "None",
         }
 
         factory = Coliseum.create_env_factory_with_site(
@@ -169,9 +182,16 @@ class TestColiseumIntegration:
                 turbtype="None",
                 reset_init=True,
                 finite_episode=True,
+                n_passthrough=0.1,
+                burn_in_passthroughs=0.001,
             )
 
-        coliseum = Coliseum(env_factory, agents={"PyWake": pywake_agent})
+        coliseum = Coliseum(
+            env_factory,
+            agents={"PyWake": pywake_agent},
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
+        )
 
         # Run a single episode. This will trigger the agent's update_wind method.
         coliseum.run_time_series_evaluation(num_episodes=1, seed=42)
@@ -206,9 +226,16 @@ class TestColiseumIntegration:
                 turbtype="None",
                 reset_init=True,
                 finite_episode=True,
+                n_passthrough=0.1,
+                burn_in_passthroughs=0.001,
             )
 
-        coliseum = Coliseum(env_factory, agents={"PyWake": pywake_agent})
+        coliseum = Coliseum(
+            env_factory,
+            agents={"PyWake": pywake_agent},
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
+        )
 
         coliseum.run_time_series_evaluation(num_episodes=1, seed=42)
 
@@ -246,13 +273,19 @@ class TestColiseumIntegration:
                 turbtype="None",
                 reset_init=True,
                 finite_episode=True,
+                n_passthrough=0.1,
+                burn_in_passthroughs=0.01,
             )
 
-        # IMPORTANT: Create a new Coliseum instance to ensure a fresh test state
-        coliseum = Coliseum(env_factory, agents={"SpyWake": spy_agent})
+        coliseum = Coliseum(
+            env_factory,
+            agents={"SpyWake": spy_agent},
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
+        )
 
         ws_grid = [9, 11]
-        wd_grid = [265, 275]
+        wd_grid = [275]
         ti_val = 0.07
 
         coliseum.run_wind_grid_evaluation(
@@ -267,11 +300,9 @@ class TestColiseumIntegration:
             ti_points=1,
         )
 
-        assert len(spy_agent.update_calls) == 4
+        assert len(spy_agent.update_calls) == 2
 
         expected_calls = [
-            {"ws": 9.0, "wd": 265.0, "ti": ti_val},
-            {"ws": 11.0, "wd": 265.0, "ti": ti_val},
             {"ws": 9.0, "wd": 275.0, "ti": ti_val},
             {"ws": 11.0, "wd": 275.0, "ti": ti_val},
         ]

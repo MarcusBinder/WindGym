@@ -78,6 +78,8 @@ class TestColiseumAndAgentIntegration:
                 reset_init=True,
                 finite_episode=True,
                 Baseline_comp=False,
+                n_passthrough=0.01,
+                burn_in_passthroughs=0.01,
             )
 
         pywake_agent = PyWakeAgent(
@@ -128,6 +130,8 @@ class TestColiseumAndAgentIntegration:
             reset_init=True,
             Baseline_comp=False,
             yaw_step_sim=YAW_STEP,
+            n_passthrough=0.5,
+            burn_in_passthroughs=0.01,
         )
         obs, info = env.reset(seed=42)  # Initial yaw starts at 0.0
 

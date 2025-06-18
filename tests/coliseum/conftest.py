@@ -160,12 +160,17 @@ def coliseum_instance(temp_yaml_file_for_coliseum, coliseum_agents):
             Baseline_comp=True,
             reset_init=True,
             finite_episode=True,
+            dt_env=1,
+            dt_sim=1,
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
     return Coliseum(
         env_factory=env_factory,
         agents=coliseum_agents,
         n_passthrough=0.1,  # Very short episodes for fast tests
+        burn_in_passthroughs=0.0001,
     )
 
 
@@ -187,6 +192,8 @@ def fast_farm_eval_factory(temp_yaml_file_for_coliseum):
             turbtype="None",  # Key optimization for speed
             reset_init=False,  # Avoid slow reset during object creation
             finite_episode=True,
+            n_passthrough=0.1,  # Very short episodes for fast tests
+            burn_in_passthroughs=0.0001,
         )
 
     return _factory

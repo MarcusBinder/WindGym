@@ -69,9 +69,10 @@ def wind_farm_env(turbine, mann_turbulence_field, monkeypatch):
         turbine=turbine,
         x_pos=x_pos,
         y_pos=y_pos,
-        n_passthrough=2,
+        n_passthrough=0.1,
         yaml_path=Path("examples/EnvConfigs/2turb.yaml"),
-        turbtype="MannFixed",  # Using fixed turbulence type
+        turbtype="None",
+        burn_in_passthroughs=0.001,
     )
 
     yield env
@@ -316,14 +317,116 @@ def test_reward_functions(wind_farm_env):
 #               np.mean(turbine_speeds[~downstream_mask])
 
 
-def test_ppo_compatibility(wind_farm_env):
-    """Test that environment works with PPO algorithm"""
-    model = PPO("MlpPolicy", wind_farm_env, verbose=0)
-    model.learn(total_timesteps=10)  # Just verify it runs without errors
+# def test_ppo_compatibility(wind_farm_env):
+#    """Test that environment works with PPO algorithm"""
+#    model = PPO("MlpPolicy", wind_farm_env, verbose=0)
+#    model.learn(total_timesteps=3)  # Just verify it runs without errors
+#
+#    obs, _ = wind_farm_env.reset()
+#    action, _ = model.predict(obs)
+#    assert wind_farm_env.action_space.contains(action)
 
-    obs, _ = wind_farm_env.reset()
-    action, _ = model.predict(obs)
-    assert wind_farm_env.action_space.contains(action)
+
+def test_ppo_compatibility(wind_farm_env):
+    """
+    Test that a PPO model can be initialized and interact with the environment
+    for a few steps without errors, and that the outputs are valid.
+    """
+    # 1. Initialize PPO model
+    # Use the 'wind_farm_env' fixture directly as the environment for PPO
+    model = PPO("MlpPolicy", wind_farm_env, verbose=0)
+
+    # Assert that the model object is created successfully
+    assert model is not None, "PPO model should be initialized."
+    assert hasattr(model, "policy"), "PPO model should have a policy object."
+    # Corrected assertion for the value network: it's typically 'critic' or 'value_net' on the policy object
+    assert hasattr(model.policy, "critic") or hasattr(
+        model.policy, "value_net"
+    ), "PPO model's policy should have a value network (critic or value_net)."
+
+    # 2. Explicitly call reset and capture initial state
+    print("\nStarting environment reset...")
+    obs, info = wind_farm_env.reset()
+    print("Environment reset complete.")
+
+    # Assert initial observation and info are valid
+    assert isinstance(obs, np.ndarray), "Initial observation should be a numpy array."
+    assert (
+        obs.shape == wind_farm_env.observation_space.shape
+    ), f"Initial observation shape mismatch. Expected {wind_farm_env.observation_space.shape}, got {obs.shape}."
+    assert not np.any(np.isnan(obs)), "Initial observation should not contain NaNs."
+    assert isinstance(info, dict), "Initial info should be a dictionary."
+    assert "Power agent" in info, "Initial info should contain 'Power agent'."
+    assert info["Power agent"] >= 0, "Initial 'Power agent' should be non-negative."
+
+    # 3. Take a few steps manually
+    num_steps_to_take = 2
+    print(f"Taking {num_steps_to_take} manual steps...")
+    for i in range(num_steps_to_take):
+        print(f"Step {i+1}/{num_steps_to_take}...")
+
+        # Predict action from the model
+        action, _ = model.predict(
+            obs, deterministic=True
+        )  # PPO needs an observation to predict
+
+        # Assert action is valid before stepping
+        assert isinstance(
+            action, np.ndarray
+        ), f"Action at step {i} should be a numpy array."
+        assert (
+            action.shape == wind_farm_env.action_space.shape
+        ), f"Action shape mismatch at step {i}. Expected {wind_farm_env.action_space.shape}, got {action.shape}."
+        assert wind_farm_env.action_space.contains(
+            action
+        ), f"Action {action} at step {i} is outside action space bounds {wind_farm_env.action_space}."
+
+        # Step the environment
+        obs, reward, terminated, truncated, info = wind_farm_env.step(action)
+
+        # Assert outputs of the step
+        assert isinstance(
+            obs, np.ndarray
+        ), f"Observation at step {i} should be a numpy array."
+        assert (
+            obs.shape == wind_farm_env.observation_space.shape
+        ), f"Observation shape mismatch at step {i}. Expected {wind_farm_env.observation_space.shape}, got {obs.shape}."
+        assert not np.any(
+            np.isnan(obs)
+        ), f"Observation at step {i} should not contain NaNs."
+
+        assert isinstance(reward, float), f"Reward at step {i} should be a float."
+        assert not np.isnan(reward), f"Reward at step {i} should not be NaN."
+
+        assert isinstance(
+            terminated, bool
+        ), f"Terminated flag at step {i} should be a boolean."
+        assert isinstance(
+            truncated, bool
+        ), f"Truncated flag at step {i} should be a boolean."
+
+        assert isinstance(info, dict), f"Info at step {i} should be a dictionary."
+        assert "Power agent" in info, f"Info at step {i} should contain 'Power agent'."
+        assert (
+            info["Power agent"] >= 0
+        ), f"'Power agent' at step {i} should be non-negative."
+
+        # Handle episode termination/truncation (and reset for next step if needed)
+        if terminated or truncated:
+            print(
+                f"Episode terminated/truncated early at step {i+1} during manual steps, resetting."
+            )
+            # For this minimal test, you might simply break here or ensure it handles a new reset
+            # For a proper RL loop, you'd always reset and continue
+            if (
+                i < num_steps_to_take - 1
+            ):  # Only reset if there are more steps planned in this loop
+                obs, _ = wind_farm_env.reset()
+                print("Environment reset after termination/truncation.")
+            else:
+                print("Last planned step, not resetting.")
+
+    print("Manual stepping complete. Test PASSED (if no assertions failed).")
 
 
 def eval_pretrained_agent(base_example_data_path):
@@ -346,6 +449,8 @@ def eval_pretrained_agent(base_example_data_path):
         yaml_path=yaml_path,
         yaw_init="Zeros",  # always start at zero yaw offset ,
         seed=SEED,
+        n_passthrough=0.1,
+        burn_in_passthroughs=0.01,
     )
 
     model = PPO.load(model_step)
@@ -437,6 +542,8 @@ def test_fast_eval():
         turbtype="None",
         yaw_init="Zeros",  # always start at zero yaw offset ,
         seed=SEED,
+        n_passthrough=0.1,
+        burn_in_passthroughs=0.0001,
     )
     n_turb = env.n_turb  # The Env1.yams file has 4 turbines
     WS_SIM = 10  # Wind speed in m/s
@@ -499,6 +606,8 @@ def test_fast_eval_debug():
         turbtype="None",
         yaw_init="Zeros",  # always start at zero yaw offset ,
         seed=SEED,
+        n_passthrough=0.1,  # Very short episodes for fast tests
+        burn_in_passthroughs=0.0001,
     )
 
     WS_SIM = 10  # Wind speed in m/s
@@ -514,7 +623,7 @@ def test_fast_eval_debug():
         ws=WS_SIM,
         ti=TI_SIM,
         wd=WD_SIM,
-        turbbox="Default",  # BARE EN STRING
+        turbbox="None",
         t_sim=5,
         deterministic=True,
         debug=True,

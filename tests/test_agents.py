@@ -66,9 +66,7 @@ def test_greedy_agent_local_controller(base_example_data_path):
     Tests the GreedyAgent with the 'local' controller type.
     Verifies that the predict method returns a correctly shaped and scaled action.
     """
-    yaml_path = base_example_data_path / Path(
-        "Env1.yaml"
-    )  # Using Env1.yaml as in the pattern
+    yaml_path = base_example_data_path / Path("Env1.yaml")
     x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=2, xDist=2, yDist=2)
     env = FarmEval(
         turbine=V80(),
@@ -77,17 +75,17 @@ def test_greedy_agent_local_controller(base_example_data_path):
         yaml_path=yaml_path,
         yaw_init="Zeros",  # Start with zero yaw offset
         seed=0,
-        # Ensure Baseline_comp is False or the environment is set up to handle fs_baseline
-        # For GreedyAgent, the baseline farm isn't directly used by the agent's logic itself,
-        # but FarmEval might initialize it.
-        Baseline_comp=False,  # Or True, if fs_baseline is properly mocked/handled in FarmEval for this simple test
+        Baseline_comp=False,
+        turbtype="None",  # Key optimization for speed
+        n_passthrough=0.1,  # Very short episodes for fast tests
+        burn_in_passthroughs=0.0001,
     )
     env.reset()  # Initialize flow simulation `fs`
 
     agent = GreedyAgent(
         env=env,
         type="local",
-        yaw_max=env.yaw_max,  # Use env's yaw limits
+        yaw_max=env.yaw_max,
         yaw_min=env.yaw_min,
         yaw_step=env.yaw_step_sim,
     )
@@ -112,9 +110,7 @@ def test_greedy_agent_global_controller(base_example_data_path):
     Tests the GreedyAgent with the 'global' controller type.
     Verifies that the predict method returns a correctly shaped and scaled action.
     """
-    yaml_path = base_example_data_path / Path(
-        "Env1.yaml"
-    )  # Using Env1.yaml as in the pattern
+    yaml_path = base_example_data_path / Path("Env1.yaml")
     x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=2, xDist=4, yDist=4)
 
     env = FarmEval(
@@ -125,6 +121,9 @@ def test_greedy_agent_global_controller(base_example_data_path):
         yaw_init="Random",  # Test with different init
         seed=1,  # Use a different seed
         Baseline_comp=False,
+        turbtype="None",
+        n_passthrough=0.1,
+        burn_in_passthroughs=0.01,
     )
     env.reset()  # Initialize flow simulation `fs`
 
@@ -167,6 +166,9 @@ def test_random_agent(base_example_data_path):
         yaml_path=yaml_path,
         yaw_init="Zeros",  # always start at zero yaw offset ,
         seed=1,
+        turbtype="None",  # Key optimization for speed
+        n_passthrough=0.1,  # Very short episodes for fast tests
+        burn_in_passthroughs=0.0001,
     )
     random_agent = RandomAgent(env=env)
     random_agent.predict()

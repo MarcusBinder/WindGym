@@ -209,7 +209,6 @@ class TestSpecificFeatures:
             config_dict, f"fill_window_{str(fill_window_config_val).lower()}"
         )
 
-        # FIX: Generate turbine layout based on the config
         farm_params = config_dict["farm"]
         x_pos, y_pos = generate_square_grid(
             turbine=V80(),
@@ -223,14 +222,16 @@ class TestSpecificFeatures:
 
         env = WindFarmEnv(
             turbine=V80(),
-            x_pos=x_pos,  # FIX: Pass x_pos
-            y_pos=y_pos,  # FIX: Pass y_pos
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             fill_window=fill_window_config_val,
             reset_init=True,
             seed=42,
             turbtype="None",
             Baseline_comp=False,
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
         expected_steps = 0
@@ -267,7 +268,6 @@ class TestSpecificFeatures:
             config_dict, f"render_{render_mode_val}"
         )
 
-        # FIX: Generate turbine layout based on the config
         farm_params = config_dict["farm"]
         x_pos, y_pos = generate_square_grid(
             turbine=V80(),
@@ -279,13 +279,15 @@ class TestSpecificFeatures:
 
         env = WindFarmEnv(
             turbine=V80(),
-            x_pos=x_pos,  # FIX: Pass x_pos
-            y_pos=y_pos,  # FIX: Pass y_pos
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             render_mode=render_mode_val,
             reset_init=True,
             seed=42,
             turbtype="None",
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
         assert env.render_mode == render_mode_val
@@ -375,7 +377,6 @@ class TestSpecificFeatures:
             f"obs_wd_{turb_wd_enabled}_{farm_wd_enabled}_{wd_current}_{wd_rolling}_{wd_hist_n}",
         )
 
-        # FIX: Generate turbine layout based on the config
         farm_params = config_dict["farm"]
         x_pos, y_pos = generate_square_grid(
             turbine=V80(),
@@ -387,13 +388,15 @@ class TestSpecificFeatures:
 
         env = WindFarmEnv(
             turbine=V80(),
-            x_pos=x_pos,  # FIX: Pass x_pos
-            y_pos=y_pos,  # FIX: Pass y_pos
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             reset_init=True,
             seed=42,
             turbtype="None",
             Baseline_comp=False,
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
         expected_dim = calculate_expected_obs_dim(config_dict, env.n_turb)
@@ -480,7 +483,6 @@ class TestSpecificFeatures:
             f"obs_cfg_{mes_type_key}_{current_flag}_{rolling_flag}_{history_n_val}",
         )
 
-        # FIX: Generate turbine layout based on the config
         farm_params = config_dict["farm"]
         x_pos, y_pos = generate_square_grid(
             turbine=V80(),
@@ -492,13 +494,15 @@ class TestSpecificFeatures:
 
         env = WindFarmEnv(
             turbine=V80(),
-            x_pos=x_pos,  # FIX: Pass x_pos
-            y_pos=y_pos,  # FIX: Pass y_pos
+            x_pos=x_pos,
+            y_pos=y_pos,
             yaml_path=yaml_filepath,
             reset_init=True,
             seed=42,
             turbtype="None",
             Baseline_comp=False,
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
         expected_dim = calculate_expected_obs_dim(config_dict, n_turb_nx)
@@ -519,7 +523,7 @@ class TestSpecificFeatures:
         config_dict["Track_power"] = True
         yaml_filepath = temp_yaml_filepath_factory(config_dict, "track_power_true")
 
-        # FIX: Generate turbine layout based on the config
+        # Generate turbine layout based on the config
         farm_params = config_dict["farm"]
         x_pos, y_pos = generate_square_grid(
             turbine=V80(),
@@ -534,10 +538,12 @@ class TestSpecificFeatures:
         ):
             WindFarmEnv(
                 turbine=V80(),
-                x_pos=x_pos,  # FIX: Pass x_pos
-                y_pos=y_pos,  # FIX: Pass y_pos
+                x_pos=x_pos,
+                y_pos=y_pos,
                 yaml_path=yaml_filepath,
                 reset_init=True,
                 seed=42,
                 turbtype="None",
+                n_passthrough=0.1,
+                burn_in_passthroughs=0.01,
             )

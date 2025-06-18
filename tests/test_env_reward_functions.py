@@ -107,8 +107,6 @@ power_def:
 # Mock for turbulence field if needed, or use "None" turbtype
 @pytest.fixture
 def mock_turbulence_env_setup(monkeypatch):
-    # If your reward calculation is independent of complex turbulence,
-    # mocking can speed things up. Otherwise, use turbtype="None".
     # For now, we'll rely on turbtype="None" in env constructor.
     pass
 

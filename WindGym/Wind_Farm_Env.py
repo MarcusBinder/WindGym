@@ -76,6 +76,7 @@ class WindFarmEnv(WindEnv):
         sample_site=None,
         HTC_path=None,
         reset_init=True,
+        burn_in_passthroughs=2,  # number of passthroughs before episode starts
     ):
         """
         This is a steadystate environment. The environment only ever changes wind conditions at reset. Then the windconditions are constatnt for the rest of the episode
@@ -106,6 +107,7 @@ class WindFarmEnv(WindEnv):
         # Predefined values
         self.wts = None
         self.wts_baseline = None
+        self.burn_in_passthroughs = burn_in_passthroughs
         # The power setpoint for the farm. This is used if the Track_power is True. (Not used yet)
         self.power_setpoint = 0.0
         self.act_var = (
@@ -775,7 +777,7 @@ class WindFarmEnv(WindEnv):
         # Time it takes for the flow to travel from one side of the farm to the other
         t_inflow = dist / self.ws
         # The time it takes for the flow to develop. Also a bit extra.
-        t_developed = int(t_inflow * 2)
+        t_developed = int(t_inflow * self.burn_in_passthroughs)
 
         # Max allowed timesteps
         self.time_max = int(t_inflow * self.n_passthrough)
