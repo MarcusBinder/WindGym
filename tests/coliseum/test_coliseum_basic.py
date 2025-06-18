@@ -46,12 +46,15 @@ def coliseum_instance(temp_yaml_file_for_coliseum, coliseum_agents):
             Baseline_comp=True,
             reset_init=True,
             finite_episode=True,
+            n_passthrough=0.05,  # A very short episode for fast testing
+            burn_in_passthroughs=0.01,
         )
 
     return Coliseum(
         env_factory=env_factory,
         agents=coliseum_agents,
-        n_passthrough=0.1,  # Short episodes for fast tests
+        n_passthrough=0.05,  # A very short episode for fast testing
+        burn_in_passthroughs=0.01,
     )
 
 
@@ -74,12 +77,15 @@ def coliseum_instance_timeseries(
             turbtype="None",
             Baseline_comp=True,
             reset_init=False,
+            n_passthrough=0.05,  # A very short episode for fast testing
+            burn_in_passthroughs=0.01,
         )
 
     return Coliseum(
         env_factory=env_factory,
         agents=coliseum_agents_timeseries,
         n_passthrough=0.05,  # A very short episode for fast testing
+        burn_in_passthroughs=0.01,
     )
 
 
