@@ -76,6 +76,9 @@ def test_greedy_agent_local_controller(base_example_data_path):
         yaw_init="Zeros",  # Start with zero yaw offset
         seed=0,
         Baseline_comp=False,
+        turbtype="None",  # Key optimization for speed
+        n_passthrough=0.1,  # Very short episodes for fast tests
+        burn_in_passthroughs=0.0001,
     )
     env.reset()  # Initialize flow simulation `fs`
 

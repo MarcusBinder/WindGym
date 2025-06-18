@@ -217,6 +217,8 @@ class TestSpecificFeatures:
             seed=42,
             turbtype="None",
             Baseline_comp=False,
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
         expected_steps = 0
@@ -310,6 +312,8 @@ class TestSpecificFeatures:
             seed=42,
             turbtype="None",
             Baseline_comp=False,
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
         expected_dim = calculate_expected_obs_dim(config_dict, env.n_turb)
@@ -407,6 +411,8 @@ class TestSpecificFeatures:
             seed=42,
             turbtype="None",
             Baseline_comp=False,
+            n_passthrough=0.1,
+            burn_in_passthroughs=0.01,
         )
 
         expected_dim = calculate_expected_obs_dim(
@@ -440,6 +446,8 @@ class TestSpecificFeatures:
                 reset_init=True,
                 seed=42,
                 turbtype="None",
+                n_passthrough=0.1,
+                burn_in_passthroughs=0.01,
             )
             # If __init__ fails, env might not be assigned or closeable
             # env.close() # Best practice to put close in a finally if env is successfully created

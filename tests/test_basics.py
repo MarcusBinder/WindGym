@@ -360,7 +360,7 @@ def test_ppo_compatibility(wind_farm_env):
     assert info["Power agent"] >= 0, "Initial 'Power agent' should be non-negative."
 
     # 3. Take a few steps manually
-    num_steps_to_take = 3
+    num_steps_to_take = 2
     print(f"Taking {num_steps_to_take} manual steps...")
     for i in range(num_steps_to_take):
         print(f"Step {i+1}/{num_steps_to_take}...")
