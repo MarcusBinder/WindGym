@@ -602,6 +602,8 @@ def test_fast_eval_debug():
         turbtype="None",
         yaw_init="Zeros",  # always start at zero yaw offset ,
         seed=SEED,
+        n_passthrough=0.1,  # Very short episodes for fast tests
+        burn_in_passthroughs=0.0001,
     )
 
     WS_SIM = 10  # Wind speed in m/s
