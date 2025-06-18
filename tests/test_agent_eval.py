@@ -178,6 +178,8 @@ def test_agent_eval_multiple_save_load(
         Baseline_comp=True,
         reset_init=True,
         fill_window=1,
+        n_passthrough=0.1,
+        burn_in_passthroughs=0.01,
     )
     single_run_ds = AgentEvalFast(
         env=temp_env_for_single_check,
