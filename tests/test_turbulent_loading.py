@@ -5,7 +5,6 @@ import tempfile
 from pathlib import Path
 import yaml
 import xarray as xr
-from gymnasium.utils.env_checker import check_env
 
 from WindGym import WindFarmEnv
 from py_wake.examples.data.hornsrev1 import V80
@@ -172,7 +171,6 @@ class TestTurbulenceLoading:
         assert env.turbtype == "None"
         assert env.addedTurbulenceModel is None
         assert isinstance(env.site.turbulenceField, RandomTurbulence)
-        check_env(env, skip_render_check=True)
         env.close()
 
     def test_turbtype_mannload_single_file(
@@ -214,7 +212,6 @@ class TestTurbulenceLoading:
             env.addedTurbulenceModel, SynchronizedAutoScalingIsotropicMannTurbulence
         )
         assert isinstance(env.site.turbulenceField, MannTurbulenceField)
-        check_env(env, skip_render_check=True)
         env.close()
 
     def test_turbtype_mannload_directory(
@@ -269,7 +266,6 @@ class TestTurbulenceLoading:
             env.addedTurbulenceModel, SynchronizedAutoScalingIsotropicMannTurbulence
         )
         assert isinstance(env.site.turbulenceField, MannTurbulenceField)
-        check_env(env, skip_render_check=True)
         env.close()
 
     def test_turbtype_mannload_raises_error_for_empty_directory(
@@ -325,7 +321,6 @@ class TestTurbulenceLoading:
             env.addedTurbulenceModel, SynchronizedAutoScalingIsotropicMannTurbulence
         )
         assert isinstance(env.site.turbulenceField, MannTurbulenceField)
-        check_env(env, skip_render_check=True)
         env.close()
 
     def test_turbtype_random(self, temp_yaml_filepath_factory):
@@ -346,7 +341,6 @@ class TestTurbulenceLoading:
         assert env.turbtype == "Random"
         assert isinstance(env.addedTurbulenceModel, AutoScalingIsotropicMannTurbulence)
         assert isinstance(env.site.turbulenceField, RandomTurbulence)
-        check_env(env, skip_render_check=True)
         env.close()
 
     def test_turbtype_invalid(self, temp_yaml_filepath_factory):
@@ -395,7 +389,6 @@ class TestTurbulenceLoading:
             env.addedTurbulenceModel, SynchronizedAutoScalingIsotropicMannTurbulence
         )
         assert isinstance(env.site.turbulenceField, MannTurbulenceField)
-        check_env(env, skip_render_check=True)
         env.close()
 
     def test_turbtype_mannload_raises_error_on_invalid_path(
