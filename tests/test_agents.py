@@ -166,6 +166,9 @@ def test_random_agent(base_example_data_path):
         yaml_path=yaml_path,
         yaw_init="Zeros",  # always start at zero yaw offset ,
         seed=1,
+        turbtype="None",  # Key optimization for speed
+        n_passthrough=0.1,  # Very short episodes for fast tests
+        burn_in_passthroughs=0.0001,
     )
     random_agent = RandomAgent(env=env)
     random_agent.predict()
