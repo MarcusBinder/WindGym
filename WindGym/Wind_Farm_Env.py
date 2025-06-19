@@ -29,6 +29,7 @@ from IPython import display
 from .WindEnv import WindEnv
 from .MesClass import farm_mes
 from .BasicControllers import local_yaw_controller, global_yaw_controller
+from .Agents import PyWakeAgent
 
 from py_wake.wind_turbines import WindTurbines as WindTurbinesPW
 from collections import deque
@@ -341,6 +342,21 @@ class WindFarmEnv(WindEnv):
                 self._base_controller = local_yaw_controller
             elif self.BaseController == "Global":
                 self._base_controller = global_yaw_controller
+            elif self.BaseController == "PyWake":
+                print("We are using the PyWake agent as the baseline controller")
+
+                class Fake_env:
+                    pass
+
+                temp_env = Fake_env()
+                temp_env.ActionMethod = "wind"
+                self.pywake_agent = PyWakeAgent(
+                    x_pos=self.x_pos,
+                    y_pos=self.y_pos,
+                    turbine=self.turbine,
+                    env=temp_env,
+                )
+                self._base_controller = self.PyWakeAgentWrapper
             else:
                 raise ValueError(
                     "The BaseController must be either Local or Global... For now"
@@ -377,6 +393,28 @@ class WindFarmEnv(WindEnv):
                     y=self.y_pos,  # x and y position of two wind turbines
                     windTurbine=self.turbine,
                 )
+
+    def PyWakeAgentWrapper(self, fs, yaw_step=1):
+        """
+        This function wraps the PyWakeAgent, so that it can be used as a controller for the baseline farm.
+        This is done to make sure that the agent can be used in the same way as the other controllers.
+        fs: Flow simulation object. For the BASELINE
+        """
+        # This is mostly the _adjust_yaws method. Just slightly formatted to work with the baseline now.
+
+        # This assumes we are using the "wind" based actions.
+        action = self.pywake_agent.predict()[0]
+
+        new_yaws = (action + 1.0) / 2.0 * (self.yaw_max - self.yaw_min) + self.yaw_min
+
+        yaw_max = fs.windTurbines.yaw + self.yaw_step_sim
+        yaw_min = fs.windTurbines.yaw - self.yaw_step_sim
+
+        new_yaws = np.clip(
+            np.clip(new_yaws, yaw_min, yaw_max), self.yaw_min, self.yaw_max
+        )
+
+        return new_yaws
 
     def load_config(self, config_path):
         """
@@ -851,6 +889,13 @@ class WindFarmEnv(WindEnv):
             self.fs_baseline.windTurbines.yaw = self.fs.windTurbines.yaw
             self.fs_baseline.run(t_developed)
 
+            if self.BaseController == "PyWake":
+                # If we are using the PyWake agent as a baseline, we need to set it up
+                self.pywake_agent.update_wind(
+                    wind_speed=self.ws,
+                    wind_direction=self.wd,
+                    TI=self.ti,
+                )
             for __ in range(self.hist_max):
                 baseline_powers = []
                 for _ in range(self.sim_steps_per_env_step):
