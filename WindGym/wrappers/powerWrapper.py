@@ -43,7 +43,7 @@ class PowerWrapper(gym.Wrapper):
         self.pywake_agent.update_wind(self.env.ws, self.env.wd, self.env.ti)
 
         # The baseline pywake power is with no yaw angles applied
-        self.pywake_baseline_power = self.pywake_agent.power(
+        self.pywake_baseline_power = self.pywake_agent.calc_power(
             np.zeros_like(self.env.x_pos)
         )
 
@@ -61,7 +61,7 @@ class PowerWrapper(gym.Wrapper):
         """
         obs, env_reward, terminated, truncated, info = self.env.step(action)
 
-        pywake_agent_power = self.pywake_agent.power(self.env.current_yaw)
+        pywake_agent_power = self.pywake_agent.calc_power(self.env.current_yaw)
 
         if self.env.power_reward == "Baseline":
             wrapper_reward = pywake_agent_power / self.pywake_baseline_power - 1
