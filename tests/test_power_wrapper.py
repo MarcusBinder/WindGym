@@ -56,7 +56,7 @@ def test_reset(MockPyWakeAgent, mock_env):
     """Test the reset method of the PowerWrapper."""
     # Setup mock agent instance
     mock_agent_instance = MockPyWakeAgent.return_value
-    mock_agent_instance.power.return_value = 5000.0
+    mock_agent_instance.calc_power.return_value = 5000.0
 
     # Mock environment state
     mock_env.ws = 8.0
@@ -83,7 +83,7 @@ def test_step_baseline_reward(MockPyWakeAgent, mock_env):
     """Test the step method with 'Baseline' power reward."""
     # Setup mock agent instance and environment
     mock_agent_instance = MockPyWakeAgent.return_value
-    mock_agent_instance.power.side_effect = [
+    mock_agent_instance.calc_power.side_effect = [
         6000.0,  # Baseline power during reset
         6600.0,  # Agent power during step
     ]
@@ -123,7 +123,7 @@ def test_step_baseline_reward(MockPyWakeAgent, mock_env):
 def test_step_power_avg_reward(MockPyWakeAgent, mock_env):
     """Test the step method with 'Power_avg' power reward."""
     mock_agent_instance = MockPyWakeAgent.return_value
-    mock_agent_instance.power.return_value = 7000.0
+    mock_agent_instance.calc_power.return_value = 7000.0
     mock_env.power_reward = "Power_avg"
     action = np.array([0.1, 0.1])
 
@@ -168,7 +168,7 @@ def test_step_unknown_reward_type(MockPyWakeAgent, mock_env):
 def test_step_reward_weighting(MockPyWakeAgent, mock_env):
     """Test the weighting between environment and wrapper rewards."""
     mock_agent_instance = MockPyWakeAgent.return_value
-    mock_agent_instance.power.return_value = 7000.0
+    mock_agent_instance.calc_power.return_value = 7000.0
     mock_env.power_reward = "Power_avg"
     action = np.array([0.1, 0.1])
 
@@ -199,7 +199,7 @@ def test_step_reward_weighting(MockPyWakeAgent, mock_env):
 def test_step_counter_and_info(MockPyWakeAgent, mock_env):
     """Test that the step counter and info dictionary are updated correctly."""
     mock_agent_instance = MockPyWakeAgent.return_value
-    mock_agent_instance.power.return_value = 1.0
+    mock_agent_instance.calc_power.return_value = 1.0
     mock_env.power_reward = "Baseline"
     action = np.array([0.1, 0.1])
     n_envs = 4
