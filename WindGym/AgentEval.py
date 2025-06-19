@@ -102,13 +102,14 @@ def eval_single_fast(
         AssertionError("You need to specify a model to evaluate the agent.")
 
     # Calculate the correct number of steps
-    step_val = env.dt_env  # This is the number of steps per environment step
-    total_steps = t_sim // step_val + 1  # This is the total number of steps to simulate
+    step_val = (
+        env.sim_steps_per_env_step
+    )  # This is the number of steps per environment step
+    total_steps = (
+        t_sim // env.dt_env + 1
+    )  # This is the total number of steps to simulate
+    time = total_steps * step_val + 1
 
-    # Unpack some variables, to make the code more readable
-    time = (
-        total_steps * step_val + 1
-    )  # Time to simulate. +1 as we have the intial state also
     n_turb = env.n_turb  # Number of turbines
     n_ws = 1  # Number of wind speeds to simulate
     n_wd = 1  # Number of wind direction simulate
