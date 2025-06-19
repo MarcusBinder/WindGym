@@ -343,8 +343,9 @@ class WindFarmEnv(WindEnv):
             elif self.BaseController == "Global":
                 self._base_controller = global_yaw_controller
             elif self.BaseController == "PyWake":
-                print("We are using the PyWake agent as the baseline controller")
+                # print("We are using the PyWake agent as the baseline controller")
 
+                # This is a workarround to make the PyWakeAgent work with the baseline farm. Better must exist.
                 class Fake_env:
                     pass
 
