@@ -3,7 +3,7 @@
 #Some initial things
 yaw_init: "Random"
 noise: "None"
-BaseController: "Local"   #Can be "Local", "Global" or "PyWake"
+BaseController: "PyWake"   #Can be "Local", "Global" or "PyWake"
 ActionMethod: "wind"      #Can be: "yaw", "wind", "absolute"
 Track_power: False       #If the farm should produce a specified power output
 
@@ -19,12 +19,12 @@ farm:
 
 #Wind conditions
 wind:
-  ws_min: 7
-  ws_max: 15
-  TI_min: 0.02
-  TI_max: 0.15
-  wd_min: 255
-  wd_max: 285
+  ws_min: 12
+  ws_max: 12
+  TI_min: 0.05
+  TI_max: 0.05
+  wd_min: 271
+  wd_max: 271
 
 #Penalty parameters
 act_pen:
