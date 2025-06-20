@@ -307,7 +307,6 @@ class TestColiseumIntegration:
         ]
         assert spy_agent.update_calls == expected_calls
 
-
     def test_pywake_agent_wrapper_logic(self, temp_yaml_file, monkeypatch):
         """
         Tests the internal logic of WindFarmEnv's PyWakeAgentWrapper.
@@ -331,7 +330,9 @@ class TestColiseumIntegration:
         """
 
         # Write this config to a temporary file
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".yaml") as tmp_file:
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".yaml"
+        ) as tmp_file:
             tmp_file.write(pywake_controller_yaml)
             yaml_path = tmp_file.name
 
@@ -344,20 +345,20 @@ class TestColiseumIntegration:
             y_pos=y_pos,
             yaml_path=yaml_path,
             turbtype="None",
-            Baseline_comp=True, # Essential for _base_controller to be set
+            Baseline_comp=True,  # Essential for _base_controller to be set
             reset_init=True,
             finite_episode=True,
             dt_sim=1,
             dt_env=1,
-            yaw_step_sim=5.0, # Define a specific yaw_step_sim for clipping test
+            yaw_step_sim=5.0,  # Define a specific yaw_step_sim for clipping test
             n_passthrough=0.1,
             burn_in_passthroughs=0.01,
         )
 
         # Mock the internal pywake_agent.predict method to control its output
         # Case 1: Agent suggests a large positive action (should be clipped)
-        mock_pywake_action = np.array([0.8, 0.2]) # Action in [-1, 1] range
-        
+        mock_pywake_action = np.array([0.8, 0.2])  # Action in [-1, 1] range
+
         def mock_predict_agent(*args, **kwargs):
             return mock_pywake_action, None
 
@@ -366,7 +367,9 @@ class TestColiseumIntegration:
         # Mock a simplified fs (FlowSimulation) object needed by _base_controller
         # Specifically, it needs fs.windTurbines.yaw to apply clipping based on current yaw.
         mock_fs = MagicMock()
-        mock_fs.windTurbines.yaw = np.array([0.0, 0.0]) # Initial yaw angles for baseline farm
+        mock_fs.windTurbines.yaw = np.array(
+            [0.0, 0.0]
+        )  # Initial yaw angles for baseline farm
 
         # Call the PyWakeAgentWrapper via _base_controller
         # This will simulate one step of the baseline controller
@@ -389,7 +392,9 @@ class TestColiseumIntegration:
 
         # Test another scenario: action leads to a yaw within yaw_step_sim limits
         mock_fs.windTurbines.yaw = np.array([10.0, 10.0])
-        mock_pywake_action = np.array([-0.5, 0.0]) # This action would lead to -15 degrees and 0 degrees if unclipped
+        mock_pywake_action = np.array(
+            [-0.5, 0.0]
+        )  # This action would lead to -15 degrees and 0 degrees if unclipped
 
         # New scaled yaw goals:
         # -0.5 -> (-0.5 + 1.0) / 2.0 * 60 - 30 = 0.25 * 60 - 30 = 15 - 30 = -15 degrees
@@ -400,13 +405,13 @@ class TestColiseumIntegration:
         # Yaw_step_sim: 5.0
         # For first turbine: target -15, current 10. Change needed: -25. Clipped change: -5. New yaw: 10 - 5 = 5.0
         # For second turbine: target 0, current 10. Change needed: -10. Clipped change: -5. New yaw: 10 - 5 = 5.0
-        
+
         # NOTE: The _base_controller function calculates the `new_yaws` based on the target, then applies `yaw_step_sim` limits.
         # The line `np.clip(new_yaws, yaw_min, yaw_max)` where `yaw_min = fs.windTurbines.yaw - self.yaw_step_sim`
         # and `yaw_max = fs.windTurbines.yaw + self.yaw_step_sim` is the key.
 
         calculated_yaws_2 = env._base_controller(fs=mock_fs, yaw_step=env.yaw_step_sim)
-        
+
         # Expected result based on logic:
         # Original new_yaws = [-15, 0]
         # yaw_min_clip = [10-5, 10-5] = [5, 5]
@@ -418,4 +423,3 @@ class TestColiseumIntegration:
 
         env.close()
         os.remove(yaml_path)
-
