@@ -1,6 +1,8 @@
 import unittest
 import numpy as np
 from WindGym.MesClass import Mes, turb_mes, farm_mes
+import sys
+from io import StringIO
 
 
 # These dummy noise functions will be used for farm_mes.
@@ -390,6 +392,115 @@ class TestFarmMes(unittest.TestCase):
         meas = self.f.get_measurements(scaled=False)
         # Check that the final measurement vector is one-dimensional and nonempty.
         self.assertTrue(meas.ndim == 1 and meas.size > 0)
+
+    def test_get_power_turb(self):
+        """
+        Tests the get_power_turb method for both unscaled and scaled outputs.
+        """
+        # Clear existing data from setup if any, or ensure fresh state
+        for turb in self.f.turb_mes:
+            turb.power.measurements.clear()
+
+        # Add some power measurements to individual turbines
+        # Assume 2 turbines based on self.n_turbines = 2 in setUp
+        self.f.turb_mes[0].add_power(1000.0)
+        self.f.turb_mes[0].add_power(
+            1100.0
+        )  # Add a second measurement for rolling mean if enabled
+        self.f.turb_mes[1].add_power(2000.0)
+        self.f.turb_mes[1].add_power(2100.0)
+
+        # Assuming power_current=True and power_rolling_mean=True, history_N=1, window_length=5
+        # The 'current' value for power_mes is the latest single value (e.g., 1100.0 for turb 0)
+        # The 'rolling_mean' with history_N=1 would be the mean of the last 'window_length' (e.g., (1000+1100)/2 = 1050.0 for turb 0 if window_length is sufficiently large, or just the current if window_length is 1 and current is last value).
+        # From MesClass, power_mes is configured with history_N=1, window_length=10.
+        # With two measurements [1000, 1100], rolling mean (history_N=1) will be np.mean([1000, 1100]) = 1050 if window_length covers both.
+        # However, Mes.get_measurements with history_N=1 prioritizes the *latest window mean*.
+        # Given `power_mes: {power_current: True, power_rolling_mean: True, power_history_N: 1, ...}`,
+        # it will return `[latest_value, mean_of_last_window]` if both are enabled.
+        # From `setup` in `TestFarmMes`, `power_current=True`, `power_rolling_mean=True`, `power_history_N=1`.
+        # So, for turbine 0: [1100.0, 1050.0]
+        # For turbine 1: [2100.0, 2050.0]
+        # Flattened: [1100.0, 1050.0, 2100.0, 2050.0]
+
+        # Calculate expected unscaled values
+        # Turbine 0: Current = 1100, Rolling mean (avg of [1000, 1100]) = 1050
+        # Turbine 1: Current = 2100, Rolling mean (avg of [2000, 2100]) = 2050
+        expected_unscaled = np.array([1100.0, 1050.0, 2100.0, 2050.0], dtype=np.float32)
+        actual_unscaled = self.f.get_power_turb(scaled=False)
+        np.testing.assert_array_almost_equal(actual_unscaled, expected_unscaled)
+
+        # Calculate expected scaled values
+        # power_max from setup is 2,000,000. Scaling is 2 * (val - 0) / (max - 0) - 1
+        # 1100 -> 2 * 1100 / 2000000 - 1 = 2200 / 2000000 - 1 = 0.0011 - 1 = -0.9989
+        # 1050 -> 2 * 1050 / 2000000 - 1 = 2100 / 2000000 - 1 = 0.00105 - 1 = -0.99895
+        # 2100 -> 2 * 2100 / 2000000 - 1 = 4200 / 2000000 - 1 = 0.0021 - 1 = -0.9979
+        # 2050 -> 2 * 2050 / 2000000 - 1 = 4100 / 2000000 - 1 = 0.00205 - 1 = -0.99795
+
+        expected_scaled = np.array(
+            [-0.9989, -0.99895, -0.9979, -0.99795], dtype=np.float32
+        )
+        actual_scaled = self.f.get_power_turb(scaled=True)
+        np.testing.assert_array_almost_equal(
+            actual_scaled, expected_scaled, decimal=5
+        )  # Increased decimal precision
+
+    def test_ti_sample_count_warning(self):
+        """
+        Tests that a warning is printed when ti_sample_count is less than 10.
+        """
+        # Save the original stdout
+        original_stdout = sys.stdout
+        # Redirect stdout to capture print statements
+        sys.stdout = StringIO()
+
+        try:
+            # Instantiate farm_mes with ti_sample_count < 10 and TI enabled
+            # We also set turb_TI to True as per the original warning condition
+            farm_mes_instance = farm_mes(
+                n_turbines=1,  # Can be any number of turbines
+                noise="None",
+                turb_ws=True,
+                turb_wd=False,
+                turb_TI=True,  # This needs to be True to activate the check
+                turb_power=False,
+                farm_ws=False,
+                farm_wd=False,
+                farm_TI=False,  # Can be True or False, as long as turb_TI is True
+                farm_power=False,
+                ws_current=True,
+                ws_rolling_mean=False,
+                ws_history_N=1,
+                ws_history_length=1,
+                ws_window_length=1,
+                wd_current=False,
+                wd_rolling_mean=False,
+                wd_history_N=1,
+                wd_history_length=1,
+                wd_window_length=1,
+                yaw_current=False,
+                yaw_rolling_mean=False,
+                yaw_history_N=1,
+                yaw_history_length=1,
+                yaw_window_length=1,
+                power_current=False,
+                power_rolling_mean=False,
+                power_history_N=1,
+                power_history_length=1,
+                power_window_length=1,
+                ti_sample_count=5,  # This is the critical value for the test
+            )
+
+            # Capture the output
+            captured_output = sys.stdout.getvalue()
+
+            # Assert that the warning message is in the captured output
+            expected_warning_message = "Warning: You are only using the last 5 high-frequency samples for TI calculations. A low number might result in a noisy estimate."
+            self.assertIn(expected_warning_message, captured_output.strip())
+
+        finally:
+            # Restore original stdout
+            sys.stdout = original_stdout
 
 
 if __name__ == "__main__":
