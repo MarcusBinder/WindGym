@@ -1,24 +1,6 @@
 #!/bin/bash
 set -e
 
-echo "[✓] Cloning WindGym-Zoo..."
-if [ ! -d "../WindGym-Zoo" ]; then
-  git clone https://github.com/kilojoules/WindGym-Zoo ../WindGym-Zoo
-fi
-
-echo "[✓] Generating config..."
-pixi run python ../WindGym-Zoo/scripts/generate_config.py \
-  --template ../WindGym-Zoo/configs/N_turbines_most_sensors.yaml \
-  --output ../WindGym-Zoo/configs/2_turbines_most_sensors.yaml \
-  --nx 2 
-
-echo "[✓] Running leaderboard evaluation..."
-pixi run python ../WindGym-Zoo/scripts/eval_leaderboard.py \
-  --config-name 2_turbines_most_sensors \
-  --configs-dir ../WindGym-Zoo/configs \
-  --agents-dir ../WindGym-Zoo/agents \
-  --out-dir ../WindGym-Zoo/results
-
 echo "[✓] Converting simulations.ipynb to Markdown..."
 # Ensure the .ipynb file exists in docs/
 if [ -f "docs/simulations.ipynb" ]; then
