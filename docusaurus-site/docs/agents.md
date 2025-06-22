@@ -1,6 +1,3 @@
-Here's a suggestion for your `agents.md` file, designed to introduce the different agent types in WindGym without including any code snippets.
-
-```markdown
 # Agents
 
 In WindGym, an **agent** is the intelligent entity responsible for making decisions within the wind farm environment. These decisions typically involve adjusting the yaw angles of wind turbines to achieve specific objectives, such as maximizing power production or minimizing structural loads.
@@ -56,4 +53,3 @@ The `ConstantAgent` applies a predefined, fixed set of yaw angles to all turbine
 Regardless of their internal logic, all agents interact with the WindGym environment through the standard Gymnasium `step()` method. They receive an observation (sensor data from the wind farm), process it with their `predict()` method to determine an action, and send that action back to the environment. The environment then applies the action, simulates the next timestep, and returns a new observation, reward, and episode status.
 
 When developing custom agents, you will typically create a new Python class that inherits from `BaseAgent` and implements your desired control or learning algorithm within its `predict()` method.
-```
