@@ -8,7 +8,7 @@ const config = {
   title: 'Hello WindGym Docs',
   tagline: 'Just a simple landing page',
   url: 'https://pages.windenergy.dtu.dk',
-  baseUrl: '/sys/windgym/',
+  baseUrl: '/',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
   favicon: 'img/favicon.ico',
