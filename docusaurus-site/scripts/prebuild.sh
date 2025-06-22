@@ -13,8 +13,8 @@ else
   echo "[!] Warning: docs/simulations.ipynb not found. Skipping notebook conversion."
 fi
 
-echo "[✓] Copying plots to static/evals/..."
-mkdir -p static/evals
-cp ../WindGym-Zoo/results/*.png static/evals/ || echo "No .png plots to copy"
-cp ../WindGym-Zoo/results/*.csv static/evals/ || echo "No .csv files to copy"
+#echo "[✓] Copying plots to static/evals/..."
+#mkdir -p static/evals
+#cp ../WindGym-Zoo/results/*.png static/evals/ || echo "No .png plots to copy"
+#cp ../WindGym-Zoo/results/*.csv static/evals/ || echo "No .csv files to copy"
 
