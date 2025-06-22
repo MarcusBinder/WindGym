@@ -57,6 +57,7 @@ build_docs:
     - apt-get install -y curl
     - curl -fsSL https://deb.nodesource.com/setup_18.x | bash - # Install Node.js 18.x
     - apt-get install -y nodejs # Install Node.js and npm
+    - apt-get install -y git
   script:
     - pixi install # Install all Python dependencies defined in dino_docs/pyproject.toml
     # Now that both Python (via pixi) and Node.js (via apt) are set up
