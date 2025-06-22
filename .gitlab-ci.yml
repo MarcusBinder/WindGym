@@ -70,7 +70,8 @@ build_docs:
     expire_in: 1 week
   tags:
     - linux
-  <<: *default_rules
+  only:
+    - docusaurus-site
 
 pages:
   stage: deploy
