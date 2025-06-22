@@ -7,13 +7,13 @@ if [ ! -d "../WindGym-Zoo" ]; then
 fi
 
 echo "[✓] Generating config..."
-python ../WindGym-Zoo/scripts/generate_config.py \
+pixi run python ../WindGym-Zoo/scripts/generate_config.py \
   --template ../WindGym-Zoo/configs/N_turbines_most_sensors.yaml \
   --output ../WindGym-Zoo/configs/2_turbines_most_sensors.yaml \
   --nx 2 
 
 echo "[✓] Running leaderboard evaluation..."
-python ../WindGym-Zoo/scripts/eval_leaderboard.py \
+pixi run python ../WindGym-Zoo/scripts/eval_leaderboard.py \
   --config-name 2_turbines_most_sensors \
   --configs-dir ../WindGym-Zoo/configs \
   --agents-dir ../WindGym-Zoo/agents \
@@ -25,7 +25,7 @@ if [ -f "docs/simulations.ipynb" ]; then
   # --to markdown: converts to Markdown
   # --output-dir docs/: saves the output .md file back into the docs/ directory
   # --output simulations: names the output file simulations.md
-  jupyter nbconvert --to markdown --execute docs/simulations.ipynb --output-dir docs/ --output simulations --allow-errors
+  pixi run jupyter nbconvert --to markdown --execute docs/simulations.ipynb --output-dir docs/ --output simulations --allow-errors
   echo "[✓] Successfully converted simulations.ipynb to docs/simulations.md"
 else
   echo "[!] Warning: docs/simulations.ipynb not found. Skipping notebook conversion."
