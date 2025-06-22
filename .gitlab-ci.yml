@@ -5,6 +5,11 @@
 default:
   image: ghcr.io/prefix-dev/pixi:latest
 
+stages:
+  - test
+  - build
+  - deploy
+
 .default_rules: &default_rules
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -42,3 +47,36 @@ test_linux:
   tags:
     - linux
   <<: *default_rules
+
+
+build_docs:
+  stage: build
+  image: node:18
+  script:
+    - cd docusaurus-site
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - docusaurus-site/build/
+    expire_in: 1 week
+  tags:
+    - linux
+  <<: *default_rules
+
+pages:
+  stage: deploy
+  needs:
+    - build_docs
+  script:
+    - mkdir public
+    - cp -r docusaurus-site/build/* public/
+  artifacts:
+    paths:
+      - public
+  only:
+    - docusaurus-site # main
+  tags:
+    - linux
+
+
