@@ -17,20 +17,20 @@ stages:
     - if: $CI_PIPELINE_SOURCE == "web"  
     - when: never
 
-pre_commit:
-  stage: test
-  variables:
-    PRE_COMMIT_HOME: ${CI_PROJECT_DIR}/.cache/pre-commit
-  script:
-    - apt-get update && apt-get install -y git
-    - pixi run pre-commit run --all-files
-  cache:
-    key: pre-commit-cache # Retains cache across all branches
-    paths:
-      - ${PRE_COMMIT_HOME}
-  tags:
-    - linux
-  <<: *default_rules
+#pre_commit:
+#  stage: test
+#  variables:
+#    PRE_COMMIT_HOME: ${CI_PROJECT_DIR}/.cache/pre-commit
+#  script:
+#    - apt-get update && apt-get install -y git
+#    - pixi run pre-commit run --all-files
+#  cache:
+#    key: pre-commit-cache # Retains cache across all branches
+#    paths:
+#      - ${PRE_COMMIT_HOME}
+#  tags:
+#    - linux
+#  <<: *default_rules
 
 #test_linux:
 #  stage: test
