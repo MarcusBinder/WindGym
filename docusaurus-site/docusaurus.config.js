@@ -5,8 +5,8 @@ const lightCodeTheme = themes.oceanicNext;
 const darkCodeTheme = themes.nightOwl;
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: 'Hello WindGym Docs',
-  tagline: 'Just a simple landing page',
+  title: 'WindGym Docs',
+  tagline: 'documentation of WindGym package',
   url: 'https://pages.windenergy.dtu.dk',
   baseUrl: '/',
   onBrokenLinks: 'throw',
@@ -54,7 +54,7 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       navbar: {
-        title: 'Hello WindGym Docs',
+        title: 'WindGym Docs',
         items: [],
       },
       footer: {
