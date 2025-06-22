@@ -51,14 +51,19 @@ pre_commit:
 
 build_docs:
   stage: build
-  image: node:18
+  image: ghcr.io/prefix-dev/pixi:latest # This image has Python, Pixi, and Conda/Mamba
+  before_script: # Use before_script to install Node.js once
+    - apt-get update -y
+    - apt-get install -y curl
+    - curl -fsSL https://deb.nodesource.com/setup_18.x | bash - # Install Node.js 18.x
+    - apt-get install -y nodejs # Install Node.js and npm
   script:
-    - apt-get update -y # Update package list
-    - apt-get install -y python3 python3-pip # Install Python 3 and pip
-    - pixi install
-    - cd docusaurus-site
-    - npm install
-    - npm run build
+    - cd ../dino_docs # Navigate to the root of your dino_docs project where pyproject.toml is
+    - pixi install # Install all Python dependencies defined in dino_docs/pyproject.toml
+    # Now that both Python (via pixi) and Node.js (via apt) are set up
+    - cd docusaurus-site # Navigate into the docusaurus-site directory
+    - npm install # Install Node.js dependencies for Docusaurus
+    - npm run build # This will run prebuild.sh (which now finds python/jupyter from pixi env) and then the Docusaurus build
   artifacts:
     paths:
       - docusaurus-site/build/
