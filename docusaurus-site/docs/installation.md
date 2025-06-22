@@ -6,70 +6,57 @@ This guide will help you set up your environment to run the **WindGym** simulati
 
 Before you begin, ensure you have the following installed on your system:
 
-* **Git**: For cloning the WindGym and its dependency repositories.
-   * [Download Git](https://git-scm.com/downloads)
-* **Pixi**: A modern package manager for Python and other languages. WindGym uses Pixi to manage its Python dependencies in an isolated environment.
-   * [Install Pixi](https://pixi.sh/latest/)
-* **Python 3.7 to 3.11**: Pixi will help manage this, but ensure you don't have conflicting global Python versions if possible.
+* **Git**: You'll need Git to clone the WindGym and its dependency repositories.
+   * Download Git
+* **Pixi**: This is a modern package manager that WindGym uses to manage its Python and other dependencies in an isolated environment.
+   * Install Pixi
+* **Python (3.7 to 3.11)**: Pixi will handle the specific Python version for you, but it's good to be aware of the compatible range.
 
-## 2. Clone the Repositories
+## 2. Core WindGym Installation
 
-First, clone the necessary repositories. Navigate to your desired working directory and run the following commands:
+First, clone the main WindGym repository. Navigate to your desired working directory and run:
 
-```bash
+```
 git clone https://gitlab.windenergy.dtu.dk/sys/windgym/WindGym.git
-git clone https://github.com/kilojoules/WindGym-Zoo.git
 ```
 
-This will create two new directories: `WindGym` (which contains the main WindGym Python package) and `WindGym-Zoo` (a dependency used by some WindGym scripts). Your working directory structure will look similar to this:
+This command creates a new directory named `WindGym`, which contains the core Python package.
+
+Now, navigate into this new directory:
 
 ```
-your-working-directory/
-├── WindGym/
-│   ├── WindGym/ (The core WindGym Python package)
-│   ├── pyproject.toml
-│   ├── docusaurus-site/ (Docusaurus documentation project)
-│   └── ...
-└── WindGym-Zoo/
-    └── ...
-```
-
-## 3. Set Up the WindGym Python Environment (using Pixi)
-
-Navigate into the `WindGym` directory. This directory contains the `pyproject.toml` file, which defines all the necessary Python dependencies for WindGym.
-
-```bash
 cd WindGym
 ```
 
-Now, use `pixi` to create and activate an isolated Python environment and install all dependencies:
+Next, use `pixi` to create and activate an isolated Python environment and install all of **WindGym's** core dependencies:
 
-```bash
+```
 pixi install
 ```
 
-* `pixi install`: This command reads your `pyproject.toml` file, resolves all specified Python dependencies (including `WindGym` itself in editable mode, `dynamiks` from GitLab, `gymnasium`, `stable_baselines3`, `pytest`, `nbconvert`, `xarray`, etc.), and creates a dedicated virtual environment. This process may take a few minutes on the first run, depending on your internet connection and system resources.
+This process reads the `pyproject.toml` file, resolves all Python dependencies (including `WindGym` itself in editable mode, `dynamiks` from GitLab, `gymnasium`, `stable_baselines3`, `pytest`, `xarray`, etc.), and sets up a dedicated virtual environment. This might take a few minutes on the first run.
 
-After `pixi install` completes, you can activate the environment and run Python commands:
+## 3. Activate the Environment
 
-```bash
+After `pixi install` completes, you need to activate the environment to use WindGym's tools.
+
+To activate the WindGym Python environment in your current terminal session:
+
+```
 pixi shell
 ```
 
-* `pixi shell`: This command activates the `WindGym` Python environment within your current terminal session. You should see `(WindGym)` (or a similar prefix) in your terminal prompt, indicating that the environment is active and all WindGym's Python dependencies are available.
+You should see `(WindGym)` (or a similar prefix) appear in your terminal prompt, indicating that the environment is active and all of WindGym's Python dependencies are available.
 
-**Note:** You will need to run `pixi shell` whenever you open a new terminal session and want to execute WindGym code. Alternatively, you can directly run tasks defined in `pyproject.toml` using `pixi run <task_name>` (e.g., `pixi run test` to run tests).
+**Remember:** You'll need to run `pixi shell` whenever you open a new terminal session and want to execute WindGym code. Alternatively, you can directly run tasks defined in `pyproject.toml` using `pixi run <task_name>` (e.g., `pixi run test` to run tests).
 
 ## 4. Verify Your Installation
 
-Once the environment is set up, you can quickly verify the installation by running a simple WindGym script or one of your tests. From within the `WindGym` directory (after running `pixi shell`), try importing `WindFarmEnv`:
+Once the environment is set up, you can quickly verify the installation by importing a core WindGym component. From within the `WindGym` directory (after running `pixi shell`), try this:
 
-```python
+```
 python -c "from WindGym.Wind_Farm_Env import WindFarmEnv; print('WindGym installed successfully!')"
 ```
 
-If you see "WindGym installed successfully!", your Python environment is ready to use for running simulations and developing agents!
+If you see "WindGym installed successfully!", your basic WindGym environment is ready for you to use!
 
-## **Optional: For Developers & Documentation Contributors**
-
-If you intend to contribute to the WindGym documentation or want to build the Docusaurus site locally, you will need Node.js and npm to set up the `docusaurus-site` project. Please refer to the `WindGym/docusaurus-site/README.md` file within the cloned `WindGym` repository for specific instructions on setting up the Node.js environment and building the documentation site.
