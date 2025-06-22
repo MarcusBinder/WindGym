@@ -1,7 +1,5 @@
 # Installation Guide
 
-**IMPORTANT: To copy the raw markdown for this document, please look for a "Copy Code" or "View Raw" button/option associated with this entire block on the right side of your screen. This will give you the literal text, including all markdown formatting like `#` and ````. Then paste it directly into your `installation.md` file.**
-
 This guide will help you set up your environment to run the **WindGym** simulation environment and its agents.
 
 ## 1. Prerequisites
