@@ -58,7 +58,6 @@ build_docs:
     - curl -fsSL https://deb.nodesource.com/setup_18.x | bash - # Install Node.js 18.x
     - apt-get install -y nodejs # Install Node.js and npm
   script:
-    - cd ../dino_docs # Navigate to the root of your dino_docs project where pyproject.toml is
     - pixi install # Install all Python dependencies defined in dino_docs/pyproject.toml
     # Now that both Python (via pixi) and Node.js (via apt) are set up
     - cd docusaurus-site # Navigate into the docusaurus-site directory
