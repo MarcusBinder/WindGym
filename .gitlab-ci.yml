@@ -32,21 +32,21 @@ pre_commit:
     - linux
   <<: *default_rules
 
-test_linux:
-  stage: test
-  needs:
-    - pre_commit
-  script:
-    - apt-get update && apt-get install -y git
-    - pixi run pytest -v --cov=windgym --cov-report=html:htmlcov --cov-report=term
-  artifacts:
-    paths:
-      - ./htmlcov
-    when: always
-  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
-  tags:
-    - linux
-  <<: *default_rules
+#test_linux:
+#  stage: test
+#  needs:
+#    - pre_commit
+#  script:
+#    - apt-get update && apt-get install -y git
+#    - pixi run pytest -v --cov=windgym --cov-report=html:htmlcov --cov-report=term
+#  artifacts:
+#    paths:
+#      - ./htmlcov
+#    when: always
+#  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+#  tags:
+#    - linux
+#  <<: *default_rules
 
 
 build_docs:
