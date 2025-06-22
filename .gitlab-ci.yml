@@ -54,7 +54,7 @@ build_docs:
   image: node:18
   script:
     - cd docusaurus-site
-    - npm ci
+    - npm install
     - npm run build
   artifacts:
     paths:
