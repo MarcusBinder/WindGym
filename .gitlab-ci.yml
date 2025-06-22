@@ -53,6 +53,9 @@ build_docs:
   stage: build
   image: node:18
   script:
+    - apt-get update -y # Update package list
+    - apt-get install -y python3 python3-pip # Install Python 3 and pip
+    - pixi install
     - cd docusaurus-site
     - npm install
     - npm run build
