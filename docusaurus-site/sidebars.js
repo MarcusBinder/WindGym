@@ -10,11 +10,9 @@ const sidebars = {
     'installation', // Refers to docusaurus-site/docs/installation.md
     'concepts',     // Refers to docusaurus-site/docs/concepts.md
     'agents',       // Refers to docusaurus-site/docs/agents.md
+    'simulations', // Refers to docusaurus-site/docs/simulations.md
     'evaluations',  // Refers to docusaurus-site/docs/evaluations.md
 
-    // If you have notebooks converted to Markdown, list them here too
-    // For example, if simulations.ipynb converts to simulations.md:
-    // 'simulations', // Refers to docusaurus-site/docs/simulations.md
 
     // You can also group related pages into categories
     /*
