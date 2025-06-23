@@ -2,6 +2,8 @@
 
 [![coverage report](https://gitlab.windenergy.dtu.dk/sys/windgym/badges/main/coverage.svg)](https://gitlab.windenergy.dtu.dk/sys/windgym/-/commits/main)
 
+📚 **[View the full documentation here](https://sys.pages.windenergy.dtu.dk/windgym/)**
+
 ## Description
 
 This is a general wind farm environment for RL research. It is built on the [DYNAMIKS](https://gitlab.windenergy.dtu.dk/DYNAMIKS/dynamiks)
