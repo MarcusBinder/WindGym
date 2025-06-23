@@ -12,6 +12,7 @@ const sidebars = {
     'agents',       // Refers to docusaurus-site/docs/agents.md
     'simulations', // Refers to docusaurus-site/docs/simulations.md
     'evaluations',  // Refers to docusaurus-site/docs/evaluations.md
+    'developer-guidelines',
 
 
     // You can also group related pages into categories
