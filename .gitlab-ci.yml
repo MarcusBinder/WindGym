@@ -17,20 +17,20 @@ stages:
     - if: $CI_PIPELINE_SOURCE == "web"  
     - when: never
 
-#pre_commit:
-#  stage: test
-#  variables:
-#    PRE_COMMIT_HOME: ${CI_PROJECT_DIR}/.cache/pre-commit
-#  script:
-#    - apt-get update && apt-get install -y git
-#    - pixi run pre-commit run --all-files
-#  cache:
-#    key: pre-commit-cache # Retains cache across all branches
-#    paths:
-#      - ${PRE_COMMIT_HOME}
-#  tags:
-#    - linux
-#  <<: *default_rules
+pre_commit:
+  stage: test
+  variables:
+    PRE_COMMIT_HOME: ${CI_PROJECT_DIR}/.cache/pre-commit
+  script:
+    - apt-get update && apt-get install -y git
+    - pixi run pre-commit run --all-files
+  cache:
+    key: pre-commit-cache # Retains cache across all branches
+    paths:
+      - ${PRE_COMMIT_HOME}
+  tags:
+    - linux
+  <<: *default_rules
 
 #test_linux:
 #  stage: test
@@ -70,8 +70,13 @@ build_docs:
     expire_in: 1 week
   tags:
     - linux
-  only:
-    - docusaurus-site
+  #only:
+  #  - docusaurus-site
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_REF_NAME == "docusaurus-site"
+    - if: $CI_COMMIT_BRANCH == "docusaurus-site"
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "docusaurus-site"
+
 
 pages:
   stage: deploy
@@ -83,8 +88,12 @@ pages:
   artifacts:
     paths:
       - public
-  only:
-    - docusaurus-site # main
+  #only:
+  #  - docusaurus-site # main
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_REF_NAME == "docusaurus-site"
+    - if: $CI_COMMIT_BRANCH == "docusaurus-site"
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "docusaurus-site"
   tags:
     - linux
 
