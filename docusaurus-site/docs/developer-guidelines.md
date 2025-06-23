@@ -22,8 +22,8 @@ Remember that we're all on the same team despite differences in our day to day s
 
 Two principles should guide our conduct:
 
-- `Think that you might be wrong. <https://en.wikipedia.org/wiki/Cromwell%27s_rule>`_
-- `Assume good faith. <https://en.wikipedia.org/wiki/Wikipedia:Assume_good_faith>`_
+- [Think that you might be wrong.](https://en.wikipedia.org/wiki/Cromwell%27s_rule)
+- [Assume good faith.](https://en.wikipedia.org/wiki/Wikipedia:Assume_good_faith)
 
 
 # Contribution management
