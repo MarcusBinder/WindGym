@@ -8,7 +8,7 @@ const config = {
   title: 'WindGym Docs',
   tagline: 'documentation of WindGym package',
   url: 'https://pages.windenergy.dtu.dk',
-  baseUrl: '/',
+  baseUrl: '/windgym/',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
   favicon: 'img/favicon.ico',
