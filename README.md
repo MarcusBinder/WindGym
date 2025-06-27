@@ -1,30 +1,31 @@
 # WindGym
 
+A dynamic wind farm environment for developing and evaluating reinforcement learning agents for wind farm control.
+
 [![coverage report](https://gitlab.windenergy.dtu.dk/sys/windgym/badges/main/coverage.svg)](https://gitlab.windenergy.dtu.dk/sys/windgym/-/commits/main)
 
 📚 **[View the full documentation here](https://sys.pages.windenergy.dtu.dk/windgym/)**
 
-## Description
+## Overview
 
-This is a general wind farm environment for RL research. It is built on the [DYNAMIKS](https://gitlab.windenergy.dtu.dk/DYNAMIKS/dynamiks)
-
-Note that there exist both a single and multi agent environment.
+WindGym provides realistic wind farm simulations built on [DYNAMIKS](https://gitlab.windenergy.dtu.dk/DYNAMIKS/dynamiks) and [PyWake](https://gitlab.windenergy.dtu.dk/TOPFARM/PyWake). Agents learn to optimize turbine yaw control for power maximization and load reduction in complex wake interactions.
 
 ## Installation
 
-To install your new environment, run the following commands:
-
-```{shell}
+```{bash}
 git clone https://gitlab.windenergy.dtu.dk/sys/WindGym.git
 cd WindGym
-pip install -e .
+pixi install
+pixi shell
 ```
 
 ## Examples
 
-Some examples of the uses can be seen in the Examples folder.
-
-An example animation of the turbines in the flow. 
+See the [examples directory](https://gitlab.windenergy.dtu.dk/sys/windgym/-/tree/main/examples) for complete usage demonstrations.
 
 
 ![Animation of flowfield](examples/images/Flowfield_gif.gif)
+
+
+
+
