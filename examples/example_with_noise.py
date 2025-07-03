@@ -24,7 +24,7 @@ BASE_YAML_CONFIG_STRING = """
 # --- Initial Settings ---
 yaw_init: "Zeros"
 noise: "{noise_setting}" # Set by --noise_level
-BaseController: "Local"
+BaseController: "PyWake"
 ActionMethod: "yaw"
 Track_power: False
 
@@ -224,8 +224,8 @@ def make_env(temp_yaml_path, turbine_obj, env_init_params, seed=0):
             seed=seed,
             dt_sim=env_init_params.get("dt_sim", 1),
             dt_env=env_init_params.get("dt_env", 10),
-            yaw_step=env_init_params.get("yaw_step", 1.0),
-            turbtype=env_init_params.get("turbtype", "MannLoad"),
+            yaw_step_sim=env_init_params.get("yaw_step", 1.0),
+            turbtype=env_init_params.get("turbtype", "MannGen"),
             TurbBox=env_init_params.get("TurbBox"),
             n_passthrough=env_init_params.get("n_passthrough", 10),
             fill_window=env_init_params.get("fill_window", True),
@@ -312,8 +312,11 @@ def train_agent(args):
         ) as tmp_yaml_file:
             tmp_yaml_file.write(current_yaml_config_string)
             temp_yaml_filepath = tmp_yaml_file.name
+        # The 'with' block ensures the file is closed here after writing.
+
         print(f"Temporary YAML config for training: {temp_yaml_filepath}")
 
+        # Now, create the SubprocVecEnv after the file is definitely written and closed.
         vec_env = SubprocVecEnv(
             [
                 make_env(
