@@ -140,8 +140,8 @@ class PyWakeAgent(BaseAgent):
         """
         # Get the yaw angles from the interpolator
         yaws = self.interpolator((self.wdir, self.wsp, self.TI))
-        
-        return yaws.squeeze()
+        self.optimized_yaws = yaws.squeeze()
+        # return yaws.squeeze()s
 
 
     def reset(self):
@@ -180,11 +180,12 @@ class PyWakeAgent(BaseAgent):
         # Only optimize if we have not done it yet, and if we are not using the lookup table.
         if not self.look_up and self.optimized is False:
             self.optimize()
+        
+        if self.look_up:
+            self.use_lookup()
 
         # Get the optimal yaw angles.
-        optimal_yaws = (
-            self.use_lookup() if self.look_up else self.optimized_yaws
-        )
+        optimal_yaws = self.optimized_yaws
 
         if self.env.ActionMethod == "wind":
             # If the action method is 'wind', we return the set point yaw angles directly.
