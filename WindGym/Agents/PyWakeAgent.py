@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 from .BaseAgent import BaseAgent
 import warnings
 
+from scipy.interpolate import RegularGridInterpolator
+
 """
 The PyWakeAgent is a class that is used to optimize the yaw angles of a wind farm using the PyWake library.
 It interfaces with the AgentEval class in the dtu_wind_gym library.
@@ -29,6 +31,7 @@ class PyWakeAgent(BaseAgent):
         yaw_min=-45,
         refine_pass_n=6,
         yaw_n=7,
+        look_up=False, # If true use interpolation to get the yaw angles
         turbine=V80(),
         env=None,
     ):
@@ -37,6 +40,7 @@ class PyWakeAgent(BaseAgent):
         self.optimized = False  # Is false before we have optimized the farm.
         self.yaw_max = yaw_max
         self.yaw_min = yaw_min
+        self.look_up = look_up
 
         self.UseEnv = True
         self.env = env
@@ -78,6 +82,10 @@ class PyWakeAgent(BaseAgent):
         self.yaw_zero = np.zeros((self.n_wt, 1, 1))
         self.reset()
 
+        if self.look_up:
+            # If we want to use interpolation, we create a lookup table
+            self.make_lookup()
+
     def update_wind(self, wind_speed, wind_direction, TI):
         """
         Update the wind conditions for the agent.
@@ -86,6 +94,55 @@ class PyWakeAgent(BaseAgent):
         self.wdir = np.asarray([wind_direction])
         self.TI = TI
         self.reset()
+
+    def make_lookup(self):
+        """
+        Create a lookup table for the yaw angles.
+        This is done as we can save time by doing it once and then use it later.
+        """
+
+        wd_array = np.arange(self.env.wd_min - 10, self.env.wd_max + 10 +1, 1)
+        ws_array =  np.arange(5, 25 + 1, 1)
+        TIs = [0.0, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16]
+
+        # Create a grid of wind directions and wind speeds
+        yaw_results = np.zeros((self.n_wt, len(wd_array), len(ws_array), len(TIs) ) )
+
+        # Do the optimization        
+        for j in range(len(TIs)):
+
+            yaw_array = yaw_optimizer_srf_vect(x=self.x_pos,
+                                               y=self.y_pos,
+                                               wffm=self.wf_model,
+                                               wd=wd_array,
+                                               ws=ws_array,
+                                               ti=np.array([TIs[j]]),
+                                               refine_pass_n=self.refine_pass_n,
+                                               yaw_n=self.yaw_n,
+                                               nn_cpu=1,
+                                               sort_reverse=False,
+                                               )   
+            
+            yaw_results[:, :, :, j] = yaw_array
+
+        # Move the axes so that the last axis is the turbine axis
+        yaw_results = np.moveaxis(yaw_results, 0, -1)
+        self.interpolator = RegularGridInterpolator(
+                            (wd_array, ws_array, TIs),  # axes
+                            yaw_results,                      # data for turbine i
+                            bounds_error=False,              # allow extrapolation
+                            fill_value=None                  # extrapolate instead of NaN
+                        )
+        
+    def use_lookup(self):
+        """
+        Use the lookup table to get the yaw angles for the current wind conditions.
+        """
+        # Get the yaw angles from the interpolator
+        yaws = self.interpolator((self.wdir, self.wsp, self.TI))
+        
+        return yaws.squeeze()
+
 
     def reset(self):
         """
@@ -120,17 +177,23 @@ class PyWakeAgent(BaseAgent):
         Note that we dont use the obs or the deterministic arguments.
         """
 
-        if self.optimized is False:
+        # Only optimize if we have not done it yet, and if we are not using the lookup table.
+        if not self.look_up and self.optimized is False:
             self.optimize()
+
+        # Get the optimal yaw angles.
+        optimal_yaws = (
+            self.use_lookup() if self.look_up else self.optimized_yaws
+        )
 
         if self.env.ActionMethod == "wind":
             # If the action method is 'wind', we return the set point yaw angles directly.
             # print("Using wind action method")
-            action = self.scale_yaw(self.optimized_yaws)
+            action = self.scale_yaw(optimal_yaws)
         elif self.env.ActionMethod == "yaw":
             # If using yaw based steering, we need to retun the yaw angles differently
 
-            yaw_goal = self.optimized_yaws
+            yaw_goal = optimal_yaws
             yaw_offset = self.env.current_yaw
             yaw_step = self.env.yaw_step_env  # How much we can change pr step
 
