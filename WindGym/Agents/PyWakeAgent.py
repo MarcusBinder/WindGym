@@ -31,7 +31,7 @@ class PyWakeAgent(BaseAgent):
         yaw_min=-45,
         refine_pass_n=6,
         yaw_n=7,
-        look_up=False, # If true use interpolation to get the yaw angles
+        look_up=False,  # If true use interpolation to get the yaw angles
         turbine=V80(),
         env=None,
     ):
@@ -101,39 +101,39 @@ class PyWakeAgent(BaseAgent):
         This is done as we can save time by doing it once and then use it later.
         """
 
-        wd_array = np.arange(self.env.wd_min - 10, self.env.wd_max + 10 +1, 1)
-        ws_array =  np.arange(5, 25 + 1, 1)
+        wd_array = np.arange(self.env.wd_min - 10, self.env.wd_max + 10 + 1, 1)
+        ws_array = np.arange(5, 25 + 1, 1)
         TIs = [0.0, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16]
 
         # Create a grid of wind directions and wind speeds
-        yaw_results = np.zeros((self.n_wt, len(wd_array), len(ws_array), len(TIs) ) )
+        yaw_results = np.zeros((self.n_wt, len(wd_array), len(ws_array), len(TIs)))
 
-        # Do the optimization        
+        # Do the optimization
         for j in range(len(TIs)):
+            yaw_array = yaw_optimizer_srf_vect(
+                x=self.x_pos,
+                y=self.y_pos,
+                wffm=self.wf_model,
+                wd=wd_array,
+                ws=ws_array,
+                ti=np.array([TIs[j]]),
+                refine_pass_n=self.refine_pass_n,
+                yaw_n=self.yaw_n,
+                nn_cpu=1,
+                sort_reverse=False,
+            )
 
-            yaw_array = yaw_optimizer_srf_vect(x=self.x_pos,
-                                               y=self.y_pos,
-                                               wffm=self.wf_model,
-                                               wd=wd_array,
-                                               ws=ws_array,
-                                               ti=np.array([TIs[j]]),
-                                               refine_pass_n=self.refine_pass_n,
-                                               yaw_n=self.yaw_n,
-                                               nn_cpu=1,
-                                               sort_reverse=False,
-                                               )   
-            
             yaw_results[:, :, :, j] = yaw_array
 
         # Move the axes so that the last axis is the turbine axis
         yaw_results = np.moveaxis(yaw_results, 0, -1)
         self.interpolator = RegularGridInterpolator(
-                            (wd_array, ws_array, TIs),  # axes
-                            yaw_results,                      # data for turbine i
-                            bounds_error=False,              # allow extrapolation
-                            fill_value=None                  # extrapolate instead of NaN
-                        )
-        
+            (wd_array, ws_array, TIs),  # axes
+            yaw_results,  # data for turbine i
+            bounds_error=False,  # allow extrapolation
+            fill_value=None,  # extrapolate instead of NaN
+        )
+
     def use_lookup(self):
         """
         Use the lookup table to get the yaw angles for the current wind conditions.
@@ -142,7 +142,6 @@ class PyWakeAgent(BaseAgent):
         yaws = self.interpolator((self.wdir, self.wsp, self.TI))
         self.optimized_yaws = yaws.squeeze()
         # return yaws.squeeze()s
-
 
     def reset(self):
         """
@@ -180,7 +179,7 @@ class PyWakeAgent(BaseAgent):
         # Only optimize if we have not done it yet, and if we are not using the lookup table.
         if not self.look_up and self.optimized is False:
             self.optimize()
-        
+
         if self.look_up:
             self.use_lookup()
 
