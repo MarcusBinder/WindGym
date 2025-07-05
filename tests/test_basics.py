@@ -497,7 +497,7 @@ def test_set_windconditions_with_site(wind_farm_env):
 
     # Sample multiple times to check distribution
     samples = []
-    for _ in range(10):
+    for _ in range(40):
         wind_farm_env._set_windconditions()
         samples.append(
             {"ws": wind_farm_env.ws, "wd": wind_farm_env.wd, "ti": wind_farm_env.ti}
