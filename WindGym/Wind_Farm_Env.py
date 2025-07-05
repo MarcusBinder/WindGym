@@ -430,11 +430,11 @@ class WindFarmEnv(WindEnv):
             wd_use = np.rad2deg(np.arctan(ws_front[1] / ws_front[0])) + self.wd
         
             # Make the wd and ws update somewhat slowly, using polyak averaging
-            tau = 0.1
+            tau = 0.05
 
             self.pywake_wd = (1-tau) * self.pywake_wd + tau * wd_use
             self.pywake_ws = (1-tau) * self.pywake_ws + tau * ws_use
-            print("Self.pywake_ws", self.pywake_ws, "Self.pywake_wd", self.pywake_wd)
+            # print("Self.pywake_ws", self.pywake_ws, "Self.pywake_wd", self.pywake_wd)
             self.pywake_agent.update_wind(
                 wind_speed=self.pywake_ws,
                 wind_direction=self.pywake_wd,
