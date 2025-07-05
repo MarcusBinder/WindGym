@@ -32,6 +32,8 @@ class PyWakeAgent(BaseAgent):
         refine_pass_n=6,
         yaw_n=7,
         look_up=False,  # If true use interpolation to get the yaw angles
+        wd_min = None,
+        wd_max = None,
         turbine=V80(),
         env=None,
     ):
@@ -41,6 +43,15 @@ class PyWakeAgent(BaseAgent):
         self.yaw_max = yaw_max
         self.yaw_min = yaw_min
         self.look_up = look_up
+
+        # IF self.look_up is True, then make sure that wd_min, wd_max, ws_min, ws_max are set
+        if self.look_up:
+            if wd_min is None or wd_max is None:
+                raise ValueError(
+                    "If look_up is True, then wd_min and wd_max must be set."
+                )
+            self.wd_min = wd_min
+            self.wd_max = wd_max
 
         self.UseEnv = True
         self.env = env
@@ -101,7 +112,7 @@ class PyWakeAgent(BaseAgent):
         This is done as we can save time by doing it once and then use it later.
         """
 
-        wd_array = np.arange(self.env.wd_min - 10, self.env.wd_max + 10 + 1, 1)
+        wd_array = np.arange(self.wd_min - 10, self.wd_max + 10 + 1, 1)
         ws_array = np.arange(5, 25 + 1, 1)
         TIs = [0.0, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16]
 
@@ -141,7 +152,6 @@ class PyWakeAgent(BaseAgent):
         # Get the yaw angles from the interpolator
         yaws = self.interpolator((self.wdir, self.wsp, self.TI))
         self.optimized_yaws = yaws.squeeze()
-        # return yaws.squeeze()s
 
     def reset(self):
         """
@@ -186,9 +196,9 @@ class PyWakeAgent(BaseAgent):
         # Get the optimal yaw angles.
         optimal_yaws = self.optimized_yaws
 
+
         if self.env.ActionMethod == "wind":
             # If the action method is 'wind', we return the set point yaw angles directly.
-            # print("Using wind action method")
             action = self.scale_yaw(optimal_yaws)
         elif self.env.ActionMethod == "yaw":
             # If using yaw based steering, we need to retun the yaw angles differently
