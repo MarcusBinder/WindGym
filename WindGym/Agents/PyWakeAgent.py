@@ -32,8 +32,8 @@ class PyWakeAgent(BaseAgent):
         refine_pass_n=6,
         yaw_n=7,
         look_up=False,  # If true use interpolation to get the yaw angles
-        wd_min = None,
-        wd_max = None,
+        wd_min=None,
+        wd_max=None,
         turbine=V80(),
         env=None,
     ):
@@ -195,7 +195,6 @@ class PyWakeAgent(BaseAgent):
 
         # Get the optimal yaw angles.
         optimal_yaws = self.optimized_yaws
-
 
         if self.env.ActionMethod == "wind":
             # If the action method is 'wind', we return the set point yaw angles directly.

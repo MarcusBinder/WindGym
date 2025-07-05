@@ -342,10 +342,9 @@ class WindFarmEnv(WindEnv):
                 self._base_controller = local_yaw_controller
             elif self.BaseController == "Global":
                 self._base_controller = global_yaw_controller
-            elif self.BaseController.split('_')[0] == "PyWake":
-
-                if '_' in self.BaseController:
-                    self.py_agent_mode = self.BaseController.split('_')[1]
+            elif self.BaseController.split("_")[0] == "PyWake":
+                if "_" in self.BaseController:
+                    self.py_agent_mode = self.BaseController.split("_")[1]
                 else:
                     self.py_agent_mode = "oracle"
                     # In oracle mode we just use the global conditions always.
@@ -354,7 +353,6 @@ class WindFarmEnv(WindEnv):
                     raise ValueError(
                         "The PyWakeAgent can only be used in oracle or local mode. Please specify the mode in the BaseController string."
                     )
-                
 
                 # lookup_mode is true if self.py_agent_mode == "local", else it's false
                 lookup_mode = self.py_agent_mode == "local"
@@ -424,23 +422,24 @@ class WindFarmEnv(WindEnv):
         # oracle mode just uses the global wind conditions, while local mode uses the local wind conditions at the turbines.
         if self.py_agent_mode == "local":
             #  This is a bit crude, and can be improved, but we just use the front most turbine for this.
-            front_tb = np.argmin(self.fs_baseline.windTurbines.positions_xyz[0,:])
-            ws_front = self.fs_baseline.windTurbines.get_rotor_avg_windspeed(include_wakes=True)[:,front_tb]
+            front_tb = np.argmin(self.fs_baseline.windTurbines.positions_xyz[0, :])
+            ws_front = self.fs_baseline.windTurbines.get_rotor_avg_windspeed(
+                include_wakes=True
+            )[:, front_tb]
             ws_use = np.linalg.norm(ws_front)
             wd_use = np.rad2deg(np.arctan(ws_front[1] / ws_front[0])) + self.wd
-        
+
             # Make the wd and ws update somewhat slowly, using polyak averaging
             tau = 0.05
 
-            self.pywake_wd = (1-tau) * self.pywake_wd + tau * wd_use
-            self.pywake_ws = (1-tau) * self.pywake_ws + tau * ws_use
+            self.pywake_wd = (1 - tau) * self.pywake_wd + tau * wd_use
+            self.pywake_ws = (1 - tau) * self.pywake_ws + tau * ws_use
             # print("Self.pywake_ws", self.pywake_ws, "Self.pywake_wd", self.pywake_wd)
             self.pywake_agent.update_wind(
                 wind_speed=self.pywake_ws,
                 wind_direction=self.pywake_wd,
                 TI=self.ti,
-                )
-            
+            )
 
         # This assumes we are using the "wind" based actions.
         action = self.pywake_agent.predict()[0]
@@ -929,7 +928,7 @@ class WindFarmEnv(WindEnv):
             self.fs_baseline.windTurbines.yaw = self.fs.windTurbines.yaw
             self.fs_baseline.run(t_developed)
 
-            if self.BaseController.split('_')[0] == "PyWake":
+            if self.BaseController.split("_")[0] == "PyWake":
                 # If we are using the PyWake agent as a baseline, we need to set it up
                 self.pywake_agent.update_wind(
                     wind_speed=self.ws,
