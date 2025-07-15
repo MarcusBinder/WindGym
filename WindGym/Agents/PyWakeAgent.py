@@ -259,7 +259,17 @@ class PyWakeAgent(BaseAgent):
 
 
 def yaw_optimizer_srf_vect(
-    x, y, wffm, yaw_max, wd, ws, ti=0.04, refine_pass_n=4, yaw_n=5, nn_cpu=1, sort_reverse=False
+    x,
+    y,
+    wffm,
+    yaw_max,
+    wd,
+    ws,
+    ti=0.04,
+    refine_pass_n=4,
+    yaw_n=5,
+    nn_cpu=1,
+    sort_reverse=False,
 ):
     """
     This is the Serial-Refine Method for yaw optimization, implemented in PyWake.
