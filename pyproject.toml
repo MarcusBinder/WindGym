@@ -49,7 +49,10 @@ testpaths = "tests"
 addopts = "--cov-report term-missing:skip-covered --cov=WindGym"
 
 [tool.coverage.run]
-omit = ["tests/*"]
+omit = [
+        "tests/*",
+        "WindGym/version.py"
+       ]
 
 [tool.pixi.project]
 channels = ["conda-forge"]
@@ -73,3 +76,4 @@ pytz = ">=2025.1,<2026"
 [tool.pixi.tasks]
 install = { cmd = "pip install -e ." }
 test = { depends-on = ["install"], cmd = "pytest" }
+
