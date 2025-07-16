@@ -26,8 +26,14 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
         x_pos,
         y_pos,
         n_passthrough=20,
-        TI_min_mes: float = 0.0,
-        TI_max_mes: float = 0.50,
+        ws_scaling_min: float = 0.0,
+        ws_scaling_max: float = 30.0,
+        wd_scaling_min: float = 0,
+        wd_scaling_max: float = 360,
+        ti_scaling_min: float = 0.0,
+        ti_scaling_max: float = 1.0,
+        yaw_scaling_min: float = -45,
+        yaw_scaling_max: float = 45,
         TurbBox="Default",
         turbtype="MannLoad",
         yaml_path=None,
@@ -41,7 +47,9 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
         yaw_step_env=1,  # How many degrees the yaw angles can change pr. step
         fill_window=True,
         sample_site=None,
+        HTC_path=None,
         reset_init=False,
+        burn_in_passthroughs=2,
     ):
         # call the init function of the parent class.
         WindFarmEnv.__init__(
@@ -50,8 +58,14 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
             x_pos=x_pos,
             y_pos=y_pos,
             n_passthrough=n_passthrough,
-            TI_min_mes=TI_min_mes,
-            TI_max_mes=TI_max_mes,
+            ws_scaling_min=ws_scaling_min,
+            ws_scaling_max=ws_scaling_max,
+            wd_scaling_min=wd_scaling_min,
+            wd_scaling_max=wd_scaling_max,
+            ti_scaling_min=ti_scaling_min,
+            ti_scaling_max=ti_scaling_max,
+            yaw_scaling_min=yaw_scaling_min,
+            yaw_scaling_max=yaw_scaling_max,
             TurbBox=TurbBox,
             turbtype=turbtype,
             yaml_path=yaml_path,
@@ -65,7 +79,9 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
             yaw_step_env=yaw_step_env,
             fill_window=fill_window,
             sample_site=sample_site,
+            HTC_path=HTC_path,
             reset_init=reset_init,
+            burn_in_passthroughs=burn_in_passthroughs,
         )
 
         self.act_var = 1

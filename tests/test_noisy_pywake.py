@@ -153,8 +153,6 @@ def test_env_instance(dummy_yaml_config):
         "reset_init": False,
         "HTC_path": None,
         "finite_episode": False,
-        "TI_min_mes": 0.0,
-        "TI_max_mes": 0.50,
         "yaw_init": "Zeros",
         "TurbBox": "Default",
         "Baseline_comp": False,
