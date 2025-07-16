@@ -38,6 +38,9 @@ import yaml
 from dynamiks.wind_turbines.hawc2_windturbine import HAWC2WindTurbines
 from dynamiks.dwm.particle_motion_models import CutOffFrq
 
+# For live plotting
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+
 CutOffFrqLio2021 = CutOffFrq(4)
 
 """
@@ -282,9 +285,6 @@ class WindFarmEnv(WindEnv):
         # Asserting that the render_mode is valid.
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
-
-        if self.render_mode == "human":
-            self.init_render()
 
     def _init_wts(self):
         """
@@ -574,9 +574,8 @@ class WindFarmEnv(WindEnv):
             low=-1, high=1, shape=((self.n_turb * self.act_var),), dtype=np.float32
         )
 
-    def init_render(self):
-        plt.ion()
-
+    def make_view(self):
+        # Makes the self.view object, which is used for rendering the environment
         x_turb, y_turb = self.fs.windTurbines.positions_xyz[:2]
 
         self.figure, self.ax = plt.subplots(figsize=(10, 4))
@@ -587,6 +586,9 @@ class WindFarmEnv(WindEnv):
             z=self.turbine.hub_height(), x=self.a, y=self.b, ax=self.ax, adaptive=False
         )
 
+    def init_render(self):
+        plt.ion()
+        self.make_view()
         plt.close()
 
     def _take_measurements(self):
@@ -948,6 +950,10 @@ class WindFarmEnv(WindEnv):
         observation = self._get_obs()
         info = self._get_info()
 
+        # Init render can now be called as fs needs to be created first
+        if self.render_mode == "human":
+            self.init_render()
+
         return observation, info
 
     def _action_penalty(self):
@@ -1239,14 +1245,7 @@ class WindFarmEnv(WindEnv):
 
         terminated = False
 
-        if self.render_mode == "human":
-            self._render_frame()
-
         return observation, reward, terminated, truncated, info
-
-    def render(self):
-        if self.render_mode == "human":
-            return self._render_frame()
 
     def _deleteHAWCfolder(self):
         """
@@ -1289,6 +1288,63 @@ class WindFarmEnv(WindEnv):
             )
             shutil.rmtree(htc_folder_baseline)
 
+    def render(self):
+        """Render method required by PettingZoo API."""
+        if self.render_mode == "rgb_array":
+            # Return the RGB frame (for recording, saving, etc.)
+            return self._render_frame()
+        elif self.render_mode == "human":
+            # Show the frame in a window
+            frame = self._render_frame_for_human()
+            plt.imshow(frame)
+            plt.axis("off")
+            plt.title("Wind Farm Environment - Render")
+            plt.show(block=False)
+            plt.pause(0.001)  # Pause to allow window to update
+
+    def _render_frame_for_human(self, baseline=False):
+        """Render the environment and return an RGB frame as a numpy array."""
+        plt.ioff()  # Non-interactive mode
+        fig, ax1 = plt.subplots(figsize=(18, 6))  # Create new figure for rendering
+
+        if baseline:
+            fs_use = self.fs_baseline
+        else:
+            fs_use = self.fs
+
+        self.make_view()
+
+        uvw = fs_use.get_windspeed(self.view, include_wakes=True, xarray=True)
+
+        wt = fs_use.windTurbines
+        x_turb, y_turb = fs_use.windTurbines.positions_xyz[:2]
+        yaw, tilt = wt.yaw_tilt()
+
+        mesh = ax1.pcolormesh(
+            uvw.x.values, uvw.y.values, uvw[0].T, shading="nearest", cmap="viridis"
+        )
+        plt.colorbar(mesh, ax=ax1, label="Wind Speed (m/s)")
+
+        # ax1.pcolormesh(uvw.x.values, uvw.y.values, uvw[0].T, shading="nearest")
+        WindTurbinesPW.plot_xy(
+            fs_use.windTurbines,
+            x_turb,
+            y_turb,
+            types=fs_use.windTurbines.types,
+            wd=fs_use.wind_direction,
+            ax=ax1,
+            yaw=yaw,
+            tilt=tilt,
+        )
+
+        canvas = FigureCanvas(fig)
+        canvas.draw()
+        buf = canvas.buffer_rgba()
+        frame = np.asarray(buf)[:, :, :3]  # Get RGB only
+
+        plt.close(fig)  # Avoid memory leaks
+        return frame
+
     def _render_frame(self, baseline=False):
         """
         This is the rendering function.
@@ -1304,13 +1360,18 @@ class WindFarmEnv(WindEnv):
         else:
             fs_use = self.fs
 
-        # uvw = self.fs.get_windspeed(self.view, include_wakes=True, xarray=False)
         uvw = fs_use.get_windspeed(self.view, include_wakes=True, xarray=True)
 
         wt = fs_use.windTurbines
         x_turb, y_turb = fs_use.windTurbines.positions_xyz[:2]
         yaw, tilt = wt.yaw_tilt()
 
+        # Redudante init_render?
+        """
+        #Init render can now be called as fs needs to be created first
+        #if self.render_mode == "human":
+        #    self.init_render()
+        """
         # [0] is the u component of the wind speed
         plt.pcolormesh(uvw.x.values, uvw.y.values, uvw[0].T, shading="nearest")
         WindTurbinesPW.plot_xy(
