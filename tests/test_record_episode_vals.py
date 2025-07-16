@@ -1,26 +1,12 @@
-"""
-Unit-tests for WindGym.wrappers.recordEpisodeVals.RecordEpisodeVals
-==================================================================
-
-A deterministic stub environment is wrapped in a Gymnasium vector-env to
-exercise the episode-statistics wrapper in isolation.  The tests drive
-its *entire* logic tree (~100 % coverage) while executing in a few
-milliseconds.
-
-Only ``pytest``, ``numpy`` and ``gymnasium`` are required.
-"""
-
-from __future__ import annotations
-
 import numpy as np
 import gymnasium as gym
 import pytest
 
-from WindGym.wrappers.recordEpisodeVals import RecordEpisodeVals
+from WindGym.wrappers import RecordEpisodeVals, AdversaryWrapper
 
 
 # --------------------------------------------------------------------------- #
-#  Minimal deterministic environment                                           #
+#  Minimal deterministic environment                                        #
 # --------------------------------------------------------------------------- #
 class PowerEnv(gym.Env):
     """
@@ -73,7 +59,7 @@ def vec_env(env_fns):
 
 
 # --------------------------------------------------------------------------- #
-#  Utility – run until *every* sub-env finishes one episode                   #
+#  Utility – run until *every* sub-env finishes one episode                 #
 # --------------------------------------------------------------------------- #
 def roll_episode(wrapped: RecordEpisodeVals, action_val=0.0) -> int:
     """
@@ -91,7 +77,7 @@ def roll_episode(wrapped: RecordEpisodeVals, action_val=0.0) -> int:
 
 
 # --------------------------------------------------------------------------- #
-#  Tests                                                                      #
+#  Tests                                                                    #
 # --------------------------------------------------------------------------- #
 def test_single_env_mean_power_queue() -> None:
     """
@@ -120,7 +106,7 @@ def test_multi_env_staggered_done() -> None:
     * The first mean (5) is queued when env-0 ends,
       the second mean (2) when env-1 ends.
     * ``episode_powers`` are per-episode accumulators and *are* cleared by
-      ``reset()``.
+      episode termination or ``reset()``.
     * The rolling mean queue is **not** cleared by ``reset()`` – it is meant
       to persist across many episodes for moving-average statistics.
     """
@@ -130,14 +116,17 @@ def test_multi_env_staggered_done() -> None:
             lambda: PowerEnv(ep_len=3, power_agent=2.0),
         ]
     )
-    w = RecordEpisodeVals(env)
+    w = AdversaryWrapper(env)
     w.reset()
 
     roll_episode(w)
     assert list(w.mean_power_queue) == [5.0, 2.0]
 
-    # per-episode accumulator still holds the last totals until reset …
-    assert w.episode_powers.sum() > 0
+    # per-episode accumulator should be reset to zero after episode termination
+    assert w.episode_powers.sum() == 0  # CHANGED THIS LINE
+    assert (
+        w.episode_powers_baseline.sum() == 0
+    )  # ADDED THIS LINE if you have baseline too
 
     w.reset()  # fresh episode(s)
 
@@ -166,14 +155,15 @@ def test_reset_clears_per_episode_state_only() -> None:
     `last_dones`) but *retains* the rolling history deques.
     """
     env = vec_env([lambda: PowerEnv(ep_len=2, power_agent=7.0)])
-    w = RecordEpisodeVals(env)
+    w = AdversaryWrapper(env)
 
     w.reset()
     roll_episode(w)
 
     # Queues populated, accumulators non-zero
     assert w.mean_power_queue
-    assert w.episode_powers.sum() > 0
+    # After roll_episode, the episode should be terminated, so episode_powers should be reset
+    assert w.episode_powers.sum() == 0  # CHANGED THIS LINE
 
     w.reset()
 

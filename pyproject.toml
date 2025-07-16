@@ -8,6 +8,8 @@ build-backend = "setuptools.build_meta"
 name = "WindGym"
 authors = [
   { name="Marcus Nilsen", email="manils@dtu.dk" },
+  { name="Julian Quick", email="juqu@dtu.dk" },
+  { name="Ernestas Simutis", email="ernim@dtu.dk" },
 ]
 description = "Wind farm reinforcement learning environment"
 readme = "README.md"
@@ -47,7 +49,10 @@ testpaths = "tests"
 addopts = "--cov-report term-missing:skip-covered --cov=WindGym"
 
 [tool.coverage.run]
-omit = ["tests/*"]
+omit = [
+        "tests/*",
+        "WindGym/version.py"
+       ]
 
 [tool.pixi.project]
 channels = ["conda-forge"]
@@ -68,7 +73,12 @@ gymnasium-all = ">=1.0.0,<2"
 xarray = ">=2022.0.0,<2025"
 pytz = ">=2025.1,<2026"
 jupyter = ">=1.1.1,<2"
+wandb = ">=0.20.1,<0.21"
+tensorboard = ">=2.19.0,<3"
+tyro = ">=0.9.26,<0.10"
+pip = ">=25.1.1,<26"
 
 [tool.pixi.tasks]
 install = { cmd = "pip install -e ." }
 test = { depends-on = ["install"], cmd = "pytest" }
+

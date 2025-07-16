@@ -17,8 +17,14 @@ class FarmEval(WindFarmEnv):
         y_pos,
         finite_episode: bool = False,
         # Max and min values for the turbulence intensity measurements. Used for internal scaling
-        TI_min_mes: float = 0.0,
-        TI_max_mes: float = 0.50,
+        ws_scaling_min: float = 0.0,
+        ws_scaling_max: float = 30.0,
+        wd_scaling_min: float = 0,
+        wd_scaling_max: float = 360,
+        ti_scaling_min: float = 0.0,
+        ti_scaling_max: float = 1.0,
+        yaw_scaling_min: float = -45,
+        yaw_scaling_max: float = 45,
         yaw_init="Zeros",
         TurbBox="Default",
         yaml_path=None,
@@ -45,9 +51,15 @@ class FarmEval(WindFarmEnv):
             x_pos=x_pos,
             y_pos=y_pos,
             n_passthrough=n_passthrough,
+            ws_scaling_min=ws_scaling_min,
+            ws_scaling_max=ws_scaling_max,
+            wd_scaling_min=wd_scaling_min,
+            wd_scaling_max=wd_scaling_max,
+            ti_scaling_min=ti_scaling_min,
+            ti_scaling_max=ti_scaling_max,
+            yaw_scaling_min=yaw_scaling_min,
+            yaw_scaling_max=yaw_scaling_max,
             burn_in_passthroughs=burn_in_passthroughs,
-            TI_min_mes=TI_min_mes,
-            TI_max_mes=TI_max_mes,
             TurbBox=TurbBox,
             turbtype=turbtype,
             yaml_path=yaml_path,
@@ -83,16 +95,16 @@ class FarmEval(WindFarmEnv):
         """
         if ws is not None:
             self.ws = ws
-            self.ws_min = ws
-            self.ws_max = ws
+            self.ws_inflow_min = ws
+            self.ws_inflow_max = ws
         if ti is not None:
             self.ti = ti
-            self.TI_min = ti
-            self.TI_max = ti
+            self.TI_inflow_min = ti
+            self.TI_inflow_max = ti
         if wd is not None:
             self.wd = wd
-            self.wd_min = wd
-            self.wd_max = wd
+            self.wd_inflow_min = wd
+            self.wd_inflow_max = wd
 
     def set_yaw_vals(self, yaw_vals):
         """

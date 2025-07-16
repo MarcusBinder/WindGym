@@ -251,19 +251,23 @@ class TestColiseumEdgeCases:
             "ws_max",
             "TI_min",
             "TI_max",
+            "TI_inflow_min",
+            "TI_inflow_max",
+            "ws_inflow_min",
+            "ws_inflow_max",
+            "wd_inflow_min",
+            "wd_inflow_max",
             "unwrapped",
         ]
         mock_env = MagicMock(spec=spec_list)
         mock_env.unwrapped = mock_env
 
-        # FIX: Assign concrete numerical values to the mock's boundary attributes.
-        # This prevents the TypeError during string formatting.
-        mock_env.wd_min = 260
-        mock_env.wd_max = 280
-        mock_env.ws_min = 8
-        mock_env.ws_max = 12
-        mock_env.TI_min = 0.05
-        mock_env.TI_max = 0.15
+        mock_env.TI_inflow_min = 0.05
+        mock_env.TI_inflow_max = 0.15
+        mock_env.ws_inflow_min = 8
+        mock_env.ws_inflow_max = 12
+        mock_env.wd_inflow_min = 260
+        mock_env.wd_inflow_max = 280
 
         # Define return values for the mock's methods
         mock_env.set_wind_vals.return_value = None

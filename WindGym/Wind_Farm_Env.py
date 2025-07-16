@@ -38,6 +38,9 @@ import yaml
 from dynamiks.wind_turbines.hawc2_windturbine import HAWC2WindTurbines
 from dynamiks.dwm.particle_motion_models import CutOffFrq
 
+# For live plotting
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+
 CutOffFrqLio2021 = CutOffFrq(4)
 
 """
@@ -60,8 +63,14 @@ class WindFarmEnv(WindEnv):
         x_pos,
         y_pos,
         n_passthrough=5,
-        TI_min_mes: float = 0.0,
-        TI_max_mes: float = 0.50,
+        ws_scaling_min: float = 0.0,
+        ws_scaling_max: float = 30.0,
+        wd_scaling_min: float = 0,
+        wd_scaling_max: float = 360,
+        ti_scaling_min: float = 0.0,
+        ti_scaling_max: float = 1.0,
+        yaw_scaling_min: float = -45,
+        yaw_scaling_max: float = 45,
         TurbBox="Default",
         turbtype="MannGenerate",
         yaml_path=None,
@@ -141,8 +150,14 @@ class WindFarmEnv(WindEnv):
             self.yaw_step_env = yaw_step_env
 
         # Saves to self
-        self.TI_min_mes = TI_min_mes
-        self.TI_max_mes = TI_max_mes
+        self.ws_scaling_min = ws_scaling_min
+        self.ws_scaling_max = ws_scaling_max
+        self.wd_scaling_min = wd_scaling_min
+        self.wd_scaling_max = wd_scaling_max
+        self.ti_scaling_min = ti_scaling_min
+        self.ti_scaling_max = ti_scaling_max
+        self.yaw_scaling_min = yaw_scaling_min
+        self.yaw_scaling_max = yaw_scaling_max
         self.seed = seed
         self.TurbBox = TurbBox
         self.turbine = turbine
@@ -158,6 +173,7 @@ class WindFarmEnv(WindEnv):
 
         # Load the configuration
         self.load_config(yaml_path)
+        self.yaml_path = yaml_path
 
         self.n_turb = len(x_pos)  # The number of turbines
 
@@ -283,9 +299,6 @@ class WindFarmEnv(WindEnv):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
-        if self.render_mode == "human":
-            self.init_render()
-
     def _init_wts(self):
         """
         Initialize the wind turbines.
@@ -342,20 +355,53 @@ class WindFarmEnv(WindEnv):
                 self._base_controller = local_yaw_controller
             elif self.BaseController == "Global":
                 self._base_controller = global_yaw_controller
-            elif self.BaseController == "PyWake":
-                # print("We are using the PyWake agent as the baseline controller")
+            elif self.BaseController.split("_")[0] == "PyWake":
+                if "_" in self.BaseController:
+                    self.py_agent_mode = self.BaseController.split("_")[1]
+                else:
+                    self.py_agent_mode = "oracle"
+                    # In oracle mode we just use the global conditions always.
+
+                if self.py_agent_mode not in ["oracle", "local"]:
+                    raise ValueError(
+                        "The PyWakeAgent can only be used in oracle or local mode. Please specify the mode in the BaseController string."
+                    )
+
+                # lookup_mode is true if self.py_agent_mode == "local", else it's false
+                lookup_mode = self.py_agent_mode == "local"
 
                 # This is a workarround to make the PyWakeAgent work with the baseline farm. Better must exist.
                 class Fake_env:
-                    pass
+                    def __init__(
+                        self,
+                        action_method="wind",
+                        yaw_max=45,
+                        yaw_min=-45,
+                        yaw_step_env=1,
+                    ):
+                        self.ActionMethod = action_method
+                        # Mocking the unwrapped attributes that PyWakeAgent expects
+                        self.unwrapped = self  # Or a separate mock object with just the needed attributes
+                        self.yaw_max = yaw_max
+                        self.yaw_min = yaw_min
+                        self.yaw_step_env = yaw_step_env
 
-                temp_env = Fake_env()
-                temp_env.ActionMethod = "wind"
+                # When creating temp_env:
+                temp_env = Fake_env(
+                    action_method="wind",
+                    yaw_max=self.yaw_max,
+                    yaw_min=self.yaw_min,
+                    yaw_step_env=self.yaw_step_env,
+                )
+
                 self.pywake_agent = PyWakeAgent(
                     x_pos=self.x_pos,
                     y_pos=self.y_pos,
                     turbine=self.turbine,
+                    yaw_max=self.yaw_max,
+                    yaw_min=self.yaw_min,
                     env=temp_env,
+                    look_up=lookup_mode,  #
                 )
                 self._base_controller = self.PyWakeAgentWrapper
             else:
@@ -403,16 +449,45 @@ class WindFarmEnv(WindEnv):
         """
         # This is mostly the _adjust_yaws method. Just slightly formatted to work with the baseline now.
 
+        # We can run this method in two different ways. Either in oracle mode or in local mode
+        # oracle mode just uses the global wind conditions, while local mode uses the local wind conditions at the turbines.
+        if self.py_agent_mode == "local":
+            #  This is a bit crude, and can be improved, but we just use the front most turbine for this.
+            front_tb = np.argmin(self.fs_baseline.windTurbines.positions_xyz[0, :])
+            ws_front = self.fs_baseline.windTurbines.get_rotor_avg_windspeed(
+                include_wakes=True
+            )[:, front_tb]
+            ws_use = np.linalg.norm(ws_front)
+            wd_use = np.rad2deg(np.arctan(ws_front[1] / ws_front[0])) + self.wd
+
+            # Make the wd and ws update somewhat slowly, using polyak averaging
+            tau = 0.05
+
+            self.pywake_wd = (1 - tau) * self.pywake_wd + tau * wd_use
+            self.pywake_ws = (1 - tau) * self.pywake_ws + tau * ws_use
+
+            self.pywake_agent.update_wind(
+                wind_speed=self.pywake_ws,
+                wind_direction=self.pywake_wd,
+                TI=self.ti,
+            )
+
         # This assumes we are using the "wind" based actions.
         action = self.pywake_agent.predict()[0]
 
+        # This unscales the actions.
         new_yaws = (action + 1.0) / 2.0 * (self.yaw_max - self.yaw_min) + self.yaw_min
+
+        # So for the baseline controller, we also need to adjust the yaws based on the wind direction error.
+        # This is done internally inside the pywakeAgent but not when used as a baseline controller.
+        pywake_error = self.pywake_agent.wdir - self.wd
+        actual_yaws = new_yaws - pywake_error
 
         yaw_max = fs.windTurbines.yaw + self.yaw_step_sim
         yaw_min = fs.windTurbines.yaw - self.yaw_step_sim
 
         new_yaws = np.clip(
-            np.clip(new_yaws, yaw_min, yaw_max), self.yaw_min, self.yaw_max
+            np.clip(actual_yaws, yaw_min, yaw_max), self.yaw_min, self.yaw_max
         )
 
         return new_yaws
@@ -426,7 +501,6 @@ class WindFarmEnv(WindEnv):
 
         # Set the attributes of the class based on the config file
         self.yaw_init = config.get("yaw_init")
-        self.noise = config.get("noise")
         self.BaseController = config.get("BaseController")
         self.ActionMethod = config.get("ActionMethod")
         # self.Baseline_comp = config.get('Baseline_comp')
@@ -441,18 +515,14 @@ class WindFarmEnv(WindEnv):
         # self.nx = farm_params["nx"]
         # self.ny = farm_params["ny"]
 
-        # Unpack the wind params
+        # get the inflow bounds. Note that these are distinct from the scaling bounds.
         wind_params = config.get("wind")
-        self.ws_min = wind_params["ws_min"]
-        self.ws_max = wind_params["ws_max"]
-        self.TI_min = wind_params["TI_min"]
-        self.TI_max = wind_params["TI_max"]
-        self.wd_min = wind_params["wd_min"]
-        self.wd_max = wind_params["wd_max"]
-
-        # These are also saved to this variable, as the eval_env overwrites the other values for the sampling
-        self.wd_min_mes = wind_params["wd_min"]
-        self.wd_max_mes = wind_params["wd_max"]
+        self.ws_inflow_min = wind_params["ws_min"]
+        self.ws_inflow_max = wind_params["ws_max"]
+        self.TI_inflow_min = wind_params["TI_min"]
+        self.TI_inflow_max = wind_params["TI_max"]
+        self.wd_inflow_min = wind_params["wd_min"]
+        self.wd_inflow_max = wind_params["wd_max"]
 
         self.act_pen = config.get("act_pen")
         self.power_def = config.get("power_def")
@@ -480,46 +550,44 @@ class WindFarmEnv(WindEnv):
         # TODO if history_length is 1, then we dont need to save the history, and we can just use the current values.
         # TODO is history_N is 1 or larger, then it is kinda implied that the rolling_mean is true.. Therefore we can change the if self.rolling_mean: check in the Mes() class, to be a if self.history_N >= 1 check... or something like that
         self.farm_measurements = farm_mes(
-            self.n_turb,
-            self.noise,
-            self.mes_level["turb_ws"],
-            self.mes_level["turb_wd"],
-            self.mes_level["turb_TI"],
-            self.mes_level["turb_power"],
-            self.mes_level["farm_ws"],
-            self.mes_level["farm_wd"],
-            self.mes_level["farm_TI"],
-            self.mes_level["farm_power"],
-            self.ws_mes["ws_current"],
-            self.ws_mes["ws_rolling_mean"],
-            self.ws_mes["ws_history_N"],
-            self.ws_mes["ws_history_length"],
-            self.ws_mes["ws_window_length"],
-            self.wd_mes["wd_current"],
-            self.wd_mes["wd_rolling_mean"],
-            self.wd_mes["wd_history_N"],
-            self.wd_mes["wd_history_length"],
-            self.wd_mes["wd_window_length"],
-            self.yaw_mes["yaw_current"],
-            self.yaw_mes["yaw_rolling_mean"],
-            self.yaw_mes["yaw_history_N"],
-            self.yaw_mes["yaw_history_length"],
-            self.yaw_mes["yaw_window_length"],
-            self.power_mes["power_current"],
-            self.power_mes["power_rolling_mean"],
-            self.power_mes["power_history_N"],
-            self.power_mes["power_history_length"],
-            self.power_mes["power_window_length"],
-            2.0,
-            25.0,  # Max and min values for wind speed measuremenats
+            n_turbines=self.n_turb,
+            turb_ws=self.mes_level["turb_ws"],
+            turb_wd=self.mes_level["turb_wd"],
+            turb_TI=self.mes_level["turb_TI"],
+            turb_power=self.mes_level["turb_power"],
+            farm_ws=self.mes_level["farm_ws"],
+            farm_wd=self.mes_level["farm_wd"],
+            farm_TI=self.mes_level["farm_TI"],
+            farm_power=self.mes_level["farm_power"],
+            ws_current=self.ws_mes["ws_current"],
+            ws_rolling_mean=self.ws_mes["ws_rolling_mean"],
+            ws_history_N=self.ws_mes["ws_history_N"],
+            ws_history_length=self.ws_mes["ws_history_length"],
+            ws_window_length=self.ws_mes["ws_window_length"],
+            wd_current=self.wd_mes["wd_current"],
+            wd_rolling_mean=self.wd_mes["wd_rolling_mean"],
+            wd_history_N=self.wd_mes["wd_history_N"],
+            wd_history_length=self.wd_mes["wd_history_length"],
+            wd_window_length=self.wd_mes["wd_window_length"],
+            yaw_current=self.yaw_mes["yaw_current"],
+            yaw_rolling_mean=self.yaw_mes["yaw_rolling_mean"],
+            yaw_history_N=self.yaw_mes["yaw_history_N"],
+            yaw_history_length=self.yaw_mes["yaw_history_length"],
+            yaw_window_length=self.yaw_mes["yaw_window_length"],
+            power_current=self.power_mes["power_current"],
+            power_rolling_mean=self.power_mes["power_rolling_mean"],
+            power_history_N=self.power_mes["power_history_N"],
+            power_history_length=self.power_mes["power_history_length"],
+            power_window_length=self.power_mes["power_window_length"],
+            ws_min=self.ws_scaling_min,
+            ws_max=self.ws_scaling_max,
             # Max and min values for wind direction measurements   NOTE i have added 5 for some slack in the measurements. so the scaling is better.
-            self.wd_min_mes - 5,
-            self.wd_max_mes + 5,
-            self.yaw_min,
-            self.yaw_max,  # Max and min values for yaw measurements
-            # Max and min values for the turbulence intensity measurements
-            self.TI_min_mes,
-            self.TI_max_mes,
+            wd_min=self.wd_scaling_min,
+            wd_max=self.wd_scaling_max,
+            yaw_min=self.yaw_scaling_min,
+            yaw_max=self.yaw_scaling_max,
+            TI_min=self.ti_scaling_min,
+            TI_max=self.ti_scaling_max,
             power_max=self.maxturbpower,
             ti_sample_count=self.ti_sample_count,
         )
@@ -538,7 +606,6 @@ class WindFarmEnv(WindEnv):
 
     def init_render(self):
         plt.ion()
-
         x_turb, y_turb = self.fs.windTurbines.positions_xyz[:2]
 
         self.figure, self.ax = plt.subplots(figsize=(10, 4))
@@ -636,11 +703,11 @@ class WindFarmEnv(WindEnv):
 
         if self.sample_site is None:
             # The wind speed is a random number between ws_min and ws_max
-            self.ws = self._random_uniform(self.ws_min, self.ws_max)
+            self.ws = self._random_uniform(self.ws_inflow_min, self.ws_inflow_max)
             # The turbulence intensity is a random number between TI_min and TI_max
-            self.ti = self._random_uniform(self.TI_min, self.TI_max)
+            self.ti = self._random_uniform(self.TI_inflow_min, self.TI_inflow_max)
             # The wind direction is a random number between wd_min and wd_max
-            self.wd = self._random_uniform(self.wd_min, self.wd_max)
+            self.wd = self._random_uniform(self.wd_inflow_min, self.wd_inflow_max)
         else:
             # wind resource
             dirs = np.arange(0, 360, 1)  # wind directions
@@ -652,11 +719,11 @@ class WindFarmEnv(WindEnv):
 
             self.wd, self.ws = self._sample_site(dirs, As, ks, freqs)
 
-            self.wd = np.clip(self.wd, self.wd_min, self.wd_max)
-            self.ws = np.clip(self.ws, self.ws_min, self.ws_max)
+            self.wd = np.clip(self.wd, self.wd_inflow_min, self.wd_inflow_max)
+            self.ws = np.clip(self.ws, self.ws_inflow_min, self.ws_inflow_max)
 
             self.ti = self._random_uniform(
-                self.TI_min, self.TI_max
+                self.TI_inflow_min, self.TI_inflow_max
             )  # The TI is still uniformly distributed.
 
     def _sample_site(self, dirs, As, ks, freqs):
@@ -890,13 +957,15 @@ class WindFarmEnv(WindEnv):
             self.fs_baseline.windTurbines.yaw = self.fs.windTurbines.yaw
             self.fs_baseline.run(t_developed)
 
-            if self.BaseController == "PyWake":
+            if self.BaseController.split("_")[0] == "PyWake":
                 # If we are using the PyWake agent as a baseline, we need to set it up
                 self.pywake_agent.update_wind(
                     wind_speed=self.ws,
                     wind_direction=self.wd,
                     TI=self.ti,
                 )
+                self.pywake_ws = self.ws
+                self.pywake_wd = self.wd
             for __ in range(self.hist_max):
                 baseline_powers = []
                 for _ in range(self.sim_steps_per_env_step):
@@ -907,6 +976,10 @@ class WindFarmEnv(WindEnv):
 
         observation = self._get_obs()
         info = self._get_info()
+
+        # Init render can now be called as fs needs to be created first
+        if self.render_mode == "human":
+            self.init_render()
 
         return observation, info
 
@@ -1078,7 +1151,6 @@ class WindFarmEnv(WindEnv):
             self.action_remaining = (
                 action * self.yaw_step_env
             )  # Over all steps we want to move this ammout
-            # print("We want to move for a total of: ", self.action_remaining)
 
         for j in range(self.sim_steps_per_env_step):
             self._adjust_yaws(action)  # Adjust the yaw angles of the agent farm
@@ -1200,14 +1272,7 @@ class WindFarmEnv(WindEnv):
 
         terminated = False
 
-        if self.render_mode == "human":
-            self._render_frame()
-
         return observation, reward, terminated, truncated, info
-
-    def render(self):
-        if self.render_mode == "human":
-            return self._render_frame()
 
     def _deleteHAWCfolder(self):
         """
@@ -1250,6 +1315,69 @@ class WindFarmEnv(WindEnv):
             )
             shutil.rmtree(htc_folder_baseline)
 
+    def render(self):
+        """Render method required by PettingZoo API."""
+        if self.render_mode == "rgb_array":
+            # Return the RGB frame (for recording, saving, etc.)
+            return self._render_frame()
+        elif self.render_mode == "human":
+            # Show the frame in a window
+            frame = self._render_frame_for_human()
+            plt.imshow(frame)
+            plt.axis("off")
+            plt.title("Wind Farm Environment - Render")
+            plt.show(block=False)
+            plt.pause(0.001)  # Pause to allow window to update
+
+    def _render_frame_for_human(self, baseline=False):
+        """Render the environment and return an RGB frame as a numpy array."""
+        plt.ioff()  # Non-interactive mode
+        fig, ax1 = plt.subplots(figsize=(18, 6))  # Create new figure for rendering
+
+        if baseline:
+            fs_use = self.fs_baseline
+        else:
+            fs_use = self.fs
+
+        x_turb, y_turb = self.fs.windTurbines.positions_xyz[:2]
+        self.a = np.linspace(-200 + min(x_turb), 1000 + max(x_turb), 250)
+        self.b = np.linspace(-200 + min(y_turb), 200 + max(y_turb), 250)
+
+        self.view = XYView(
+            z=self.turbine.hub_height(), x=self.a, y=self.b, adaptive=False
+        )
+
+        uvw = fs_use.get_windspeed(self.view, include_wakes=True, xarray=True)
+
+        wt = fs_use.windTurbines
+        x_turb, y_turb = fs_use.windTurbines.positions_xyz[:2]
+        yaw, tilt = wt.yaw_tilt()
+
+        mesh = ax1.pcolormesh(
+            uvw.x.values, uvw.y.values, uvw[0].T, shading="nearest", cmap="viridis"
+        )
+        plt.colorbar(mesh, ax=ax1, label="Wind Speed (m/s)")
+
+        # ax1.pcolormesh(uvw.x.values, uvw.y.values, uvw[0].T, shading="nearest")
+        WindTurbinesPW.plot_xy(
+            fs_use.windTurbines,
+            x_turb,
+            y_turb,
+            types=fs_use.windTurbines.types,
+            wd=fs_use.wind_direction,
+            ax=ax1,
+            yaw=yaw,
+            tilt=tilt,
+        )
+
+        canvas = FigureCanvas(fig)
+        canvas.draw()
+        buf = canvas.buffer_rgba()
+        frame = np.asarray(buf)[:, :, :3]  # Get RGB only
+
+        plt.close(fig)  # Avoid memory leaks
+        return frame
+
     def _render_frame(self, baseline=False):
         """
         This is the rendering function.
@@ -1265,13 +1393,18 @@ class WindFarmEnv(WindEnv):
         else:
             fs_use = self.fs
 
-        # uvw = self.fs.get_windspeed(self.view, include_wakes=True, xarray=False)
         uvw = fs_use.get_windspeed(self.view, include_wakes=True, xarray=True)
 
         wt = fs_use.windTurbines
         x_turb, y_turb = fs_use.windTurbines.positions_xyz[:2]
         yaw, tilt = wt.yaw_tilt()
 
+        # Redudante init_render?
+        """
+        #Init render can now be called as fs needs to be created first
+        #if self.render_mode == "human":
+        #    self.init_render()
+        """
         # [0] is the u component of the wind speed
         plt.pcolormesh(uvw.x.values, uvw.y.values, uvw[0].T, shading="nearest")
         WindTurbinesPW.plot_xy(

@@ -369,12 +369,12 @@ class Coliseum:
         temp_env = self.env_factory()
 
         # Use user-provided bounds or fall back to environment defaults
-        wd_min_actual = wd_min if wd_min is not None else temp_env.wd_min
-        wd_max_actual = wd_max if wd_max is not None else temp_env.wd_max
-        ws_min_actual = ws_min if ws_min is not None else temp_env.ws_min
-        ws_max_actual = ws_max if ws_max is not None else temp_env.ws_max
-        ti_min_actual = ti_min if ti_min is not None else temp_env.TI_min
-        ti_max_actual = ti_max if ti_max is not None else temp_env.TI_max
+        wd_min_actual = wd_min if wd_min is not None else temp_env.wd_inflow_min
+        wd_max_actual = wd_max if wd_max is not None else temp_env.wd_inflow_max
+        ws_min_actual = ws_min if ws_min is not None else temp_env.ws_inflow_min
+        ws_max_actual = ws_max if ws_max is not None else temp_env.ws_inflow_max
+        ti_min_actual = ti_min if ti_min is not None else temp_env.TI_inflow_min
+        ti_max_actual = ti_max if ti_max is not None else temp_env.TI_inflow_max
 
         temp_env.close()
 
