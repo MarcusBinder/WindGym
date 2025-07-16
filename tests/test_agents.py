@@ -52,7 +52,12 @@ def test_power_optimization():
 
     # Run optimization
     agent = PyWakeAgent(
-        x_pos=x_pos, y_pos=y_pos, wind_speed=wind_speed, wind_dir=wind_dir, TI=TI
+        x_pos=x_pos,
+        y_pos=y_pos,
+        wind_speed=wind_speed,
+        wind_dir=wind_dir,
+        TI=TI,
+        look_up=True,
     )
     agent.plot_flow()  # runs optimize
     agent_power = compute_power(agent.optimized_yaws)
