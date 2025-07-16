@@ -263,17 +263,6 @@ class TestInvalidConfigurations:
         # ),
         pytest.param(
             {
-                "id": "InvalidNoiseType",
-                "yaml_config_kwargs": {"noise": "SomeInvalidNoiseType"},
-                "expected_exception_info": (
-                    AttributeError,
-                    r"'farm_mes' object has no attribute '_add_noise'",
-                ),
-            },
-            id="InvalidNoiseType",
-        ),
-        pytest.param(
-            {
                 "id": "MissingKeyInMesLevel",
                 "yaml_config_kwargs": {
                     "mes_level": {"turb_ws": True}

@@ -83,16 +83,16 @@ class FarmEval(WindFarmEnv):
         """
         if ws is not None:
             self.ws = ws
-            self.ws_min = ws
-            self.ws_max = ws
+            self.ws_inflow_min = ws
+            self.ws_inflow_max = ws
         if ti is not None:
             self.ti = ti
-            self.TI_min = ti
-            self.TI_max = ti
+            self.TI_inflow_min = ti
+            self.TI_inflow_max = ti
         if wd is not None:
             self.wd = wd
-            self.wd_min = wd
-            self.wd_max = wd
+            self.wd_inflow_min = wd
+            self.wd_inflow_max = wd
 
     def set_yaw_vals(self, yaw_vals):
         """

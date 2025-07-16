@@ -308,7 +308,6 @@ class turb_mes:
     def get_wd(self, scaled=False):
         # get the wd measurements
         if scaled:
-            # Scale the measurements
             return self._scale_val(self.wd.get_measurements(), self.wd_min, self.wd_max)
         else:
             return self.wd.get_measurements()
@@ -372,7 +371,6 @@ class farm_mes(WindEnv):
     def __init__(
         self,
         n_turbines,
-        noise="None",  # Can be: "None", or "Normal"   Ill add OU later
         turb_ws=True,
         turb_wd=True,
         turb_TI=True,
@@ -442,17 +440,6 @@ class farm_mes(WindEnv):
                 print(
                     f"Warning: You are only using the last {ti_sample_count} high-frequency samples for TI calculations. A low number might result in a noisy estimate."
                 )
-
-        # TODO Add Ornstein–Uhlenbeck process for noise
-        self.ws_noise = 0.0
-        self.wd_noise = 2.0  # 2 degrees
-        self.yaw_noise = 0.0
-        self.power_noise = 0.0
-
-        if noise == "Normal":
-            self._add_noise = self._random_normal
-        elif noise == "None":
-            self._add_noise = self._return_zeros
 
         # We assume that the farm oberservations would take the same form as the turbine observations.
         self.farm_observed_variables = (
@@ -547,7 +534,6 @@ class farm_mes(WindEnv):
         return np.array([])
 
     def add_ws(self, measurement):
-        measurement += self._add_noise(mean=0, std=self.ws_noise, n=len(measurement))
         # add measurements to the ws
         for turb in self.turb_mes:
             turb.add_ws(measurement)
@@ -556,7 +542,6 @@ class farm_mes(WindEnv):
 
     def add_wd(self, measurement):
         # add measurements to the wd
-        measurement += self._add_noise(mean=0, std=self.wd_noise, n=len(measurement))
         for turb in self.turb_mes:
             turb.add_wd(measurement)
         if self.farm_wd:
@@ -564,13 +549,11 @@ class farm_mes(WindEnv):
 
     def add_yaw(self, measurement):
         # add measurements to the yaw
-        measurement += self._add_noise(mean=0, std=self.yaw_noise, n=len(measurement))
         for turb in self.turb_mes:
             turb.add_yaw(measurement)
 
     def add_power(self, measurement):
         # add measurements to the power
-        measurement += self._add_noise(mean=0, std=self.power_noise, n=len(measurement))
         for turb in self.turb_mes:
             turb.add_power(measurement)
         if self.farm_power:
@@ -580,16 +563,6 @@ class farm_mes(WindEnv):
 
     def add_measurements(self, ws, wd, yaws, powers):
         # add measurements to the ws, wd and yaw in one go
-
-        # Adding noise to the measurements
-        # print("Before noise in farm: ws: ", ws, "| wd: ", wd, "| yaws: ", yaws, "| powers: ", powers)
-
-        ws += self._add_noise(mean=0, std=self.ws_noise, n=len(ws))
-        wd += self._add_noise(mean=0, std=self.wd_noise, n=len(wd))
-        yaws += self._add_noise(mean=0, std=self.yaw_noise, n=len(yaws))
-        powers += self._add_noise(mean=0, std=self.power_noise, n=len(powers))
-        # print("After norise in farm: ws: ", ws, "| wd: ", wd, "| yaws: ", yaws, "| powers: ", powers)
-
         for turb, speed, direction, yaw, power in zip(
             self.turb_mes, ws, wd, yaws, powers
         ):
@@ -669,7 +642,6 @@ class farm_mes(WindEnv):
     def get_wd_farm(self, scaled=False):
         # get the wd measurements
         if scaled:
-            # Scale the measurements
             return self._scale_val(self.farm_mes.get_wd(), self.wd_min, self.wd_max)
         else:
             return self.farm_mes.get_wd()

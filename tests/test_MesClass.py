@@ -5,17 +5,6 @@ import sys
 from io import StringIO
 
 
-# These dummy noise functions will be used for farm_mes.
-def dummy_random_normal(self, mean, std, n):
-    # Return zeros for deterministic behavior.
-    return np.zeros(n, dtype=np.float32)
-
-
-def dummy_return_zeros(self, mean, std, n):
-    # Return zeros for deterministic behavior.
-    return np.zeros(n, dtype=np.float32)
-
-
 # ------------------------------------------------------------------------------
 # Tests for the base measurement class "Mes"
 # ------------------------------------------------------------------------------
@@ -202,9 +191,6 @@ class TestTurbMes(unittest.TestCase):
 # ------------------------------------------------------------------------------
 # Tests for the farm measurement class "farm_mes"
 # ------------------------------------------------------------------------------
-# Since farm_mes inherits from WindEnv (which is not provided), we patch its noise functions.
-# The __init__ of farm_mes uses a noise parameter to choose between _random_normal and _return_zeros.
-# We override these methods for testing to yield deterministic (zero) noise.
 
 
 class TestFarmMes(unittest.TestCase):
@@ -213,7 +199,6 @@ class TestFarmMes(unittest.TestCase):
         self.n_turbines = 2
         self.f = farm_mes(
             n_turbines=self.n_turbines,
-            noise="None",
             turb_ws=True,
             turb_wd=True,
             turb_TI=True,
@@ -243,10 +228,6 @@ class TestFarmMes(unittest.TestCase):
             power_history_length=10,
             power_window_length=5,
         )
-        # Patch the noise functions to return zeros.
-        self.f._return_zeros = dummy_return_zeros.__get__(self.f, farm_mes)
-        self.f._random_normal = dummy_random_normal.__get__(self.f, farm_mes)
-        self.f._add_noise = self.f._return_zeros
 
     def test_observed_variables(self):
         # For each turbine:
@@ -459,7 +440,6 @@ class TestFarmMes(unittest.TestCase):
             # We also set turb_TI to True as per the original warning condition
             farm_mes_instance = farm_mes(
                 n_turbines=1,  # Can be any number of turbines
-                noise="None",
                 turb_ws=True,
                 turb_wd=False,
                 turb_TI=True,  # This needs to be True to activate the check

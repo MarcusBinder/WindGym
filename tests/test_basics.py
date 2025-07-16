@@ -243,8 +243,16 @@ def test_wind_conditions(wind_farm_env):
     _, info = wind_farm_env.reset()
 
     # Check wind speed and direction are within expected ranges
-    assert wind_farm_env.ws_min <= info["Wind speed Global"] <= wind_farm_env.ws_max
-    assert wind_farm_env.wd_min <= info["Wind direction Global"] <= wind_farm_env.wd_max
+    assert (
+        wind_farm_env.farm_measurements.farm_mes.ws_min
+        <= info["Wind speed Global"]
+        <= wind_farm_env.farm_measurements.farm_mes.ws_max
+    )
+    assert (
+        wind_farm_env.farm_measurements.farm_mes.wd_min
+        <= info["Wind direction Global"]
+        <= wind_farm_env.farm_measurements.farm_mes.wd_max
+    )
 
     # Verify turbine-specific wind measurements exist
     assert "Wind speed at turbines" in info
@@ -505,9 +513,15 @@ def test_set_windconditions_with_site(wind_farm_env):
 
     # Check all samples are within configured limits
     for sample in samples:
-        assert wind_farm_env.ws_min <= sample["ws"] <= wind_farm_env.ws_max
-        assert wind_farm_env.wd_min <= sample["wd"] <= wind_farm_env.wd_max
-        assert wind_farm_env.TI_min <= sample["ti"] <= wind_farm_env.TI_max
+        assert (
+            wind_farm_env.ws_inflow_min <= sample["ws"] <= wind_farm_env.ws_inflow_max
+        )
+        assert (
+            wind_farm_env.wd_inflow_min <= sample["wd"] <= wind_farm_env.wd_inflow_max
+        )
+        assert (
+            wind_farm_env.TI_inflow_min <= sample["ti"] <= wind_farm_env.TI_inflow_max
+        )
 
     # Verify we get different values (sampling is working)
     wind_speeds = [s["ws"] for s in samples]
@@ -518,7 +532,10 @@ def test_set_windconditions_with_site(wind_farm_env):
     # Check that TI is still uniformly distributed between min and max
     ti_values = [s["ti"] for s in samples]
     assert len(set(ti_values)) > 1, "TI values are not varying"
-    assert all(wind_farm_env.TI_min <= ti <= wind_farm_env.TI_max for ti in ti_values)
+    assert all(
+        wind_farm_env.TI_inflow_min <= ti <= wind_farm_env.TI_inflow_max
+        for ti in ti_values
+    )
 
 
 def test_check_env(wind_farm_env):
