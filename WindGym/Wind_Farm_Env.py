@@ -63,8 +63,6 @@ class WindFarmEnv(WindEnv):
         x_pos,
         y_pos,
         n_passthrough=5,
-        TI_min_mes: float = 0.0,
-        TI_max_mes: float = 0.50,
         ws_scaling_min: float = 0.0,
         ws_scaling_max: float = 30.0,
         wd_scaling_min: float = 0,
@@ -606,8 +604,8 @@ class WindFarmEnv(WindEnv):
             low=-1, high=1, shape=((self.n_turb * self.act_var),), dtype=np.float32
         )
 
-    def make_view(self):
-        # Makes the self.view object, which is used for rendering the environment
+    def init_render(self):
+        plt.ion()
         x_turb, y_turb = self.fs.windTurbines.positions_xyz[:2]
 
         self.figure, self.ax = plt.subplots(figsize=(10, 4))
@@ -618,9 +616,6 @@ class WindFarmEnv(WindEnv):
             z=self.turbine.hub_height(), x=self.a, y=self.b, ax=self.ax, adaptive=False
         )
 
-    def init_render(self):
-        plt.ion()
-        self.make_view()
         plt.close()
 
     def _take_measurements(self):
@@ -1344,7 +1339,13 @@ class WindFarmEnv(WindEnv):
         else:
             fs_use = self.fs
 
-        self.make_view()
+        x_turb, y_turb = self.fs.windTurbines.positions_xyz[:2]
+        self.a = np.linspace(-200 + min(x_turb), 1000 + max(x_turb), 250)
+        self.b = np.linspace(-200 + min(y_turb), 200 + max(y_turb), 250)
+
+        self.view = XYView(
+            z=self.turbine.hub_height(), x=self.a, y=self.b, adaptive=False
+        )
 
         uvw = fs_use.get_windspeed(self.view, include_wakes=True, xarray=True)
 
