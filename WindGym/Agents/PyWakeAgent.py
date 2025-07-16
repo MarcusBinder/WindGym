@@ -125,6 +125,7 @@ class PyWakeAgent(BaseAgent):
                 x=self.x_pos,
                 y=self.y_pos,
                 wffm=self.wf_model,
+                yaw_max=self.yaw_max,
                 wd=wd_array,
                 ws=ws_array,
                 ti=np.array([TIs[j]]),
@@ -167,6 +168,7 @@ class PyWakeAgent(BaseAgent):
             x=self.x_pos,
             y=self.y_pos,
             wffm=self.wf_model,
+            yaw_max=self.yaw_max,
             wd=self.wdir,
             ws=self.wsp,
             ti=self.TI,
@@ -257,7 +259,17 @@ class PyWakeAgent(BaseAgent):
 
 
 def yaw_optimizer_srf_vect(
-    x, y, wffm, wd, ws, ti=0.04, refine_pass_n=4, yaw_n=5, nn_cpu=1, sort_reverse=False
+    x,
+    y,
+    wffm,
+    yaw_max,
+    wd,
+    ws,
+    ti=0.04,
+    refine_pass_n=4,
+    yaw_n=5,
+    nn_cpu=1,
+    sort_reverse=False,
 ):
     """
     This is the Serial-Refine Method for yaw optimization, implemented in PyWake.
@@ -280,6 +292,8 @@ def yaw_optimizer_srf_vect(
         PyWake wind farm flow model.
     wd : array_like or float
         Wind direction(s) (in meteorological convention, degrees).
+    yaw_max: float
+        Maximum yaw angle (degrees)
     ws : array_like or float
         Wind speed(s) (m/s).
     ti : array_like or float
@@ -298,7 +312,6 @@ def yaw_optimizer_srf_vect(
     yaw_opt : ndarray, shape (n_wt, n_wd, n_ws)
         The optimized yaw angles for each turbine, wind direction, and wind speed.
     """
-    yaw_max = 30  # Maximum yaw angle (degrees)
     # add delta to wd to fix perfect alignment cases with 2 maxima
     wd = np.atleast_1d(wd) + 1e-3  # shape: (n_wd,)
     ws = np.atleast_1d(ws)  # shape: (n_ws,)
