@@ -15,6 +15,14 @@ from wandb.integration.sb3 import WandbCallback
 import wandb
 
 from WindGym import WindFarmEnv  # Using WindFarmEnv for training
+from WindGym.Measurement_Manager import (
+    MeasurementManager,
+    WhiteNoiseModel,
+    EpisodicBiasNoiseModel,
+    HybridNoiseModel,
+    NoisyWindFarmEnv,
+    MeasurementType,
+)
 from py_wake.examples.data.hornsrev1 import V80
 
 # --- Base YAML Configuration String (will be formatted) ---
@@ -23,7 +31,6 @@ BASE_YAML_CONFIG_STRING = """
 
 # --- Initial Settings ---
 yaw_init: "Zeros"
-noise: "{noise_setting}" # Set by --noise_level
 BaseController: "PyWake"
 ActionMethod: "yaw"
 Track_power: False
@@ -152,7 +159,6 @@ class WindGymCustomMonitor(BaseCallback):
             num_turbines = len(info.get("yaw angles agent", []))
 
             # Since per-turbine TI is now in the info dict, we can get it here once
-            # The .get() method safely returns None if the key is not found
             turbine_tis = info.get("Turbulence intensity at turbines")
 
             for i in range(num_turbines):
@@ -179,11 +185,43 @@ class WindGymCustomMonitor(BaseCallback):
                         )[i]
                     )
 
-                # ✅ NEW SIMPLIFIED LOGIC: Log TI directly from the info dictionary
+                # Log TI directly from the info dictionary
                 if turbine_tis is not None:
                     log_data[
                         f"custom_env_{env_idx}/turbine_{i}/turbulence_intensity"
                     ] = turbine_tis[i]
+
+            for key in info:
+                if key.startswith("obs_true/") or key.startswith("obs_sensed/"):
+                    # Add to log_data, preserving the sub-path from the info key
+                    log_data[f"custom_env_{env_idx}/{key}"] = info[key]
+
+            # Log noise information if available
+            if "noise_info" in info:
+                noise_info = info["noise_info"]
+                log_data[f"custom_env_{env_idx}/noise_type"] = noise_info.get(
+                    "type", "unknown"
+                )
+
+                # Log specific noise metrics based on type
+                if "bias_vector_norm (scaled)" in noise_info:
+                    log_data[f"custom_env_{env_idx}/bias_vector_norm"] = noise_info[
+                        "bias_vector_norm (scaled)"
+                    ]
+
+                if "applied_bias (physical_units)" in noise_info:
+                    # Log a sample of the biases
+                    bias_dict = noise_info["applied_bias (physical_units)"]
+                    if bias_dict:
+                        # Just log the first turbine's biases as an example
+                        for key, value in list(bias_dict.items())[:3]:
+                            log_data[f"custom_env_{env_idx}/noise_bias_{key}"] = value
+
+            for key in info:
+                if key.startswith("obs_true/"):
+                    log_data[f"custom_env_{env_idx}/{key}"] = info[key]
+                elif key.startswith("obs_sensed/"):
+                    log_data[f"custom_env_{env_idx}/{key}"] = info[key]
 
             # Log all the collected data for this step to wandb
             wandb.log(log_data, step=self.num_timesteps)
@@ -191,14 +229,80 @@ class WindGymCustomMonitor(BaseCallback):
         return True
 
 
-def make_env(temp_yaml_path, turbine_obj, env_init_params, seed=0):
+def create_noise_model(noise_type_str, include_turbine_wd, include_farm_wd):
+    """
+    Create appropriate noise model based on configuration.
+
+    Args:
+        noise_type_str (str): "None", "White", "Bias", or "Hybrid"
+        include_turbine_wd (bool): Whether turbine wind direction is included (impacts what measurements are available for noise)
+        include_farm_wd (bool): Whether farm wind direction is included (impacts what measurements are available for noise)
+
+    Returns:
+        NoiseModel instance or None
+    """
+    if noise_type_str == "None":
+        return None
+    elif noise_type_str == "White":
+        # Define noise standard deviations in physical units
+        white_noise_std_devs = {
+            MeasurementType.WIND_SPEED: 0.5,  # 0.5 m/s standard deviation
+            MeasurementType.WIND_DIRECTION: 2.0,  # 2 degrees standard deviation
+            MeasurementType.YAW_ANGLE: 0.5,  # 0.5 degrees standard deviation
+            MeasurementType.TURBULENCE_INTENSITY: 0.01,  # 0.01 TI standard deviation
+            MeasurementType.POWER: 10000.0,  # 10 kW standard deviation
+        }
+        return WhiteNoiseModel(white_noise_std_devs)
+    elif noise_type_str == "Bias":
+        # Define bias ranges in physical units
+        # These ranges are for uniform sampling [min, max] for the bias
+        episodic_bias_ranges = {
+            MeasurementType.WIND_SPEED: (-1.0, 1.0),  # +/- 1.0 m/s bias
+            MeasurementType.WIND_DIRECTION: (-5.0, 5.0),  # +/- 5.0 degrees bias
+            MeasurementType.YAW_ANGLE: (-2.0, 2.0),  # +/- 2.0 degrees bias
+        }
+        return EpisodicBiasNoiseModel(episodic_bias_ranges)
+    elif noise_type_str == "Hybrid":
+        # Combine both white noise and episodic bias
+        white_noise_std_devs = {
+            MeasurementType.WIND_SPEED: 0.5,
+            MeasurementType.WIND_DIRECTION: 2.0,
+            MeasurementType.YAW_ANGLE: 0.5,
+            MeasurementType.TURBULENCE_INTENSITY: 0.01,
+            MeasurementType.POWER: 10000.0,
+        }
+        episodic_bias_ranges = {
+            MeasurementType.WIND_SPEED: (-1.0, 1.0),
+            MeasurementType.WIND_DIRECTION: (-5.0, 5.0),
+            MeasurementType.YAW_ANGLE: (-2.0, 2.0),
+        }
+        return HybridNoiseModel(
+            models=[
+                WhiteNoiseModel(white_noise_std_devs),
+                EpisodicBiasNoiseModel(episodic_bias_ranges),
+            ]
+        )
+    else:
+        raise ValueError(
+            f"Unknown noise type: {noise_type_str}. Choose from 'None', 'White', 'Bias', 'Hybrid'."
+        )
+
+
+def make_env(
+    temp_yaml_path,
+    turbine_obj,
+    env_init_params,
+    seed=0,
+    noise_type_str="None",
+    include_turbine_wd=True,
+    include_farm_wd=True,
+):
     def _init():
-        # 1. LOAD THE CONFIG: This is the critical step to fix the NameError.
-        # Each new process will open the temp file and load the config.
+        # 1. LOAD THE CONFIG
         with open(temp_yaml_path, "r") as f:
             config = yaml.safe_load(f)
 
-        # 2. GET FARM PARAMS: Now 'config' is defined and this will work.
+        # 2. GET FARM PARAMS
         farm_params = config["farm"]
         nx = farm_params["nx"]
         ny = farm_params["ny"]
@@ -215,22 +319,91 @@ def make_env(temp_yaml_path, turbine_obj, env_init_params, seed=0):
         x_pos = x_pos.flatten()
         y_pos = y_pos.flatten()
 
-        # 5. INITIALIZE ENV WITH ALL ARGUMENTS
-        env = WindFarmEnv(
+        # 5. CREATE BASE ENVIRONMENT (without noise)
+        temp_base_env_for_mm_setup = WindFarmEnv(
             x_pos=x_pos,
             y_pos=y_pos,
             turbine=turbine_obj,
             yaml_path=temp_yaml_path,
-            seed=seed,
+            seed=seed,  # Pass the seed for reproducibility of internal randomness
             dt_sim=env_init_params.get("dt_sim", 1),
             dt_env=env_init_params.get("dt_env", 10),
             yaw_step_sim=env_init_params.get("yaw_step", 1.0),
-            turbtype=env_init_params.get("turbtype", "MannGen"),
+            # Use 'MannGenerate' as default if not specified or TurbBox not provided,
+            # to avoid FileNotFoundError if 'MannLoad' is default and path is missing.
+            turbtype=env_init_params.get("turbtype", "MannGenerate"),
             TurbBox=env_init_params.get("TurbBox"),
             n_passthrough=env_init_params.get("n_passthrough", 10),
             fill_window=env_init_params.get("fill_window", True),
             Baseline_comp=True,
+            # Ensure MeasurementManager's `_build_from_env` gets the correct scaling ranges from the `temp_base_env_for_mm_setup`
+            # These are usually passed via yaml_path now, but explicitly setting them here
+            # ensures the MeasurementSpec min/max are correct for scaling noise.
+            TI_min_mes=config["mes_level"].get(
+                "TI_min_mes", 0.0
+            ),  # Assuming these are defined in mes_level if needed
+            TI_max_mes=config["mes_level"].get("TI_max_mes", 0.50),
+            ws_scaling_min=config["wind"].get(
+                "ws_min", 0.0
+            ),  # Using wind min/max for scaling range in MesClass
+            ws_scaling_max=config["wind"].get("ws_max", 30.0),
+            wd_scaling_min=config["wind"].get("wd_min", 0.0),
+            wd_scaling_max=config["wind"].get("wd_max", 360.0),
+            yaw_scaling_min=config["farm"].get("yaw_min", -45.0),
+            yaw_scaling_max=config["farm"].get("yaw_max", 45.0),
         )
+
+        # 6. CREATE MEASUREMENT MANAGER AND NOISE MODEL
+        #    The MeasurementManager is initialized with the temporary base environment
+        #    to allow it to build `self.specs` correctly based on the env's observation
+        #    space structure and scaling ranges.
+        measurement_manager = MeasurementManager(temp_base_env_for_mm_setup, seed=seed)
+        noise_model = create_noise_model(
+            noise_type_str, include_turbine_wd, include_farm_wd
+        )
+
+        final_env_kwargs = {
+            "x_pos": x_pos,
+            "y_pos": y_pos,
+            "turbine": turbine_obj,
+            "yaml_path": temp_yaml_path,
+            "seed": seed,
+            "dt_sim": env_init_params.get("dt_sim", 1),
+            "dt_env": env_init_params.get("dt_env", 10),
+            "yaw_step_sim": env_init_params.get("yaw_step", 1.0),
+            "turbtype": env_init_params.get("turbtype", "MannGenerate"),
+            "TurbBox": env_init_params.get("TurbBox"),
+            "n_passthrough": env_init_params.get("n_passthrough", 10),
+            "fill_window": env_init_params.get("fill_window", True),
+            "Baseline_comp": True,
+            # Pass these scaling parameters for the *actual* WindFarmEnv instance
+            # that NoisyWindFarmEnv will create internally.
+            "TI_min_mes": config["mes_level"].get("TI_min_mes", 0.0),
+            "TI_max_mes": config["mes_level"].get("TI_max_mes", 0.50),
+            "ws_scaling_min": config["wind"].get("ws_min", 0.0),
+            "ws_scaling_max": config["wind"].get("ws_max", 30.0),
+            "wd_scaling_min": config["wind"].get("wd_min", 0.0),
+            "wd_scaling_max": config["wind"].get("wd_max", 360.0),
+            "yaw_scaling_min": config["farm"].get("yaw_min", -45.0),
+            "yaw_scaling_max": config["farm"].get("yaw_max", 45.0),
+        }
+
+        if noise_model is not None:
+            measurement_manager.set_noise_model(noise_model)
+            # Wrap with NoisyWindFarmEnv. Note: NoisyWindFarmEnv *re-creates* the base environment
+            # using the base_env_class and the provided **env_kwargs.
+            # This is why the `temp_base_env_for_mm_setup` above is created and then implicitly
+            # discarded (by Python's garbage collector) after `measurement_manager.specs` are built.
+            env = NoisyWindFarmEnv(
+                base_env_class=WindFarmEnv,
+                measurement_manager=measurement_manager,
+                **final_env_kwargs,  # Pass all necessary kwargs for base_env_class
+            )
+        else:
+            # If no noise, use the plain WindFarmEnv instance.
+            # In this case, `temp_base_env_for_mm_setup` *is* the actual environment.
+            env = temp_base_env_for_mm_setup
+
         return env
 
     return _init
@@ -244,24 +417,25 @@ def train_agent(args):
     include_farm_wd_yaml_str = "false" if args.disable_farm_wd else "true"
 
     current_yaml_config_string = BASE_YAML_CONFIG_STRING.format(
-        noise_setting=args.noise_level,
         include_turbine_wd_yaml=include_turbine_wd_yaml_str,
         include_farm_wd_yaml=include_farm_wd_yaml_str,
     )
     print("--- Using YAML Configuration ---")
     print(current_yaml_config_string)
     print("--------------------------------")
-    if args.noise_level == "Normal":
+    if args.noise_type == "None":  # Changed from noise_level to noise_type
+        print("INFO: No observation noise will be applied by MeasurementManager.")
+    else:
         print(
-            "INFO: WindGym's built-in 'Normal' noise will be applied to observations."
-        )
+            f"INFO: MeasurementManager will apply '{args.noise_type}' noise to observations."
+        )  # Changed from noise_level to noise_type
     if args.disable_turbine_wd:
         print("INFO: Turbine wind direction measurements will be DISABLED.")
     if args.disable_farm_wd:
         print("INFO: Farm wind direction measurements will be DISABLED.")
 
     # W&B and Output Directory Setup
-    run_name = f"{args.run_name_prefix}_noise-{args.noise_level}_turbWD-{not args.disable_turbine_wd}_farmWD-{not args.disable_farm_wd}_{wandb.util.generate_id()}"
+    run_name = f"{args.run_name_prefix}_noise-{args.noise_type}_turbWD-{not args.disable_turbine_wd}_farmWD-{not args.disable_farm_wd}_{wandb.util.generate_id()}"  # Changed from noise_level to noise_type
 
     run = wandb.init(
         project=args.project_name,
@@ -320,7 +494,13 @@ def train_agent(args):
         vec_env = SubprocVecEnv(
             [
                 make_env(
-                    temp_yaml_filepath, turbine, env_init_params, seed=args.seed + i
+                    temp_yaml_filepath,
+                    turbine,
+                    env_init_params,
+                    seed=args.seed + i,
+                    noise_type_str=args.noise_type,  # Changed from noise_level to noise_type
+                    include_turbine_wd=not args.disable_turbine_wd,
+                    include_farm_wd=not args.disable_farm_wd,
                 )
                 for i in range(args.n_envs)
             ]
@@ -332,9 +512,21 @@ def train_agent(args):
             name_prefix="yaw_agent_model",
         )
 
-        eval_env_instance = make_env(
-            temp_yaml_filepath, turbine, env_init_params, seed=args.seed + 1000
-        )()
+        # Eval Env setup:
+        # Create a single environment for evaluation. The make_env returns a factory, so call it.
+        eval_env_instance_factory = make_env(
+            temp_yaml_filepath,
+            turbine,
+            env_init_params,
+            seed=args.seed + 1000,
+            noise_type_str=args.noise_type,  # Changed from noise_level to noise_type
+            include_turbine_wd=not args.disable_turbine_wd,
+            include_farm_wd=not args.disable_farm_wd,
+        )
+        eval_env_instance = (
+            eval_env_instance_factory()
+        )  # Instantiate the environment for evaluation
+
         eval_callback = EvalCallback(
             eval_env_instance,
             best_model_save_path=os.path.join(models_save_base, "best_model"),
@@ -445,14 +637,14 @@ if __name__ == "__main__":
         "--seed", type=int, default=42, help="Random seed for reproducibility."
     )
 
-    # YAML/Observation Customization
     parser.add_argument(
-        "--noise_level",
+        "--noise_type",
         type=str,
-        choices=["None", "Normal"],
-        default="None",
-        help="Observation noise level for YAML.",
+        choices=["None", "White", "Bias", "Hybrid"],
+        default="Bias",
+        help="Observation noise type (handled by MeasurementManager).",
     )
+
     parser.add_argument(
         "--disable_turbine_wd",
         action="store_true",
@@ -480,7 +672,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--turbtype",
         type=str,
-        default="MannLoad",
+        default="MannGenerate",
         choices=["MannLoad", "MannGenerate", "MannFixed", "Random", "None"],
         help="Turbulence type.",
     )

@@ -35,7 +35,6 @@ def temp_yaml_file_factory():
 def get_base_yaml_dict():
     return {
         "yaw_init": "Zeros",
-        "noise": "None",
         "BaseController": "Local",
         "ActionMethod": "yaw",
         "Track_power": False,
@@ -104,8 +103,6 @@ def get_base_yaml_dict():
     [
         ("yaw_init", "Random"),
         ("yaw_init", "Zeros"),
-        ("noise", "Normal"),
-        ("noise", "None"),
         ("BaseController", "Global"),
         ("BaseController", "Local"),
         ("ActionMethod", "wind"),
@@ -183,12 +180,12 @@ def test_wind_params_loading(temp_yaml_file_factory):
         reset_init=False,
     )
 
-    assert env.ws_min == 7
-    assert env.ws_max == 12
-    assert env.TI_min == 0.03
-    assert env.TI_max == 0.12
-    assert env.wd_min == 200
-    assert env.wd_max == 300
+    assert env.ws_inflow_min == 7
+    assert env.ws_inflow_max == 12
+    assert env.TI_inflow_min == 0.03
+    assert env.TI_inflow_max == 0.12
+    assert env.wd_inflow_min == 200
+    assert env.wd_inflow_max == 300
     env.close()
 
 

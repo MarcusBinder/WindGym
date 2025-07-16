@@ -3,6 +3,8 @@ from py_wake.examples.data.lillgrund import LillgrundSite
 from py_wake.deflection_models.jimenez import JimenezWakeDeflection
 from py_wake.examples.data.hornsrev1 import V80
 
+from WindGym.Measurement_Manager import MeasurementType, MeasurementManager
+
 from py_wake.literature.gaussian_models import Blondel_Cathelain_2020
 from py_wake.turbulence_models import CrespoHernandez
 
@@ -32,8 +34,6 @@ class PyWakeAgent(BaseAgent):
         refine_pass_n=6,
         yaw_n=7,
         look_up=False,  # If true use interpolation to get the yaw angles
-        wd_min=None,
-        wd_max=None,
         turbine=V80(),
         env=None,
     ):
@@ -44,14 +44,10 @@ class PyWakeAgent(BaseAgent):
         self.yaw_min = yaw_min
         self.look_up = look_up
 
-        # IF self.look_up is True, then make sure that wd_min, wd_max, ws_min, ws_max are set
+        # If self.look_up is True, then make sure that wd_min, wd_max, ws_min, ws_max are set
         if self.look_up:
-            if wd_min is None or wd_max is None:
-                raise ValueError(
-                    "If look_up is True, then wd_min and wd_max must be set."
-                )
-            self.wd_min = wd_min
-            self.wd_max = wd_max
+            self.wd_min = 0
+            self.wd_max = 360
 
         self.UseEnv = True
         self.env = env
@@ -112,7 +108,7 @@ class PyWakeAgent(BaseAgent):
         This is done as we can save time by doing it once and then use it later.
         """
 
-        wd_array = np.arange(self.wd_min - 10, self.wd_max + 10 + 1, 1)
+        wd_array = np.arange(self.wd_min, self.wd_max, 1)
         ws_array = np.arange(5, 25 + 1, 1)
         TIs = [0.0, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16]
 
@@ -198,21 +194,28 @@ class PyWakeAgent(BaseAgent):
         # Get the optimal yaw angles.
         optimal_yaws = self.optimized_yaws
 
-        if self.env.ActionMethod == "wind":
+        base_env = self.env.unwrapped
+        if base_env.ActionMethod == "wind":
             # If the action method is 'wind', we return the set point yaw angles directly.
             action = self.scale_yaw(optimal_yaws)
-        elif self.env.ActionMethod == "yaw":
-            # If using yaw based steering, we need to retun the yaw angles differently
 
-            yaw_goal = optimal_yaws
-            yaw_offset = self.env.current_yaw
-            yaw_step = self.env.yaw_step_env  # How much we can change pr step
+        # If using yaw based steering, we need to retun the yaw angles differently
+        elif base_env.ActionMethod == "yaw":
+            # error is sensed direction minus true direction
+            wd_error = self.wdir - base_env.wd
+
+            # we adjust the prescribed yaw offset based on the difference between the true and sensed wind direction
+            # this is so that the offset is relative to sensed information, avoiding "oracle" reliance
+            yaw_goal = self.optimized_yaws - wd_error
+
+            yaw_offset = base_env.current_yaw
+            yaw_step = base_env.yaw_step_env  # How much we can change pr step
 
             step_dir = np.sign(yaw_goal - yaw_offset)
             step_scale = np.abs(yaw_goal - yaw_offset)
             # here we replace all values that are larger then the max, with the max
             step_scale[step_scale > yaw_step] = yaw_step
-            action = step_dir * step_scale / self.env.yaw_step_env
+            action = step_dir * step_scale / base_env.yaw_step_env
 
         return action, None
 
@@ -414,3 +417,90 @@ def yaw_optimizer_srf_vect(
         warnings.warn("Optimal setpoints outside [-yaw_max, yaw_max] range.")
         yaw_opt = np.clip(yaw_opt, a_min=-yaw_max, a_max=yaw_max)
     return yaw_opt
+
+
+class NoisyPyWakeAgent(PyWakeAgent):
+    """
+    A version of the PyWakeAgent that makes decisions based on noisy observations.
+
+    Unlike the base PyWakeAgent which gets perfect global wind conditions, this
+    agent must estimate the wind conditions from the observation vector it
+    receives at each step. It then re-runs its optimization based on this
+    imperfect, noisy information.
+    """
+
+    def __init__(self, measurement_manager: MeasurementManager, **kwargs):
+        """
+        Initializes the agent.
+
+        Args:
+            measurement_manager (MeasurementManager): The MeasurementManager instance
+                from the environment. This is required for the agent to understand
+                the structure of the observation vector.
+            **kwargs: Keyword arguments to be passed to the parent PyWakeAgent,
+                      such as x_pos, y_pos, turbine, etc.
+        """
+        # Get the environment from the measurement manager
+        env = measurement_manager.env
+
+        # Initialize the parent PyWakeAgent, explicitly passing the environment
+        super().__init__(env=env, **kwargs)
+
+        self.mm = measurement_manager
+        # The self.env attribute is now correctly set from the parent __init__.
+
+    def _unscale(self, scaled_val, min_val, max_val):
+        """Helper to convert a scaled value from [-1, 1] back to its physical unit."""
+        if (max_val - min_val) == 0:
+            return scaled_val  # Avoid division by zero if max and min are the same
+        return (scaled_val + 1) / 2 * (max_val - min_val) + min_val
+
+    def _estimate_wind_from_obs(self, obs: np.ndarray) -> tuple[float, float]:
+        """
+        Estimates the global wind speed and direction by averaging the
+        noisy measurements from the observation vector.
+        """
+        ws_values, wd_values = [], []
+
+        # Find all wind speed and direction measurements in the observation vector
+        for spec in self.mm.specs:
+            # Extract the scaled value from the observation vector
+            scaled_value = obs[spec.index_range[0] : spec.index_range[1]]
+
+            if spec.measurement_type == MeasurementType.WIND_SPEED:
+                unscaled_ws = self._unscale(
+                    scaled_value,
+                    spec.min_val,
+                    spec.max_val,
+                )
+                ws_values.extend(np.atleast_1d(unscaled_ws))
+
+            elif spec.measurement_type == MeasurementType.WIND_DIRECTION:
+                unscaled_wd = self._unscale(
+                    scaled_value,
+                    spec.min_val,
+                    spec.max_val,
+                )
+                wd_values.extend(np.atleast_1d(unscaled_wd))
+
+        # Average the collected values to get a single estimate.
+        # If no measurements are found, fall back to the last known value.
+        estimated_ws = np.mean(ws_values) if ws_values else self.wsp[0]
+        estimated_wd = np.mean(wd_values) if wd_values else self.wdir[0]
+
+        return estimated_ws, estimated_wd
+
+    def predict(self, obs, deterministic=None):
+        """
+        This method now uses the observation to make a decision.
+        """
+        # 1. Estimate wind conditions from the noisy observation vector
+        est_ws, est_wd = self._estimate_wind_from_obs(obs)
+
+        # 2. Update the agent's internal state with these new, noisy estimates.
+        #    This call resets self.optimized to False, forcing a re-optimization.
+        self.update_wind(wind_speed=est_ws, wind_direction=est_wd, TI=self.TI)
+
+        # 3. Call the parent's predict method. It will now run optimize()
+        #    with the new noisy data and return the appropriate action.
+        return super().predict(obs, deterministic=deterministic)
