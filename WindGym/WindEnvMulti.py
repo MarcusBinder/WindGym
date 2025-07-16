@@ -17,11 +17,14 @@ The main difference between this and the single agent version is that we have to
 class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
     metadata = {
         "name": "MultiFarm_environment_v0",
+        "render_modes": ["human", "rgb_array"],
     }
 
     def __init__(
         self,
         turbine,
+        x_pos,
+        y_pos,
         n_passthrough=20,
         TI_min_mes: float = 0.0,
         TI_max_mes: float = 0.50,
@@ -34,14 +37,18 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
         seed=None,
         dt_sim=1,  # Simulation timestep in seconds
         dt_env=1,  # Environment timestep in seconds
-        yaw_step=1,  # How many degrees the yaw angles can change pr. step
+        yaw_step_sim=1,
+        yaw_step_env=1,  # How many degrees the yaw angles can change pr. step
         fill_window=True,
         sample_site=None,
+        reset_init=False,
     ):
         # call the init function of the parent class.
         WindFarmEnv.__init__(
             self,
             turbine=turbine,
+            x_pos=x_pos,
+            y_pos=y_pos,
             n_passthrough=n_passthrough,
             TI_min_mes=TI_min_mes,
             TI_max_mes=TI_max_mes,
@@ -54,9 +61,11 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
             seed=seed,
             dt_sim=dt_sim,
             dt_env=dt_env,
-            yaw_step=yaw_step,
+            yaw_step_sim=yaw_step_sim,
+            yaw_step_env=yaw_step_env,
             fill_window=fill_window,
             sample_site=sample_site,
+            reset_init=reset_init,
         )
 
         self.act_var = 1
@@ -75,6 +84,9 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
         self.agent_name_mapping = dict(
             zip(self.possible_agents, list(range(len(self.possible_agents))))
         )
+
+    def render(self):
+        return WindFarmEnv.render(self)
 
     def _get_obs_multi(self):
         """
@@ -99,7 +111,6 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
             )
             for a, turbine_mes in zip(self.agents, self.farm_measurements.turb_mes)
         }
-
         return observations
 
     def _get_infos(self):
