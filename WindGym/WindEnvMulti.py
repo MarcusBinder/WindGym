@@ -35,7 +35,7 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
         yaw_scaling_min: float = -45,
         yaw_scaling_max: float = 45,
         TurbBox="Default",
-        turbtype="MannLoad",
+        turbtype="MannGenerate",
         yaml_path=None,
         Baseline_comp=False,
         yaw_init=None,
@@ -51,6 +51,12 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
         reset_init=False,
         burn_in_passthroughs=2,
     ):
+        self.n_turb = len(x_pos)  # n_turb needed before possible_agents
+        self.possible_agents = ["turbine_" + str(r) for r in range(self.n_turb)]
+        # a mapping between agent name and ID. Used to get the correct observations and infos.
+        self.agent_name_mapping = dict(
+            zip(self.possible_agents, list(range(len(self.possible_agents))))
+        )
         # call the init function of the parent class.
         WindFarmEnv.__init__(
             self,
@@ -94,12 +100,6 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
         self.obs_var = turbine_obs_var + farm_obs_var
 
         self.timestep = 0
-        self.possible_agents = ["turbine_" + str(r) for r in range(self.n_turb)]
-
-        # a mapping between agent name and ID. Used to get the correct observations and infos.
-        self.agent_name_mapping = dict(
-            zip(self.possible_agents, list(range(len(self.possible_agents))))
-        )
 
     def render(self):
         return WindFarmEnv.render(self)
@@ -109,24 +109,31 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
         Concatenate the observations of the turbines and the farm, pr agent.
         Also clip it between -1 and 1.
         """
-        observations = {
-            a: (
-                np.clip(
-                    np.concatenate(
-                        [
-                            turbine_mes.get_measurements(scaled=True),
-                            self.farm_measurements.farm_mes.get_measurements(
-                                scaled=True
-                            ),
-                        ]
-                    ),
-                    -1.0,
-                    1.0,
-                    dtype=np.float32,
+        if self.farm_measurements is None:
+            # Environment has been truncated and cleaned up by parent, return zero-filled obs
+            observations = {
+                a: np.zeros(self.observation_space(a).shape, dtype=np.float32)
+                for a in self.agents
+            }
+        else:
+            observations = {
+                a: (
+                    np.clip(
+                        np.concatenate(
+                            [
+                                turbine_mes.get_measurements(scaled=True),
+                                self.farm_measurements.farm_mes.get_measurements(
+                                    scaled=True
+                                ),
+                            ]
+                        ),
+                        -1.0,
+                        1.0,
+                        dtype=np.float32,
+                    )
                 )
-            )
-            for a, turbine_mes in zip(self.agents, self.farm_measurements.turb_mes)
-        }
+                for a, turbine_mes in zip(self.agents, self.farm_measurements.turb_mes)
+            }
         return observations
 
     def _get_infos(self):
@@ -134,43 +141,65 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
         Return info dictionary.
         """
 
-        infos = {
-            a: {
-                "yaw angles agent": self.current_yaw[self.agent_name_mapping[a]],
-                "yaw angles measured": self.farm_measurements.turb_mes[
-                    self.agent_name_mapping[a]
-                ].get_yaw(),
-                "Wind speed Global": self.ws,
-                "Wind speed at turbine": self.current_ws[self.agent_name_mapping[a]],
-                "Wind speed at turbine measured": self.farm_measurements.turb_mes[
-                    self.agent_name_mapping[a]
-                ].get_ws(),
-                "Wind direction Global": self.wd,
-                "Wind direction at turbine": self.current_wd[
-                    self.agent_name_mapping[a]
-                ],
-                "Wind direction at turbine measured": self.farm_measurements.turb_mes[
-                    self.agent_name_mapping[a]
-                ].get_wd(),
-                "Wind direction at farm measured": self.farm_measurements.get_wd_farm(),
-                "Turbulence intensity": self.ti,
-                "Power agent": self.fs.windTurbines.power().sum(),
-                "Power turbine agent": self.fs.windTurbines.power()[
-                    self.agent_name_mapping[a]
-                ],
-                "Turbine x positions": self.fs.windTurbines.positions_xyz[0][
-                    self.agent_name_mapping[a]
-                ],
-                "Turbine y positions": self.fs.windTurbines.positions_xyz[1][
-                    self.agent_name_mapping[a]
-                ],
-            }
-            for a in self.agents
-        }
+        infos = {}
+        for a in self.agents:
+            agent_idx = self.agent_name_mapping[a]
+            if self.farm_measurements is None:
+                # Environment has been truncated and cleaned up by parent, return empty info dict
+                info_dict = {}
+            else:
+                info_dict = {
+                    "yaw angles agent": self.current_yaw[agent_idx],
+                    "yaw angles measured": self.farm_measurements.turb_mes[
+                        agent_idx
+                    ].get_yaw(),
+                    "Wind speed Global": self.ws,
+                    "Wind speed at turbine": self.current_ws[agent_idx],
+                    "Wind speed at turbine measured": self.farm_measurements.turb_mes[
+                        agent_idx
+                    ].get_ws(),
+                    "Wind speed at farm measured": self.farm_measurements.get_ws_farm(),
+                    "Wind direction Global": self.wd,
+                    "Wind direction at turbine": self.current_wd[agent_idx],
+                    "Wind direction at turbine measured": self.farm_measurements.turb_mes[
+                        agent_idx
+                    ].get_wd(),
+                    "Wind direction at farm measured": self.farm_measurements.get_wd_farm(),
+                    "Turbulence intensity": self.ti,
+                    "Power agent": self.fs.windTurbines.power().sum(),
+                    "Power turbine agent": self.fs.windTurbines.power()[agent_idx],
+                    "Turbine x positions": self.fs.windTurbines.positions_xyz[0][
+                        agent_idx
+                    ],
+                    "Turbine y positions": self.fs.windTurbines.positions_xyz[1][
+                        agent_idx
+                    ],
+                }
+                if self.Baseline_comp:
+                    info_dict["yaw angles base"] = self.fs_baseline.windTurbines.yaw[
+                        agent_idx
+                    ]  # Per turbine yaw
+                    info_dict["Power baseline"] = (
+                        self.fs_baseline.windTurbines.power().sum()
+                    )  # Total farm power
+                    info_dict["Power pr turbine baseline"] = (
+                        self.fs_baseline.windTurbines.power()[agent_idx]
+                    )  # Per turbine power
+                    info_dict["Wind speed at turbines baseline"] = np.linalg.norm(
+                        self.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
+                    )[agent_idx]
 
+            infos[a] = info_dict
         return infos
 
     def reset(self, seed=None, options=None):
+        # Clear the agents list before calling parent reset,
+        # as parent reset populates relevant internal state
+        # and we then rebuild the agents list for the new episode.
+        # This ensures that when _get_obs_multi/_get_infos are called below,
+        # self.agents is correctly populated for the new episode.
+        self.agents = copy(self.possible_agents)
+
         # call the reset function of the parent class.
         WindFarmEnv.reset(self, seed, options)
 
@@ -217,39 +246,54 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
         The step function.
         We unpack the actions, and call the step function of the parent class.
         """
+
         # Extract all actions
         all_action = np.array([yaw[0] for yaw in actions.values()])
 
-        observation, reward, terminated, truncated, info = WindFarmEnv.step(
-            self, all_action
+        # Call the parent WindFarmEnv's step method
+        parent_obs, parent_reward, parent_terminated, parent_truncated, parent_info = (
+            WindFarmEnv.step(self, all_action)
         )
 
-        # Get observations rewards and infos.
-        observations = self._get_obs_multi()
-        # rewards = self._calc_reward()
-        infos = self._get_infos()
-
-        # The rewards is "just" the reward from the parent class, but we need to unpack it.
-        rewards = {a: reward for a in self.agents}
-
-        # If we are at the end of the simulation, we truncate the agents.
-        # Note that this is not the same as terminating the agents.
+        # IMPORTANT: Check if the environment was truncated by the parent step call.
         # https://farama.org/Gymnasium-Terminated-Truncated-Step-API#theory
         # https://arxiv.org/pdf/1712.00378
         # https://gymnasium.farama.org/tutorials/gymnasium_basics/handling_time_limits/
-        if truncated:
-            # terminated = {a: True for a in self.agents}
-            truncations = {a: True for a in self.agents}
-        else:
-            truncations = {a: False for a in self.agents}
 
-        self.timestep += 1
+        # If it was, self.farm_measurements will be None.
+        if parent_truncated:
+            # Prepare outputs for a truncated state.
+            # _get_obs_multi and _get_infos are designed to handle self.farm_measurements being None.
+            observations = self._get_obs_multi()
+            infos = self._get_infos()
 
-        # We are never at some end point in wind farm simulations, so we always return False for terminated.
-        terminations = {a: False for a in self.agents}
+            # For rewards, use the last reward from the parent step, as the episode is now ending.
+            # You might want a specific reward for truncation here, but using parent_reward is a safe default.
+            rewards = {
+                a: parent_reward for a in self.possible_agents
+            }  # Apply to all possible agents
 
-        if any(terminations.values()) or all(truncations.values()):
+            # Set truncation flags for all agents
+            truncations = {a: True for a in self.possible_agents}
+            terminations = {
+                a: False for a in self.possible_agents
+            }  # Truncation, not termination
+
+            # Clear the list of active agents, as per PettingZoo convention for a finished episode.
             self.agents = []
+
+            return observations, rewards, terminations, truncations, infos
+
+        # If not truncated, proceed normally
+        observations = self._get_obs_multi()
+        infos = self._get_infos()
+
+        # Rewards are the same for all agents in this environment.
+        rewards = {a: parent_reward for a in self.agents}
+
+        # Use the flags returned by the parent step
+        truncations = {a: parent_truncated for a in self.agents}
+        terminations = {a: parent_terminated for a in self.agents}
 
         return observations, rewards, terminations, truncations, infos
 
