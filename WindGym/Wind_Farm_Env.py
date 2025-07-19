@@ -307,10 +307,8 @@ class WindFarmEnv(WindEnv):
         """
         if self.wts is not None:
             self.wts = None
-            del self.wts
         if self.wts_baseline is not None:
             self.wts_baseline = None
-            del self.wts_baseline
 
         if self.HTC_path is not None:
             # If we have a high fidelity turbine model, then we need to load it in
@@ -816,9 +814,9 @@ class WindFarmEnv(WindEnv):
         if self.Baseline_comp:  # I am pretty sure we need to have 2 sites, as the flow simulation is run on the site, and the measurements are taken from the site.
             tf_base = copy.deepcopy(tf_agent)
             self.site_base = TurbulenceFieldSite(ws=self.ws, turbulenceField=tf_base)
-            del tf_base
+            tf_base = None
         tf_agent = None
-        del tf_agent
+        tf_agent = None
         gc.collect()
 
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
@@ -1248,8 +1246,6 @@ class WindFarmEnv(WindEnv):
                     self.wts_baseline.h2.close()
                 self.fs_baseline = None
                 self.site_base = None
-                del self.fs_baseline
-                del self.site_base
 
             if self.HTC_path is not None:
                 # Close the connections
@@ -1261,9 +1257,6 @@ class WindFarmEnv(WindEnv):
             self.fs = None
             self.site = None
             self.farm_measurements = None
-            del self.fs
-            del self.site
-            del self.farm_measurements
             gc.collect()
         else:
             truncated = False
@@ -1433,14 +1426,12 @@ class WindFarmEnv(WindEnv):
         if self.Baseline_comp:
             self.fs_baseline = None
             self.site_base = None
-            del self.fs_baseline
-            del self.site_base
         self.fs = None
         self.site = None
         self.farm_measurements = None
-        del self.fs
-        del self.site
-        del self.farm_measurements
+        self.fs = None
+        self.site = None
+        self.farm_measurements = None
         gc.collect()
 
     def plot_frame(self, baseline=False):

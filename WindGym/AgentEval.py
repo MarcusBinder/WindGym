@@ -423,53 +423,135 @@ def eval_single_fast(
             plt.close("all")
 
     # Reshape the arrays and put them in a xarray dataset
-    powerF_a = powerF_a.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
-    powerT_a = powerT_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-    yaw_a = yaw_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-    ws_a = ws_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-    rew_plot = rew_plot.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
+    powerF_a = powerF_a.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+    powerT_a = powerT_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+    yaw_a = yaw_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+    ws_a = ws_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+    rew_plot = rew_plot.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
 
     # # Then create a xarray dataset with the results
     # Common data variables
     data_vars = {
-        "powerF_a": (("time", "ws", "wd", "TI", "turbbox", "model_step"), powerF_a),
+        "powerF_a": (
+            ("time", "ws", "wd", "TI", "turbbox", "model_step", "deterministic"),
+            powerF_a,
+        ),
         "powerT_a": (
-            ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+            (
+                "time",
+                "turb",
+                "ws",
+                "wd",
+                "TI",
+                "turbbox",
+                "model_step",
+                "deterministic",
+            ),
             powerT_a,
         ),
-        "yaw_a": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), yaw_a),
-        "ws_a": (("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"), ws_a),
-        "reward": (("time", "ws", "wd", "TI", "turbbox", "model_step"), rew_plot),
+        "yaw_a": (
+            (
+                "time",
+                "turb",
+                "ws",
+                "wd",
+                "TI",
+                "turbbox",
+                "model_step",
+                "deterministic",
+            ),
+            yaw_a,
+        ),
+        "ws_a": (
+            (
+                "time",
+                "turb",
+                "ws",
+                "wd",
+                "TI",
+                "turbbox",
+                "model_step",
+                "deterministic",
+            ),
+            ws_a,
+        ),
+        "reward": (
+            ("time", "ws", "wd", "TI", "turbbox", "model_step", "deterministic"),
+            rew_plot,
+        ),
     }
 
     # Add baseline variables if applicable
     if baseline_comp:
-        powerF_b = powerF_b.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
-        powerT_b = powerT_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        yaw_b = yaw_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        ws_b = ws_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
-        pct_inc = pct_inc.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1)
+        powerF_b = powerF_b.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+        powerT_b = powerT_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+        yaw_b = yaw_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+        ws_b = ws_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+        pct_inc = pct_inc.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
 
         data_vars.update(
             {
                 "powerF_b": (
-                    ("time", "ws", "wd", "TI", "turbbox", "model_step"),
+                    (
+                        "time",
+                        "ws",
+                        "wd",
+                        "TI",
+                        "turbbox",
+                        "model_step",
+                        "deterministic",
+                    ),
                     powerF_b,
                 ),
                 "powerT_b": (
-                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    (
+                        "time",
+                        "turb",
+                        "ws",
+                        "wd",
+                        "TI",
+                        "turbbox",
+                        "model_step",
+                        "deterministic",
+                    ),
                     powerT_b,
                 ),
                 "yaw_b": (
-                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    (
+                        "time",
+                        "turb",
+                        "ws",
+                        "wd",
+                        "TI",
+                        "turbbox",
+                        "model_step",
+                        "deterministic",
+                    ),
                     yaw_b,
                 ),
                 "ws_b": (
-                    ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
+                    (
+                        "time",
+                        "turb",
+                        "ws",
+                        "wd",
+                        "TI",
+                        "turbbox",
+                        "model_step",
+                        "deterministic",
+                    ),
                     ws_b,
                 ),
                 "pct_inc": (
-                    ("time", "ws", "wd", "TI", "turbbox", "model_step"),
+                    (
+                        "time",
+                        "ws",
+                        "wd",
+                        "TI",
+                        "turbbox",
+                        "model_step",
+                        "deterministic",
+                    ),
                     pct_inc,
                 ),
             }
@@ -484,6 +566,7 @@ def eval_single_fast(
         "TI": np.array([ti]),
         "turbbox": [turbbox],
         "model_step": np.array([model_step]),
+        "deterministic": np.array([deterministic]),
     }
 
     # Create the dataset

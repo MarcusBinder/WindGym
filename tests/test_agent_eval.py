@@ -235,6 +235,7 @@ def test_agent_eval_multiple_save_load(
         "TI": test_tis,
         "turbbox": test_turbboxes,
         "turb": np.arange(basic_farm_eval_env.n_turb),
+        "deterministic": np.array([False]),
     }
     for coord_name, expected_values in assert_coords.items():
         assert coord_name in multi_ds.coords, f"Coordinate '{coord_name}' missing"
@@ -259,6 +260,7 @@ def test_agent_eval_multiple_save_load(
                 len(test_tis),
                 len(test_turbboxes),
                 1,
+                1,
             )
         elif var_name in ["powerT_a", "yaw_a", "ws_a", "powerT_b", "yaw_b", "ws_b"]:
             expected_shape = (
@@ -268,6 +270,7 @@ def test_agent_eval_multiple_save_load(
                 len(test_winddirs),
                 len(test_tis),
                 len(test_turbboxes),
+                1,
                 1,
             )
         else:
