@@ -21,7 +21,7 @@ from WindGym.Agents.PyWakeAgent import NoisyPyWakeAgent
 from WindGym.utils.generate_layouts import generate_square_grid
 
 # Keep these imports as they were in your original cleanRL script
-from WindGym.wrappers import AdversaryWrapper, CurriculumWrapper
+from WindGym.wrappers import AdversaryWrapper
 
 # Import turbine type from PyWake
 from py_wake.examples.data.hornsrev1 import V80
@@ -72,7 +72,7 @@ class Args:
     """Number of flow passthroughs for episode length in the base env"""
     max_bias_ws: float = 1.0
     """Max wind speed bias for per-turbine sensors (m/s)."""
-    max_bias_wd: float = 5.0
+    max_bias_wd: float = 100.0
     """Max wind direction bias for per-turbine sensors (deg)."""
 
     # Algorithm specific arguments
@@ -162,8 +162,6 @@ class ParametricAdversarialEnv(gym.Env):
             y_pos=y_pos,
             turbine=turbine,
             look_up=True,
-            wd_min=0,
-            wd_max=360,
         )
         self.constraints = constraints
         self.controlled_params = sorted(self.constraints.keys())
@@ -818,7 +816,7 @@ power_mes: {power_current: False, power_rolling_mean: False, power_history_N: 1,
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # Initialize custom logger
-    vector_logger = VectorEnvLogger(writer, args.num_envs)
+    vector_logger = VectorEnvLogger(writer, args.num_envs, n_turbines=n_turb)
 
     # ALGO Logic: Storage setup
     args.batch_size = int(args.num_envs * args.num_steps)
