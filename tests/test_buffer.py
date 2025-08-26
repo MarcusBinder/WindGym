@@ -106,10 +106,7 @@ def test_step_workflow_runs_without_crashing_and_logs_plausible_data(test_config
 
     # We wrap the `step` call in a try/except block to give a clear
     # error message if the workflow itself crashes.
-    try:
-        env.step(action)
-    except Exception as e:
-        pytest.fail(f"The env.step() workflow crashed with an unexpected error: {e}")
+    env.step(action)
 
     # ==========================================================================
     # 3. ASSERT: Check for plausible data, not specific values.
