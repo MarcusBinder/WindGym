@@ -592,6 +592,7 @@ def train_agent(args):
         import traceback
 
         traceback.print_exc()
+        raise (e)
     finally:
         if "vec_env" in locals():
             vec_env.close()

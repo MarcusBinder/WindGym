@@ -165,12 +165,7 @@ def test_plot_wind_grid_results_runs_without_error(mock_savefig, coliseum_instan
     )
 
     # Now, attempt to plot the results
-    try:
-        coliseum_instance.plot_wind_grid_results(
-            dataset, save_path="test_grid_plot.png"
-        )
-    except Exception as e:
-        pytest.fail(f"plot_wind_grid_results raised an unexpected exception: {e}")
+    coliseum_instance.plot_wind_grid_results(dataset, save_path="test_grid_plot.png")
 
     # Check that savefig was called
     mock_savefig.assert_called_once_with(
@@ -268,12 +263,7 @@ def test_coliseum_plot_time_series_runs_without_error(
     )
 
     # Now, attempt to plot the results.
-    try:
-        coliseum_instance_timeseries.plot_time_series_comparison(
-            save_path="test_plot.png"
-        )
-    except Exception as e:
-        pytest.fail(f"plot_time_series_comparison raised an unexpected exception: {e}")
+    coliseum_instance_timeseries.plot_time_series_comparison(save_path="test_plot.png")
 
     # Check that the matplotlib 'savefig' function was called, indicating the plot was generated and saved.
     mock_savefig.assert_called_once()

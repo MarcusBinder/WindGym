@@ -11,3 +11,8 @@ repos:
       # Run the formatter.
       - id: ruff-format
         types_or: [python, pyi]
+     # 🔒 Silent Killers — audit Python for bad exception handling
+  - repo: https://github.com/kilojoules/silent-killers
+    rev: v0.1.7
+    hooks:
+      - id: silent-killers-audit
