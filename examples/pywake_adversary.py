@@ -147,7 +147,7 @@ class ParametricAdversarialEnv(gym.Env):
             turbine=turbine,
             x_pos=x_pos,
             y_pos=y_pos,
-            yaml_path=yaml_path,
+            config=yaml_path,
             Baseline_comp=True,
             reset_init=False,
             n_passthrough=n_passthrough,

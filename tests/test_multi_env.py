@@ -115,7 +115,7 @@ def basic_env_config(tmp_yaml_file):
         "turbine": V80(),  # <--- Changed to real V80() turbine
         "x_pos": [0, 560],  # Two turbines for multi-agent
         "y_pos": [0, 0],
-        "yaml_path": tmp_yaml_file,
+        "config": tmp_yaml_file,
         "turbtype": "None",  # Crucial: disable turbulence generation for speed and determinism
         "reset_init": True,  # Call reset during constructor
         "dt_sim": 1,
@@ -649,7 +649,7 @@ class TestWindFarmEnvMultiCoverage:
             "turbine": MagicMock(),  # Mock turbine
             "x_pos": [0],
             "y_pos": [0],  # Single turbine is fine for this test
-            "yaml_path": tmp_yaml_file,
+            "config": tmp_yaml_file,
             "turbtype": "None",
             "reset_init": True,
             "dt_sim": 3,  # dt_sim = 3

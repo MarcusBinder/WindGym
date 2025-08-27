@@ -441,7 +441,7 @@ def make_env(
     def _init():
         env = WindFarmEnv(
             turbine=wind_turbine(),
-            yaml_path=yaml_path,
+            config=yaml_path,
             TurbBox=turbbox_path,
             seed=seed,
             dt_env=dt_env,
@@ -517,7 +517,7 @@ if __name__ == "__main__":
     # fake env for processing purposes
     temp_env = WindFarmEnv(
         turbine=wind_turbine(),
-        yaml_path=args.yaml_path,
+        config=args.yaml_path,
         TurbBox=args.turbbox_path,
         seed=args.seed,
         dt_env=args.dt_env,

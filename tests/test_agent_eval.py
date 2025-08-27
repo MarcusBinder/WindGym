@@ -110,7 +110,7 @@ def basic_farm_eval_env(temp_yaml_file_factory):
 
     env = FarmEval(
         turbine=V80(),
-        yaml_path=yaml_filepath,
+        config=yaml_filepath,
         x_pos=x_pos,
         y_pos=y_pos,
         turbtype="None",
@@ -170,7 +170,7 @@ def test_agent_eval_multiple_save_load(
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=temp_env_for_single_check_yaml_path,
+        config=temp_env_for_single_check_yaml_path,
         turbtype="None",
         seed=43,
         dt_sim=dt_sim,

@@ -102,7 +102,7 @@ def make_env(n_envs):
         turbine=wind_turbine(),
         n_passthrough=args.max_eps,
         TurbBox="/work/users/manils/rl_timestep/Boxes/V80env/",
-        yaml_path=args.yaml_path,
+        config=args.yaml_path,
         dt_sim=args.dt_sim,
         dt_env=args.dt_env,
         turbtype=args.TI_type,  # the type of turbulence.

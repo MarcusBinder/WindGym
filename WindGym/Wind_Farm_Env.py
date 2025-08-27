@@ -1,4 +1,5 @@
-from typing import Optional
+from __future__ import annotations
+from typing import Any, Dict, Optional, Union
 import numpy as np
 import gymnasium as gym
 import matplotlib.pyplot as plt
@@ -7,6 +8,7 @@ import os
 import gc
 import socket
 import shutil
+from pathlib import Path
 
 # Dynamiks imports
 from dynamiks.dwm import DWMFlowSimulation
@@ -73,7 +75,7 @@ class WindFarmEnv(WindEnv):
         yaw_scaling_max: float = 45,
         TurbBox="Default",
         turbtype="MannGenerate",
-        yaml_path=None,
+        config=None,
         Baseline_comp=False,
         yaw_init=None,
         render_mode=None,
@@ -97,7 +99,10 @@ class WindFarmEnv(WindEnv):
             TI_max_mes: float: The maximum value for the turbulence intensity measurements. Used for internal scaling
             TurbBox: str: The path to the turbulence box files. If Default, then it will use the default turbulence box files.
             turbtype: str: The type of turbulence box that is used. Can be one of the following: MannLoad, MannGenerate, MannFixed, Random, None
-            yaml_path: str: The path to the yaml file that contains the configuration of the environment. TODO make a default value for this
+            config (str | Path | dict): The environment configuration.
+                - If dict: taken directly.
+                - If str/Path to an existing file: loaded from file.
+                - If str containing YAML (multi-line, not a file path): parsed as YAML.
             Baseline_comp: bool: If true, then the environment will compare the performance of the agent with a baseline farm. This is only used in the EnvEval class.
             yaw_init: str: The method for initializing the yaw angles of the turbines. If 'Random', then the yaw angles will be random. Else they will be zeros.
             render_mode: str: The render mode of the environment. If None, then nothing will be rendered. If human, then the environment will be rendered in a window. If rgb_array, then the environment will be rendered as an array.
@@ -171,9 +176,41 @@ class WindFarmEnv(WindEnv):
         # The initial yaw of the turbines. This is used if the yaw_init is "Defined"
         self.yaw_initial = [0]
 
+        ### Old yaml reader. This is now replaced by the config argument
         # Load the configuration
-        self.load_config(yaml_path)
-        self.yaml_path = yaml_path
+        # if yaml_content:
+        #     self.load_config_from_string(yaml_content)
+        # elif yaml_path:
+        #     self.load_config(yaml_path)
+        # else:
+        #     raise ValueError("Either yaml_path or yaml_content must be provided.")
+
+        # self.yaml_path = yaml_path
+
+        # --- Load config ---
+        if config is None:
+            raise ValueError(
+                "A configuration must be provided via the `config` argument."
+            )
+
+        if isinstance(config, dict):
+            cfg = config
+            self.yaml_path = None
+        elif isinstance(config, (str, Path)):
+            config_str = str(config)
+            if os.path.exists(config_str):  # treat as file
+                with open(config_str, "r") as f:
+                    cfg = yaml.safe_load(f) or {}
+                self.yaml_path = config_str
+            else:  # treat as YAML string
+                cfg = yaml.safe_load(config_str) or {}
+                self.yaml_path = None
+        else:
+            raise TypeError(
+                "`config` must be a dict, YAML string, or path to a YAML file."
+            )
+
+        self._apply_config(cfg)
 
         self.n_turb = len(x_pos)  # The number of turbines
 
@@ -490,54 +527,166 @@ class WindFarmEnv(WindEnv):
 
         return new_yaws
 
-    def load_config(self, config_path):
+    def load_config_from_string(self, config: Union[str, Dict[str, Any]]) -> None:
         """
-        This loads in the yaml file, and sets a bunch of internal values.
+        Accepts either a YAML string or a pre-parsed dict.
+        """
+        if isinstance(config, dict):
+            config = config
+        else:
+            config = yaml.safe_load(config) or {}
+        self._apply_config(config)
+
+    def load_config(self, config_path: Union[str, Path]) -> None:
+        """
+        Loads YAML from disk, then applies it.
         """
         with open(config_path, "r") as file:
-            config = yaml.safe_load(file)  # Load the YAML file
+            config = yaml.safe_load(file) or {}
+        self._apply_config(config)
 
-        # Set the attributes of the class based on the config file
+    def _apply_config(self, config: Dict[str, Any]) -> None:
+        """
+        Validates and maps the parsed config dictionary to instance attributes.
+        This is the only place that should set attributes from config.
+        """
+
+        # helpers for clearer errors on missing/invalid sections/keys
+        def require_section(name: str) -> Dict[str, Any]:
+            section = config.get(name)
+            if not isinstance(section, dict):
+                raise ValueError(
+                    f"Config section '{name}' is required and must be a mapping."
+                )
+            return section
+
+        def require_key(section: Dict[str, Any], key: str, section_name: str):
+            if key not in section:
+                raise ValueError(
+                    f"Key '{key}' is required in section '{section_name}'."
+                )
+            return section[key]
+
+        # Top-level fields (optional)
         self.yaw_init = config.get("yaw_init")
         self.BaseController = config.get("BaseController")
         self.ActionMethod = config.get("ActionMethod")
-        # self.Baseline_comp = config.get('Baseline_comp')
         self.Track_power = config.get("Track_power")
 
-        # Unpack the farm params
-        farm_params = config.get("farm")
-        self.yaw_min = farm_params["yaw_min"]
-        self.yaw_max = farm_params["yaw_max"]
-        # self.xDist = farm_params["xDist"]
-        # self.yDist = farm_params["yDist"]
-        # self.nx = farm_params["nx"]
-        # self.ny = farm_params["ny"]
+        # Farm section (required keys)
+        farm = require_section("farm")
+        self.yaw_min = require_key(farm, "yaw_min", "farm")
+        self.yaw_max = require_key(farm, "yaw_max", "farm")
 
-        # get the inflow bounds. Note that these are distinct from the scaling bounds.
-        wind_params = config.get("wind")
-        self.ws_inflow_min = wind_params["ws_min"]
-        self.ws_inflow_max = wind_params["ws_max"]
-        self.TI_inflow_min = wind_params["TI_min"]
-        self.TI_inflow_max = wind_params["TI_max"]
-        self.wd_inflow_min = wind_params["wd_min"]
-        self.wd_inflow_max = wind_params["wd_max"]
+        # Wind section (required keys)
+        wind = require_section("wind")
+        self.ws_inflow_min = require_key(wind, "ws_min", "wind")
+        self.ws_inflow_max = require_key(wind, "ws_max", "wind")
+        self.TI_inflow_min = require_key(wind, "TI_min", "wind")
+        self.TI_inflow_max = require_key(wind, "TI_max", "wind")
+        self.wd_inflow_min = require_key(wind, "wd_min", "wind")
+        self.wd_inflow_max = require_key(wind, "wd_max", "wind")
 
-        self.act_pen = config.get("act_pen")
-        self.power_def = config.get("power_def")
-        self.mes_level = config.get("mes_level")
+        # Measurement & reward sections (optional but commonly expected)
+        self.act_pen = config.get("act_pen", {}) or {}
+        self.power_def = config.get("power_def", {}) or {}
+        self.mes_level = config.get("mes_level", {}) or {}
         self.ws_mes = config.get("ws_mes")
         self.wd_mes = config.get("wd_mes")
         self.yaw_mes = config.get("yaw_mes")
         self.power_mes = config.get("power_mes")
 
+        # Derived / convenience attributes with sensible fallbacks
         self.ti_sample_count = self.mes_level.get("ti_sample_count", 30)
+        self.action_penalty = self.act_pen.get("action_penalty")
+        self.action_penalty_type = self.act_pen.get("action_penalty_type")
+        self.Power_scaling = self.power_def.get("Power_scaling")
+        self.power_avg = self.power_def.get("Power_avg")
+        self.power_reward = self.power_def.get("Power_reward")
 
-        # unpack some more, because we use these later.
-        self.action_penalty = self.act_pen["action_penalty"]
-        self.action_penalty_type = self.act_pen["action_penalty_type"]
-        self.Power_scaling = self.power_def["Power_scaling"]
-        self.power_avg = self.power_def["Power_avg"]
-        self.power_reward = self.power_def["Power_reward"]
+    # def load_config_from_string(self, yaml_content_str):
+    #     config = yaml.safe_load(yaml_content_str)
+
+    #     # Set the attributes of the class based on the config file
+    #     self.yaw_init = config.get("yaw_init")
+    #     self.BaseController = config.get("BaseController")
+    #     self.ActionMethod = config.get("ActionMethod")
+    #     self.Track_power = config.get("Track_power")
+
+    #     # Unpack the farm params
+    #     farm_params = config.get("farm")
+    #     self.yaw_min = farm_params["yaw_min"]
+    #     self.yaw_max = farm_params["yaw_max"]
+
+    #     # get the inflow bounds. Note that these are distinct from the scaling bounds.
+    #     wind_params = config.get("wind")
+    #     self.ws_inflow_min = wind_params["ws_min"]
+    #     self.ws_inflow_max = wind_params["ws_max"]
+    #     self.TI_inflow_min = wind_params["TI_min"]
+    #     self.TI_inflow_max = wind_params["TI_max"]
+    #     self.wd_inflow_min = wind_params["wd_min"]
+    #     self.wd_inflow_max = wind_params["wd_max"]
+
+    #     self.act_pen = config.get("act_pen")
+    #     self.power_def = config.get("power_def")
+    #     self.mes_level = config.get("mes_level")
+    #     self.ws_mes = config.get("ws_mes")
+    #     self.wd_mes = config.get("wd_mes")
+    #     self.yaw_mes = config.get("yaw_mes")
+    #     self.power_mes = config.get("power_mes")
+
+    #     self.ti_sample_count = self.mes_level.get("ti_sample_count", 30)
+
+    #     # unpack some more, because we use these later.
+    #     self.action_penalty = self.act_pen["action_penalty"]
+    #     self.action_penalty_type = self.act_pen["action_penalty_type"]
+    #     self.Power_scaling = self.power_def["Power_scaling"]
+    #     self.power_avg = self.power_def["Power_avg"]
+    #     self.power_reward = self.power_def["Power_reward"]
+
+    # def load_config(self, config_path):
+    #     """
+    #     This loads in the yaml file, and sets a bunch of internal values.
+    #     """
+    #     with open(config_path, "r") as file:
+    #         config = yaml.safe_load(file)  # Load the YAML file
+
+    #     # Set the attributes of the class based on the config file
+    #     self.yaw_init = config.get("yaw_init")
+    #     self.BaseController = config.get("BaseController")
+    #     self.ActionMethod = config.get("ActionMethod")
+    #     self.Track_power = config.get("Track_power")
+
+    #     # Unpack the farm params
+    #     farm_params = config.get("farm")
+    #     self.yaw_min = farm_params["yaw_min"]
+    #     self.yaw_max = farm_params["yaw_max"]
+
+    #     # get the inflow bounds. Note that these are distinct from the scaling bounds.
+    #     wind_params = config.get("wind")
+    #     self.ws_inflow_min = wind_params["ws_min"]
+    #     self.ws_inflow_max = wind_params["ws_max"]
+    #     self.TI_inflow_min = wind_params["TI_min"]
+    #     self.TI_inflow_max = wind_params["TI_max"]
+    #     self.wd_inflow_min = wind_params["wd_min"]
+    #     self.wd_inflow_max = wind_params["wd_max"]
+
+    #     self.act_pen = config.get("act_pen")
+    #     self.power_def = config.get("power_def")
+    #     self.mes_level = config.get("mes_level")
+    #     self.ws_mes = config.get("ws_mes")
+    #     self.wd_mes = config.get("wd_mes")
+    #     self.yaw_mes = config.get("yaw_mes")
+    #     self.power_mes = config.get("power_mes")
+
+    #     self.ti_sample_count = self.mes_level.get("ti_sample_count", 30)
+
+    #     # unpack some more, because we use these later.
+    #     self.action_penalty = self.act_pen["action_penalty"]
+    #     self.action_penalty_type = self.act_pen["action_penalty_type"]
+    #     self.Power_scaling = self.power_def["Power_scaling"]
+    #     self.power_avg = self.power_def["Power_avg"]
+    #     self.power_reward = self.power_def["Power_reward"]
 
     def _init_farm_mes(self):
         """

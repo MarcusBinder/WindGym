@@ -674,7 +674,7 @@ class Coliseum:
             env_factory = Coliseum.create_env_factory_with_site(
                 WindFarmEnv, site,
                 turbine=V80(), x_pos=x_pos, y_pos=y_pos,
-                yaml_path="config.yaml"
+                config="config.yaml"
             )
             coliseum = Coliseum(env_factory, agents)
         """
