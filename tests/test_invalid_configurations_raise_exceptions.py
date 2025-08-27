@@ -178,7 +178,9 @@ class TestInvalidConfigurations:
                 "yaml_config_kwargs": {"BaseController": "InvalidController"},
                 "expected_exception_info": (
                     ValueError,
-                    r"The BaseController must be either Local or Global",
+                    re.escape(
+                        "BaseController must be one of: 'Local', 'Global', 'PyWake[_oracle|_local]'."
+                    ),
                 ),
             },
             id="InvalidBaseController",
