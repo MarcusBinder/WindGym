@@ -121,7 +121,7 @@ def run_env_and_get_reward(
         "turbine": V80(),
         "x_pos": x_pos,
         "y_pos": y_pos,
-        "yaml_path": yaml_filepath,
+        "config": yaml_filepath,
         "seed": 123,
         "dt_sim": 1,
         "dt_env": 10,  # Gives some steps for DWM to run
@@ -238,7 +238,7 @@ def test_power_reward_power_diff(temp_yaml_file_factory, mock_turbulence_env_set
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=yaml_filepath,
+        config=yaml_filepath,
         seed=123,
         dt_sim=1,
         dt_env=10,
@@ -282,7 +282,7 @@ def test_power_reward_power_diff(temp_yaml_file_factory, mock_turbulence_env_set
             turbine=V80(),
             x_pos=x_pos,
             y_pos=y_pos,
-            yaml_path=yaml_filepath_invalid,
+            config=yaml_filepath_invalid,
             reset_init=True,
         )
 
@@ -377,7 +377,7 @@ act_pen:
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=yaml_filepath,
+        config=yaml_filepath,
         seed=123,
         dt_sim=1,
         dt_env=10,

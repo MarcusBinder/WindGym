@@ -91,7 +91,7 @@ def test_step_workflow_runs_without_crashing_and_logs_plausible_data(test_config
         x_pos=np.array([0, 500]),
         y_pos=np.array([0, 0]),
         Baseline_comp=True,
-        yaml_path=str(test_config_file),
+        config=str(test_config_file),
         dt_sim=1,
         dt_env=1,
         turbtype="None",  # Use the simplest simulation type

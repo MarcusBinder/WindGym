@@ -77,7 +77,7 @@ def test_greedy_agent_local_controller(base_example_data_path):
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=yaml_path,
+        config=yaml_path,
         yaw_init="Zeros",  # Start with zero yaw offset
         seed=0,
         Baseline_comp=False,
@@ -122,7 +122,7 @@ def test_greedy_agent_global_controller(base_example_data_path):
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=yaml_path,
+        config=yaml_path,
         yaw_init="Random",  # Test with different init
         seed=1,  # Use a different seed
         Baseline_comp=False,
@@ -168,7 +168,7 @@ def test_random_agent(base_example_data_path):
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=yaml_path,
+        config=yaml_path,
         yaw_init="Zeros",  # always start at zero yaw offset ,
         seed=1,
         turbtype="None",  # Key optimization for speed

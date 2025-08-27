@@ -194,7 +194,7 @@ if __name__ == "__main__":
     env = make_vec_env(
         lambda: WindFarmEnv(
             turbine=wind_turbine(),
-            yaml_path=args.yaml_path,
+            config=args.yaml_path,
             TurbBox=args.turbbox_path,
             seed=args.seed,
             dt_sim=1,

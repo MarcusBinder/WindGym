@@ -83,7 +83,7 @@ def env_factory():
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=yaml_filepath,
+        config=yaml_filepath,
         turbtype="None",
         Baseline_comp=True,
         reset_init=False,
