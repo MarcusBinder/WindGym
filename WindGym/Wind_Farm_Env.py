@@ -8,6 +8,7 @@ import os
 import gc
 import socket
 import shutil
+import math
 from pathlib import Path
 
 # Dynamiks imports
@@ -176,48 +177,11 @@ class WindFarmEnv(WindEnv):
         # The initial yaw of the turbines. This is used if the yaw_init is "Defined"
         self.yaw_initial = [0]
 
-        ### Old yaml reader. This is now replaced by the config argument
-        # Load the configuration
-        # if yaml_content:
-        #     self.load_config_from_string(yaml_content)
-        # elif yaml_path:
-        #     self.load_config(yaml_path)
-        # else:
-        #     raise ValueError("Either yaml_path or yaml_content must be provided.")
-
-        # self.yaml_path = yaml_path
-
         # --- Load config ---
-        if config is None:
-            raise ValueError(
-                "A configuration must be provided via the `config` argument."
-            )
-
-        if isinstance(config, dict):
-            cfg = config
-            self.yaml_path = None
-        elif isinstance(config, (str, Path)):
-            config_str = str(config)
-            if os.path.exists(config_str):  # treat as file
-                with open(config_str, "r") as f:
-                    cfg = yaml.safe_load(f) or {}
-                self.yaml_path = config_str
-            else:  # treat as YAML string
-                cfg = yaml.safe_load(config_str) or {}
-                self.yaml_path = None
-        else:
-            raise TypeError(
-                "`config` must be a dict, YAML string, or path to a YAML file."
-            )
-
+        cfg = self._normalize_config_input(config)
         self._apply_config(cfg)
 
         self.n_turb = len(x_pos)  # The number of turbines
-
-        # Deques that holds the power output of the farm and the baseline farm. This is used for the power reward
-        self.farm_pow_deq = deque(maxlen=self.power_avg)
-        self.base_pow_deq = deque(maxlen=self.power_avg)
-        self.power_len = self.power_avg
 
         # Sets the yaw init method. If Random, then the yaw angles will be random. Else they will be zeros
         # If yaw_init is defined (it will be if we initialize from EnvEval) then set it like this. Else just use the value from the yaml
@@ -271,23 +235,9 @@ class WindFarmEnv(WindEnv):
 
         # Read in the turb boxes
         if turbtype == "MannLoad":
-            if TurbBox is None or not os.path.exists(TurbBox):
-                raise FileNotFoundError(
-                    "turbtype is 'MannLoad' but a valid path was not provided to 'TurbBox'. "
-                    "Please provide a path to your turbulence files or use turbtype='MannGenerate'."
-                )
-
-            if os.path.isfile(TurbBox):
-                self.TF_files.append(TurbBox)
-            else:
-                for f in os.listdir(TurbBox):
-                    if f.startswith("TF_") and f.endswith(".nc"):  # Be more specific
-                        self.TF_files.append(os.path.join(TurbBox, f))
-
-            if not self.TF_files:
-                raise FileNotFoundError(
-                    f"No valid turbulence files (TF_*.nc) found in directory: {TurbBox}"
-                )
+            if not TurbBox:
+                raise FileNotFoundError("Provide 'TurbBox' for turbtype='MannLoad'.")
+            self.TF_files = self._discover_turbulence_files(TurbBox)
 
         # If we need to have a "baseline" farm, then we need to set up the baseline controller
         # This could be moved to the Power_reward check, but I have a feeling this will be expanded in the future, when we include damage.
@@ -386,21 +336,18 @@ class WindFarmEnv(WindEnv):
         # Setting up the baseline controller if we need it
         if self.Baseline_comp:
             # If we compare to some baseline performance, then we also need a controller for that
-            if self.BaseController == "Local":
-                self._base_controller = local_yaw_controller
-            elif self.BaseController == "Global":
-                self._base_controller = global_yaw_controller
-            elif self.BaseController.split("_")[0] == "PyWake":
-                if "_" in self.BaseController:
-                    self.py_agent_mode = self.BaseController.split("_")[1]
-                else:
-                    self.py_agent_mode = "oracle"
-                    # In oracle mode we just use the global conditions always.
+            base = (self.BaseController or "").strip()
+            kind = base.split("_", 1)[0]
 
-                if self.py_agent_mode not in ["oracle", "local"]:
-                    raise ValueError(
-                        "The PyWakeAgent can only be used in oracle or local mode. Please specify the mode in the BaseController string."
-                    )
+            if kind == "Local":
+                self._base_controller = local_yaw_controller
+            elif kind == "Global":
+                self._base_controller = global_yaw_controller
+            elif kind == "PyWake":
+                mode = base.split("_", 1)[1] if "_" in base else "oracle"
+                if mode not in {"oracle", "local"}:
+                    raise ValueError("PyWake mode must be 'oracle' or 'local'.")
+                self.py_agent_mode = mode
 
                 # lookup_mode is true if self.py_agent_mode == "local", else it's false
                 lookup_mode = self.py_agent_mode == "local"
@@ -441,8 +388,9 @@ class WindFarmEnv(WindEnv):
                 self._base_controller = self.PyWakeAgentWrapper
             else:
                 raise ValueError(
-                    "The BaseController must be either Local or Global... For now"
+                    "BaseController must be one of: 'Local', 'Global', 'PyWake[_oracle|_local]'."
                 )
+
             # Definde the turbines
             if self.HTC_path is not None:
                 # If we have a high fidelity turbine model, then we need to load it in
@@ -488,12 +436,12 @@ class WindFarmEnv(WindEnv):
         # oracle mode just uses the global wind conditions, while local mode uses the local wind conditions at the turbines.
         if self.py_agent_mode == "local":
             #  This is a bit crude, and can be improved, but we just use the front most turbine for this.
-            front_tb = np.argmin(self.fs_baseline.windTurbines.positions_xyz[0, :])
-            ws_front = self.fs_baseline.windTurbines.get_rotor_avg_windspeed(
-                include_wakes=True
-            )[:, front_tb]
+            front_tb = np.argmin(fs.windTurbines.positions_xyz[0, :])
+            ws_front = fs.windTurbines.get_rotor_avg_windspeed(include_wakes=True)[
+                :, front_tb
+            ]
             ws_use = np.linalg.norm(ws_front)
-            wd_use = np.rad2deg(np.arctan(ws_front[1] / ws_front[0])) + self.wd
+            wd_use = np.rad2deg(np.arctan2(ws_front[1], ws_front[0])) + self.wd
 
             # Make the wd and ws update somewhat slowly, using polyak averaging
             tau = 0.05
@@ -527,23 +475,28 @@ class WindFarmEnv(WindEnv):
 
         return new_yaws
 
-    def load_config_from_string(self, config: Union[str, Dict[str, Any]]) -> None:
+    def _normalize_config_input(self, config):
         """
-        Accepts either a YAML string or a pre-parsed dict.
+        Normalizes the config input to a dictionary.
         """
-        if isinstance(config, dict):
-            config = config
-        else:
-            config = yaml.safe_load(config) or {}
-        self._apply_config(config)
-
-    def load_config(self, config_path: Union[str, Path]) -> None:
-        """
-        Loads YAML from disk, then applies it.
-        """
-        with open(config_path, "r") as file:
-            config = yaml.safe_load(file) or {}
-        self._apply_config(config)
+        if config is None:
+            raise ValueError(
+                "A configuration must be provided via the `config` argument."
+            )
+        if isinstance(config, dict):  # If it is already a dict, then just return it
+            self.yaml_path = None
+            return config
+        if isinstance(config, (str, Path)):  #
+            p = Path(str(config))
+            config_str = str(config)
+            if os.path.exists(config_str):  # treat as file
+                with open(config_str, "r") as f:
+                    return yaml.safe_load(f) or {}
+                self.yaml_path = config_str
+            else:  # treat as string
+                self.yaml_path = None
+                return yaml.safe_load(str(config)) or {}
+        raise TypeError("`config` must be a dict, YAML string, or path to a YAML file.")
 
     def _apply_config(self, config: Dict[str, Any]) -> None:
         """
@@ -604,90 +557,6 @@ class WindFarmEnv(WindEnv):
         self.power_avg = self.power_def.get("Power_avg")
         self.power_reward = self.power_def.get("Power_reward")
 
-    # def load_config_from_string(self, yaml_content_str):
-    #     config = yaml.safe_load(yaml_content_str)
-
-    #     # Set the attributes of the class based on the config file
-    #     self.yaw_init = config.get("yaw_init")
-    #     self.BaseController = config.get("BaseController")
-    #     self.ActionMethod = config.get("ActionMethod")
-    #     self.Track_power = config.get("Track_power")
-
-    #     # Unpack the farm params
-    #     farm_params = config.get("farm")
-    #     self.yaw_min = farm_params["yaw_min"]
-    #     self.yaw_max = farm_params["yaw_max"]
-
-    #     # get the inflow bounds. Note that these are distinct from the scaling bounds.
-    #     wind_params = config.get("wind")
-    #     self.ws_inflow_min = wind_params["ws_min"]
-    #     self.ws_inflow_max = wind_params["ws_max"]
-    #     self.TI_inflow_min = wind_params["TI_min"]
-    #     self.TI_inflow_max = wind_params["TI_max"]
-    #     self.wd_inflow_min = wind_params["wd_min"]
-    #     self.wd_inflow_max = wind_params["wd_max"]
-
-    #     self.act_pen = config.get("act_pen")
-    #     self.power_def = config.get("power_def")
-    #     self.mes_level = config.get("mes_level")
-    #     self.ws_mes = config.get("ws_mes")
-    #     self.wd_mes = config.get("wd_mes")
-    #     self.yaw_mes = config.get("yaw_mes")
-    #     self.power_mes = config.get("power_mes")
-
-    #     self.ti_sample_count = self.mes_level.get("ti_sample_count", 30)
-
-    #     # unpack some more, because we use these later.
-    #     self.action_penalty = self.act_pen["action_penalty"]
-    #     self.action_penalty_type = self.act_pen["action_penalty_type"]
-    #     self.Power_scaling = self.power_def["Power_scaling"]
-    #     self.power_avg = self.power_def["Power_avg"]
-    #     self.power_reward = self.power_def["Power_reward"]
-
-    # def load_config(self, config_path):
-    #     """
-    #     This loads in the yaml file, and sets a bunch of internal values.
-    #     """
-    #     with open(config_path, "r") as file:
-    #         config = yaml.safe_load(file)  # Load the YAML file
-
-    #     # Set the attributes of the class based on the config file
-    #     self.yaw_init = config.get("yaw_init")
-    #     self.BaseController = config.get("BaseController")
-    #     self.ActionMethod = config.get("ActionMethod")
-    #     self.Track_power = config.get("Track_power")
-
-    #     # Unpack the farm params
-    #     farm_params = config.get("farm")
-    #     self.yaw_min = farm_params["yaw_min"]
-    #     self.yaw_max = farm_params["yaw_max"]
-
-    #     # get the inflow bounds. Note that these are distinct from the scaling bounds.
-    #     wind_params = config.get("wind")
-    #     self.ws_inflow_min = wind_params["ws_min"]
-    #     self.ws_inflow_max = wind_params["ws_max"]
-    #     self.TI_inflow_min = wind_params["TI_min"]
-    #     self.TI_inflow_max = wind_params["TI_max"]
-    #     self.wd_inflow_min = wind_params["wd_min"]
-    #     self.wd_inflow_max = wind_params["wd_max"]
-
-    #     self.act_pen = config.get("act_pen")
-    #     self.power_def = config.get("power_def")
-    #     self.mes_level = config.get("mes_level")
-    #     self.ws_mes = config.get("ws_mes")
-    #     self.wd_mes = config.get("wd_mes")
-    #     self.yaw_mes = config.get("yaw_mes")
-    #     self.power_mes = config.get("power_mes")
-
-    #     self.ti_sample_count = self.mes_level.get("ti_sample_count", 30)
-
-    #     # unpack some more, because we use these later.
-    #     self.action_penalty = self.act_pen["action_penalty"]
-    #     self.action_penalty_type = self.act_pen["action_penalty_type"]
-    #     self.Power_scaling = self.power_def["Power_scaling"]
-    #     self.power_avg = self.power_def["Power_avg"]
-    #     self.power_reward = self.power_def["Power_reward"]
-
     def _init_farm_mes(self):
         """
         This function initializes the farm measurements class.
@@ -739,6 +608,11 @@ class WindFarmEnv(WindEnv):
             ti_sample_count=self.ti_sample_count,
         )
 
+        # Deques that holds the power output of the farm and the baseline farm. This is used for the power reward
+        self.farm_pow_deq = deque(maxlen=self.power_avg)
+        self.base_pow_deq = deque(maxlen=self.power_avg)
+        self.power_len = self.power_avg
+
     def _init_spaces(self):
         """
         This function initializes the observation and action spaces.
@@ -777,7 +651,7 @@ class WindFarmEnv(WindEnv):
         u_speed = self.fs.windTurbines.rotor_avg_windspeed[:, 0]
         v_speed = self.fs.windTurbines.rotor_avg_windspeed[:, 1]
 
-        self.current_wd = np.rad2deg(np.arctan(v_speed / u_speed)) + self.wd
+        self.current_wd = np.rad2deg(np.arctan2(v_speed, u_speed)) + self.wd
 
         self.current_yaw = self.fs.windTurbines.yaw
         self.current_powers = self.fs.windTurbines.power()  # The Power pr turbine
@@ -805,7 +679,7 @@ class WindFarmEnv(WindEnv):
         """
 
         values = self.farm_measurements.get_measurements(scaled=True)
-        return np.clip(values, -1.0, 1.0, dtype=np.float32)
+        return np.clip(values, -1.0, 1.0).astype(np.float32)
 
     def _get_info(self):
         """
@@ -965,7 +839,6 @@ class WindFarmEnv(WindEnv):
             self.site_base = TurbulenceFieldSite(ws=self.ws, turbulenceField=tf_base)
             tf_base = None
         tf_agent = None
-        tf_agent = None
         gc.collect()
 
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
@@ -976,30 +849,26 @@ class WindFarmEnv(WindEnv):
         - The measurements are filled up with the initial values.
 
         """
-        # We need the following line to seed self.np_random
+        # Seed the RNG used by this Env (sets self.np_random)
         super().reset(seed=seed)
         self.timestep = 0
 
-        # Sample global wind conditions and set the site
+        # 1) Global wind conditions + sites
         self._set_windconditions()
         self._def_site()
-        # Restart the measurement class. This is done to make sure that the measurements are not carried over from the last episode
+
+        # 2) Fresh measurement buffers
         self._init_farm_mes()
-
-        # Setup the wind turbines
-        self._init_wts()
-
         if hasattr(self, "farm_measurements") and self.farm_measurements is not None:
             self.farm_measurements.np_random = self.np_random
-            # print(f"DEBUG RESET WindFarmEnv: farm_measurements.np_random ID = {id(self.farm_measurements.np_random)}, state_key[:2] = {self.farm_measurements.np_random.bit_generator.state['state']['key'][:2]}")
         else:
-            print(
-                "WARNING: farm_measurements was not initialized prior to attempting to set its np_random in reset."
-            )
+            print("WARNING: farm_measurements was not initialized before reset.")
 
-        # This is the rated poweroutput of the turbine at the given ws. Used for reward scaling.
+        # Rated power at current ws (for reward scaling)
         self.rated_power = self.turbine.power(self.ws)
 
+        # 3) Turbines + main flow sim
+        self._init_wts()
         self.fs = DWMFlowSimulation(
             site=self.site,
             windTurbines=self.wts,
@@ -1012,10 +881,9 @@ class WindFarmEnv(WindEnv):
                 temporal_filter=self.temporal_filter
             ),
             addedTurbulenceModel=self.addedTurbulenceModel,
-        )  # NOTE, we need this particlemotion to capture the yaw
+        )
 
-        # Set the yaw angles of the farm
-        # NOTE that I use yaw_start and not yaw_min/yaw_max. This is to make sure that the yaw angles are not too large at the start, but still not zero
+        # Initial yaw set (bounded by yaw_start)
         self.fs.windTurbines.yaw = self._yaw_init(
             min_val=-self.yaw_start,
             max_val=self.yaw_start,
@@ -1029,15 +897,12 @@ class WindFarmEnv(WindEnv):
 
         # Time it takes for the flow to travel from one side of the farm to the other
         t_inflow = dist / self.ws
-        # The time it takes for the flow to develop. Also a bit extra.
-        t_developed = int(t_inflow * self.burn_in_passthroughs)
-
-        # Max allowed timesteps
-        self.time_max = int(t_inflow * self.n_passthrough)
+        t_developed = math.ceil(t_inflow * self.burn_in_passthroughs)
+        self.time_max = math.ceil(t_inflow * self.n_passthrough)
 
         if self.n_turb == 1:
             # For a single turbine, base the time on flow passing the rotor diameter
-            self.time_max = int((self.D * self.n_passthrough) / self.ws)
+            self.time_max = math.ceil((self.D * self.n_passthrough) / self.ws)
 
         # Ensure time_max is at least 1 to allow at least one step
         self.time_max = max(1, self.time_max)
@@ -1045,47 +910,7 @@ class WindFarmEnv(WindEnv):
         # first we run the simulation the time it takes the flow to develop
         self.fs.run(t_developed)
 
-        # Fill up our measurement queue first, with the ammount of steps we need to fill up
-        for __ in range(self.steps_on_reset):
-            windspeeds = []
-            winddirs = []
-            yaws = []
-            powers = []
-
-            for _ in range(self.sim_steps_per_env_step):
-                # Step the flow simulation
-                self.fs.step()
-
-                # Make the measurements from the sensor
-                self._take_measurements()
-
-                if self.farm_measurements.turb_TI or self.farm_measurements.farm_TI:
-                    for i in range(self.n_turb):
-                        self.farm_measurements.turb_mes[i].add_hf_ws(self.current_ws[i])
-                    if self.farm_measurements.farm_TI:
-                        self.farm_measurements.farm_mes.add_hf_ws(
-                            np.mean(self.current_ws)
-                        )
-
-                # Put them into the lists
-                windspeeds.append(self.current_ws)
-                winddirs.append(self.current_wd)
-                yaws.append(self.current_yaw)
-                powers.append(self.current_powers)
-
-            mean_windspeed = np.mean(windspeeds, axis=0)
-            mean_winddir = np.mean(winddirs, axis=0)
-            mean_yaw = np.mean(yaws, axis=0)
-            mean_power = np.mean(powers, axis=0)
-
-            # Put them into the mes class, such that the _get_obs() call works as intendet.
-            self.farm_measurements.add_measurements(
-                mean_windspeed, mean_winddir, mean_yaw, mean_power
-            )
-
-            self.farm_pow_deq.append(mean_power.sum())
-
-        # Do the same for the baseline farm
+        # 3b) Baseline flow sim (optional)
         if self.Baseline_comp:
             self.fs_baseline = DWMFlowSimulation(
                 site=self.site_base,
@@ -1100,27 +925,41 @@ class WindFarmEnv(WindEnv):
                 ),
                 addedTurbulenceModel=self.addedTurbulenceModel,
             )
-
+            # Start baseline with same yaw as agent at reset
             self.fs_baseline.windTurbines.yaw = self.fs.windTurbines.yaw
             self.fs_baseline.run(t_developed)
 
-            if self.BaseController.split("_")[0] == "PyWake":
-                # If we are using the PyWake agent as a baseline, we need to set it up
+            # If baseline is PyWake, prime its wind estimate
+            if (self.BaseController or "").split("_")[0] == "PyWake":
                 self.pywake_agent.update_wind(
-                    wind_speed=self.ws,
-                    wind_direction=self.wd,
-                    TI=self.ti,
+                    wind_speed=self.ws, wind_direction=self.wd, TI=self.ti
                 )
                 self.pywake_ws = self.ws
                 self.pywake_wd = self.wd
-            for __ in range(self.hist_max):
-                baseline_powers = []
-                for _ in range(self.sim_steps_per_env_step):
-                    self.fs_baseline.step()
-                    baseline_powers.append(self.fs_baseline.windTurbines.power().sum())
 
-                self.base_pow_deq.append(np.mean(baseline_powers, axis=0))
+        # 4) Fill measurement history window (and power deques)
+        #    Uses the unified inner loop; no action applied during reset.
+        for _ in range(self.steps_on_reset):
+            out = self._advance_and_measure(
+                self.sim_steps_per_env_step,
+                apply_agent_action=False,
+                action=None,
+                include_baseline=self.Baseline_comp,
+            )
 
+        # Push means into measurement buffers
+        self.farm_measurements.add_measurements(
+            out["mean_windspeed"],
+            out["mean_winddir"],
+            out["mean_yaw"],
+            out["mean_power"],
+        )
+        # Power history (farm-level)
+        self.farm_pow_deq.append(out["mean_power"].sum())
+        if self.Baseline_comp:
+            self.base_pow_deq.append(out["baseline_power_mean"].sum())
+
+        # 5) Get observation and info
         observation = self._get_obs()
         info = self._get_info()
 
@@ -1137,16 +976,124 @@ class WindFarmEnv(WindEnv):
         if (
             self.action_penalty < 0.001
         ):  # If the penalty is very small, then we dont need to calculate it
-            return 0
+            return 0.0
 
-        elif self.action_penalty_type == "Change":
-            # The penalty is dependent on the change in values
-            pen_val = np.mean(np.abs(self.old_yaws - self.fs.windTurbines.yaw))
-        elif self.action_penalty_type == "Total":
-            # The penalty is dependent on the total values
-            pen_val = np.mean(np.abs(self.fs.windTurbines.yaw)) / self.yaw_max
+        t = (self.action_penalty_type or "").lower()
+        if t == "change":
+            pen_val = float(np.mean(np.abs(self.old_yaws - self.fs.windTurbines.yaw)))
+        elif t == "total":
+            pen_val = float(
+                np.mean(np.abs(self.fs.windTurbines.yaw)) / max(1e-6, self.yaw_max)
+            )
+        else:
+            pen_val = 0.0
+        return float(self.action_penalty) * pen_val
 
-        return self.action_penalty * pen_val
+    def _advance_and_measure(
+        self,
+        n_sim_steps: int,
+        *,
+        apply_agent_action: bool = False,
+        action: np.ndarray | None = None,
+        include_baseline: bool = False,
+    ):
+        """
+        Advance the simulation n_sim_steps times.
+        Optionally apply the agent action each sim step (yaw or wind method).
+        Optionally step baseline using its controller.
+
+        Returns:
+            dict with keys:
+            - time_array: (n_sim_steps,)
+            - windspeeds, winddirs, yaws, powers: (n_sim_steps, n_turb)
+            - baseline_powers, yaws_baseline, windspeeds_baseline (if include_baseline): same shapes
+            - mean_windspeed, mean_winddir, mean_yaw, mean_power: (n_turb,)
+            - baseline_power_mean (if include_baseline): scalar (farm sum) or (n_turb,) – here we return (n_turb,)
+        """
+        T = n_sim_steps
+        n = self.n_turb
+        time_array = np.zeros(T, dtype=np.float32)
+        windspeeds = np.zeros((T, n), dtype=np.float32)
+        winddirs = np.zeros((T, n), dtype=np.float32)
+        yaws = np.zeros((T, n), dtype=np.float32)
+        powers = np.zeros((T, n), dtype=np.float32)
+
+        if include_baseline:
+            baseline_powers = np.zeros((T, n), dtype=np.float32)
+            yaws_baseline = np.zeros((T, n), dtype=np.float32)
+            windspeeds_baseline = np.zeros((T, n), dtype=np.float32)
+
+        # If in "yaw" mode, we have an action budget that spans the env step
+        if apply_agent_action and self.ActionMethod == "yaw":
+            self.action_remaining = (
+                action * self.yaw_step_env
+            )  # total budget for this env step
+
+        for j in range(T):
+            # 1) Agent yaw update (if any)
+            if apply_agent_action:
+                self._adjust_yaws(action)
+
+            # 2) Step agent flow
+            self.fs.step()
+
+            # 3) Baseline
+            if include_baseline:
+                new_baseline_yaws = self._base_controller(
+                    fs=self.fs_baseline, yaw_step=self.yaw_step_sim
+                )
+                self.fs_baseline.windTurbines.yaw = new_baseline_yaws
+                self.fs_baseline.step()
+
+            # 4) Measurements at this sim step
+            self._take_measurements()
+
+            # HF TI buffering (if requested)
+            if self.farm_measurements.turb_TI or self.farm_measurements.farm_TI:
+                for i in range(self.n_turb):
+                    self.farm_measurements.turb_mes[i].add_hf_ws(self.current_ws[i])
+                if self.farm_measurements.farm_TI:
+                    self.farm_measurements.farm_mes.add_hf_ws(np.mean(self.current_ws))
+
+            # 5) Store arrays
+            windspeeds[j] = self.current_ws
+            winddirs[j] = self.current_wd
+            yaws[j] = self.current_yaw
+            powers[j] = self.current_powers
+            time_array[j] = self.fs.time
+
+            if include_baseline:
+                baseline_powers[j] = self.fs_baseline.windTurbines.power()
+                yaws_baseline[j] = self.fs_baseline.windTurbines.yaw
+                windspeeds_baseline[j] = np.linalg.norm(
+                    self.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
+                )
+
+        # 6) Aggregate to per-env-step means
+        mean_windspeed = np.mean(windspeeds, axis=0)
+        mean_winddir = np.mean(winddirs, axis=0)
+        mean_yaw = np.mean(yaws, axis=0)
+        mean_power = np.mean(powers, axis=0)  # per-turbine
+
+        result = dict(
+            time_array=time_array,
+            windspeeds=windspeeds,
+            winddirs=winddirs,
+            yaws=yaws,
+            powers=powers,
+            mean_windspeed=mean_windspeed,
+            mean_winddir=mean_winddir,
+            mean_yaw=mean_yaw,
+            mean_power=mean_power,
+        )
+        if include_baseline:
+            result.update(
+                baseline_powers=baseline_powers,
+                yaws_baseline=yaws_baseline,
+                windspeeds_baseline=windspeeds_baseline,
+                baseline_power_mean=np.mean(baseline_powers, axis=0),  # per-turbine
+            )
+        return result
 
     def _adjust_yaws(self, action):
         """
@@ -1272,104 +1219,40 @@ class WindFarmEnv(WindEnv):
         # Save the old yaw angles, so we can calculate the change in yaw angles
         self.old_yaws = copy.copy(self.fs.windTurbines.yaw)
 
-        # Run multiple simulation steps for each environment step
-        # Initialize list to store observations
-
-        time_array = np.zeros(self.sim_steps_per_env_step, dtype=np.float32)
-        windspeeds = np.zeros(
-            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
-        )
-        winddirs = np.zeros(
-            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
-        )
-        yaws = np.zeros((self.sim_steps_per_env_step, self.n_turb), dtype=np.float32)
-        powers = np.zeros((self.sim_steps_per_env_step, self.n_turb), dtype=np.float32)
-        baseline_powers = np.zeros(
-            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
-        )
-        yaws_baseline = np.zeros(
-            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
-        )
-        windspeeds_baseline = np.zeros(
-            (self.sim_steps_per_env_step, self.n_turb), dtype=np.float32
+        out = self._advance_and_measure(
+            self.sim_steps_per_env_step,
+            apply_agent_action=True,
+            action=action,
+            include_baseline=self.Baseline_comp,
         )
 
-        if self.ActionMethod == "yaw":
-            self.action_remaining = (
-                action * self.yaw_step_env
-            )  # Over all steps we want to move this ammout
-
-        for j in range(self.sim_steps_per_env_step):
-            self._adjust_yaws(action)  # Adjust the yaw angles of the agent farm
-
-            # Step the flow simulation
-            self.fs.step()
-
-            # If we have baseline comparison, step it too
-            if self.Baseline_comp:
-                new_baseline_yaws = self._base_controller(
-                    fs=self.fs_baseline, yaw_step=self.yaw_step_sim
-                )
-                self.fs_baseline.windTurbines.yaw = new_baseline_yaws
-                self.fs_baseline.step()
-
-                baseline_powers[j] = self.fs_baseline.windTurbines.power()
-                yaws_baseline[j] = self.fs_baseline.windTurbines.yaw
-                windspeeds_baseline[j] = np.linalg.norm(
-                    self.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
-                )
-            # Make the measurements from the sensor
-            self._take_measurements()
-
-            if self.farm_measurements.turb_TI or self.farm_measurements.farm_TI:
-                for i in range(self.n_turb):
-                    self.farm_measurements.turb_mes[i].add_hf_ws(self.current_ws[i])
-                # Also populate the farm-level hf buffer if it's being used for farm_TI
-                if self.farm_measurements.farm_TI:
-                    self.farm_measurements.farm_mes.add_hf_ws(np.mean(self.current_ws))
-
-            # Put them into the lists
-            windspeeds[j] = self.current_ws
-            winddirs[j] = self.current_wd
-            yaws[j] = self.current_yaw
-            powers[j] = self.current_powers
-            time_array[j] = self.fs.time
-
-        mean_windspeed = np.mean(windspeeds, axis=0)
-        mean_winddir = np.mean(winddirs, axis=0)
-        mean_yaw = np.mean(yaws, axis=0)
-
-        mean_power = np.mean(powers, axis=0)  # This is pr turbine
-
-        # Put them into the mes class.
+        # add to measurements/history
         self.farm_measurements.add_measurements(
-            mean_windspeed, mean_winddir, mean_yaw, mean_power
+            out["mean_windspeed"],
+            out["mean_winddir"],
+            out["mean_yaw"],
+            out["mean_power"],
         )
-        self.farm_pow_deq.append(
-            mean_power.sum()
-        )  # Do the sum, because we want for the whole farm.
+        self.farm_pow_deq.append(out["mean_power"].sum())
         if self.Baseline_comp:
-            self.base_pow_deq.append(np.mean(baseline_powers, axis=0).sum())
+            self.base_pow_deq.append(out["baseline_power_mean"].sum())
+
         if np.any(np.isnan(self.farm_pow_deq)):
             raise Exception("NaN Power")
 
+        # Build observation / info
         observation = self._get_obs()
         info = self._get_info()
-
-        # Add extra vals to info dict. Used for the agent_eval_fast
-        info["time_array"] = time_array
-        info["windspeeds"] = windspeeds
-        # info['winddirs'] = winddirs
-        info["yaws"] = yaws
-        info["powers"] = powers
-
+        info["time_array"] = out["time_array"]
+        info["windspeeds"] = out["windspeeds"]
+        info["yaws"] = out["yaws"]
+        info["powers"] = out["powers"]
         if self.Baseline_comp:
-            info["baseline_powers"] = baseline_powers
-            info["yaws_baseline"] = yaws_baseline
-            info["windspeeds_baseline"] = windspeeds_baseline
+            info["baseline_powers"] = out["baseline_powers"]
+            info["yaws_baseline"] = out["yaws_baseline"]
+            info["windspeeds_baseline"] = out["windspeeds_baseline"]
 
         # self.fs_time = self.fs.time  # Save the flow simulation timestep.
-        # Save the power output of the farm
         # Calculate the reward
         # The power production reward with the scaling
         power_rew = self._power_rew() * self.Power_scaling
@@ -1570,14 +1453,21 @@ class WindFarmEnv(WindEnv):
             # If we have the RGB mode.
             pass
 
+    def _discover_turbulence_files(self, root: Union[str, Path]) -> list[str]:
+        p = Path(root)
+        if p.is_file() and p.name.startswith("TF_") and p.suffix == ".nc":
+            return [str(p)]
+        if p.is_dir():
+            files = sorted(str(f) for f in p.glob("TF_*.nc"))
+            if files:
+                return files
+        raise FileNotFoundError(f"No TF_*.nc files found at: {root}")
+
     def close(self):
         plt.close()
         if self.Baseline_comp:
             self.fs_baseline = None
             self.site_base = None
-        self.fs = None
-        self.site = None
-        self.farm_measurements = None
         self.fs = None
         self.site = None
         self.farm_measurements = None
