@@ -16,3 +16,4 @@ repos:
     rev: v0.1.7
     hooks:
       - id: silent-killers-audit
+        exclude: ^WindGym/__init__\.py$

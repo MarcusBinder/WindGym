@@ -2,14 +2,12 @@
 #### GitLab CI Configuration for WindGym #####
 ##############################################
 
+stages: [test, release]
+
 default:
   image: ghcr.io/prefix-dev/pixi:latest
 
-.default_rules: &default_rules
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - when: never
+# -------- TESTS (run on MRs and on main) --------
 
 pre_commit:
   stage: test
@@ -19,25 +17,51 @@ pre_commit:
     - apt-get update && apt-get install -y git
     - pixi run pre-commit run --all-files
   cache:
-    key: pre-commit-cache # Retains cache across all branches
+    key: pre-commit-cache
     paths:
       - ${PRE_COMMIT_HOME}
-  tags:
-    - linux
-  <<: *default_rules
+  tags: [linux]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'  # pushes to main
 
 test_linux:
   stage: test
-  needs:
-    - pre_commit
+  needs: [pre_commit]
   script:
     - apt-get update && apt-get install -y git
     - pixi run pytest -v --cov=windgym --cov-report=html:htmlcov --cov-report=term
   artifacts:
-    paths:
-      - ./htmlcov
+    paths: [./htmlcov]
     when: always
   coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
-  tags:
-    - linux
-  <<: *default_rules
+  tags: [linux]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'  # pushes to main
+
+# -------- RELEASE (auto-bump + tag on push to main) --------
+
+release:
+  stage: release
+  image: python:3.11-slim
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never              # don't run on tag pipelines
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
+      when: on_success         # run only on normal pushes to main (i.e., after MR merge)
+    - when: never
+  before_script:
+    - apt-get update && apt-get install -y git
+    - pip install --upgrade pip
+    - pip install python-semantic-release build
+    - git config user.name "gitlab-ci"
+    - git config user.email "ci@example.com"
+    # allow pushing tags back with a token
+    - git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+    - git fetch --tags --prune --unshallow || git fetch --tags --prune
+  script:
+    - semantic-release version     # decides bump and creates tag vX.Y.Z
+    - semantic-release publish     # creates GitLab Release + writes CHANGELOG.md
+  variables:
+    GL_TOKEN: "${GITLAB_TOKEN}"    # semantic-release reads this for GitLab API
