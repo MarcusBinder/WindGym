@@ -57,8 +57,8 @@ build_command = "python -m build"
 upload_to_repository = false     # no PyPI
 upload_to_release = false        # no wheel upload into GitLab Release asset (can enable later)
 
-[tool.semantic_release.changelog.default_templates]
-changelog_file = "CHANGELOG.md"
+# [tool.semantic_release.changelog.default_templates]
+# changelog_file = "CHANGELOG.md"
 
 [tool.pytest.ini_options]
 testpaths = "tests"
