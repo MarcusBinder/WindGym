@@ -68,8 +68,8 @@ release:
     - git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
 
     # quick diagnostics
-    - echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
-    - echo "Last tag: $(git describe --tags --abbrev=0 || echo 'none')"
+    # - echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
+    # - echo "Last tag: $(git describe --tags --abbrev=0 || echo 'none')"
 
   script:
     - semantic-release version
