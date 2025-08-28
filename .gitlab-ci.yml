@@ -67,8 +67,8 @@ release:
     - git checkout "${CI_DEFAULT_BRANCH}"
 
     # optional: quick diagnostics (nice when debugging)
-    - echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
-    - echo "Last tag: $(git describe --tags --abbrev=0 || echo 'none')"
+    # - echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
+    # - echo "Last tag: $(git describe --tags --abbrev=0 || echo 'none')"
   script:
     - semantic-release version
     - semantic-release publish
