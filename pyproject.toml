@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "WindGym"
+dynamic = ["version"]
 authors = [
   { name="Marcus Nilsen", email="manils@dtu.dk" },
   { name="Julian Quick", email="juqu@dtu.dk" },
