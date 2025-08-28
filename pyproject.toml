@@ -6,16 +6,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "WindGym"
-dynamic = ["version"]
 authors = [
   { name="Marcus Nilsen", email="manils@dtu.dk" },
   { name="Julian Quick", email="juqu@dtu.dk" },
   { name="Ernestas Simutis", email="ernim@dtu.dk" },
-  { name="Teodor Åstrand", email="tobas@dtu.dk" },
 ]
 description = "Wind farm reinforcement learning environment"
 readme = "README.md"
-# version = "0.0.2"
+version = "0.0.2"
 requires-python = ">=3.7, <3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -44,21 +42,7 @@ packages = ["WindGym"]
 
 [tool.setuptools_scm]
 version_file = "WindGym/version.py"
-version_scheme = "guess-next-dev"
-local_scheme = "no-local-version"
-fallback_version = "0.0.0"
-
-[tool.semantic_release]
-commit_parser = "conventional"
-version_source = "tag"          # derive version ONLY from Git tags
-tag_format = "v{version}"       # tags like v0.1.0
-branch = "main"
-build_command = "python -m build"
-upload_to_repository = false     # no PyPI
-upload_to_release = false        # no wheel upload into GitLab Release asset (can enable later)
-
-# [tool.semantic_release.changelog.default_templates]
-# changelog_file = "CHANGELOG.md"
+version_scheme = "no-guess-dev"
 
 [tool.pytest.ini_options]
 testpaths = "tests"

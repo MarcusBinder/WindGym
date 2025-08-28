@@ -2,12 +2,14 @@
 #### GitLab CI Configuration for WindGym #####
 ##############################################
 
-stages: [test, release]
-
 default:
   image: ghcr.io/prefix-dev/pixi:latest
 
-# -------- TESTS (run on MRs and on main) --------
+.default_rules: &default_rules
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - when: never
 
 pre_commit:
   stage: test
@@ -17,68 +19,25 @@ pre_commit:
     - apt-get update && apt-get install -y git
     - pixi run pre-commit run --all-files
   cache:
-    key: pre-commit-cache
+    key: pre-commit-cache # Retains cache across all branches
     paths:
       - ${PRE_COMMIT_HOME}
-  tags: [linux]
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'  # pushes to main
+  tags:
+    - linux
+  <<: *default_rules
 
 test_linux:
   stage: test
-  needs: [pre_commit]
+  needs:
+    - pre_commit
   script:
     - apt-get update && apt-get install -y git
     - pixi run pytest -v --cov=windgym --cov-report=html:htmlcov --cov-report=term
   artifacts:
-    paths: [./htmlcov]
+    paths:
+      - ./htmlcov
     when: always
   coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
-  tags: [linux]
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'  # pushes to main
-
-# -------- RELEASE (auto-bump + tag on push to main) --------
-
-release:
-  stage: release
-  image: python:3.11-slim
-  rules:
-    - if: '$CI_COMMIT_TAG'
-      when: never
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
-      when: on_success
-    - when: never
-  before_script:
-    - |
-      set -e
-      apt-get update && apt-get install -y git
-      pip install --upgrade pip
-      pip install python-semantic-release build
-      git config user.name "gitlab-ci"
-      git config user.email "ci@example.com"
-
-      # ensure we have the branch + tags and are ON the branch (not detached)
-      git fetch origin --prune --tags
-      git fetch origin "${CI_DEFAULT_BRANCH}:${CI_DEFAULT_BRANCH}"
-      git checkout "${CI_DEFAULT_BRANCH}"
-
-      # verify token presence and authenticate pushes
-      if [ -z "$GITLAB_TOKEN" ]; then
-        echo "ERROR: GITLAB_TOKEN is empty/unavailable"
-        exit 1
-      fi
-      git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
-
-      git config remote.origin.push 'refs/tags/*:refs/tags/*'
-
-      # quick diagnostics
-      echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
-      echo "Last tag: $(git describe --tags --abbrev=0 || echo 'none')"
-  script:
-    - semantic-release version
-    - semantic-release publish
-  variables:
-    GL_TOKEN: "${GITLAB_TOKEN}"
+  tags:
+    - linux
+  <<: *default_rules
