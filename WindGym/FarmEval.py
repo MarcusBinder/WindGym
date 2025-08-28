@@ -80,7 +80,6 @@ class FarmEval(WindFarmEnv):
 
     def reset(self, seed=None, options=None):
         # Overwrite the reset function so that we never terminates.
-        # observation, info = WindFarmEnv.reset(self, seed, options)
         observation, info = super().reset(seed=seed, options=options)
         # Only set an "infinite" time_max if the finite_episode flag is False.
         if not self.finite_episode:
