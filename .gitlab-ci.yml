@@ -58,17 +58,19 @@ release:
     - git config user.name "gitlab-ci"
     - git config user.email "ci@example.com"
 
-    # authenticate pushes (tags/releases)
-    - git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
-
-    # make sure we have full history + tags + the branch ref, then CHECKOUT the branch
+    # ensure we have the branch + tags and are ON the branch (not detached)
     - git fetch origin --prune --tags
     - git fetch origin "${CI_DEFAULT_BRANCH}:${CI_DEFAULT_BRANCH}"
     - git checkout "${CI_DEFAULT_BRANCH}"
 
-    # optional: quick diagnostics (nice when debugging)
-    # - echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
-    # - echo "Last tag: $(git describe --tags --abbrev=0 || echo 'none')"
+    # verify token presence and authenticate pushes
+    - test -n "$GITLAB_TOKEN" || (echo "ERROR: GITLAB_TOKEN is empty/unavailable"; exit 1)
+    - git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+
+    # quick diagnostics
+    - echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
+    - echo "Last tag: $(git describe --tags --abbrev=0 || echo 'none')"
+
   script:
     - semantic-release version
     - semantic-release publish

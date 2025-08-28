@@ -49,6 +49,7 @@ local_scheme = "no-local-version"
 fallback_version = "0.0.0"
 
 [tool.semantic_release]
+commit_parser = "conventional"
 version_source = "tag"          # derive version ONLY from Git tags
 tag_format = "v{version}"       # tags like v0.1.0
 branch = "main"
@@ -56,10 +57,6 @@ build_command = "python -m build"
 upload_to_repository = false     # no PyPI
 upload_to_release = false        # no wheel upload into GitLab Release asset (can enable later)
 
-# Conventional Commits → SemVer bump
-commit_parser = "conventional"
-
-# new location for changelog file setting (v10+)
 [tool.semantic_release.changelog.default_templates]
 changelog_file = "CHANGELOG.md"
 
