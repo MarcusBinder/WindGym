@@ -57,9 +57,10 @@ upload_to_repository = false     # no PyPI
 upload_to_release = false        # no wheel upload into GitLab Release asset (can enable later)
 
 # Conventional Commits → SemVer bump
-commit_parser = "angular"
+commit_parser = "conventional"
 
-[tool.semantic_release.changelog]
+# new location for changelog file setting (v10+)
+[tool.semantic_release.changelog.default_templates]
 changelog_file = "CHANGELOG.md"
 
 [tool.pytest.ini_options]
