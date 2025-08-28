@@ -72,6 +72,8 @@ release:
       fi
       git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
 
+      git config remote.origin.push 'refs/tags/*:refs/tags/*'
+
       # quick diagnostics
       echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
       echo "Last tag: $(git describe --tags --abbrev=0 || echo 'none')"
