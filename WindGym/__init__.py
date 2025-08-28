@@ -18,6 +18,7 @@ except Exception:
     # ultimate fallback for odd environments
     try:
         from importlib.metadata import version, PackageNotFoundError
+
         __version__ = version("WindGym")
     except Exception:
         __version__ = "0.0.0"
