@@ -138,6 +138,7 @@ class WindFarmEnv(WindEnv):
         if self.dt_env % self.dt_sim != 0:
             raise ValueError("dt_env must be a multiple of dt_sim")
 
+        self.delay = dt_env  # The delay in seconds. By default just use the dt_env. We cant have smaller delays then this.
         self.sample_site = sample_site
         self.yaw_start = 15.0  # This is the limit for the initialization of the yaw angles. This is used to make sure that the yaw angles are not too large at the start, but still not zero
         # Max power pr turbine. Used in the measurement class
@@ -992,6 +993,7 @@ class WindFarmEnv(WindEnv):
     def _advance_and_measure(
         self,
         n_sim_steps: int,
+        ignore_steps: int = 0,
         *,
         apply_agent_action: bool = False,
         action: np.ndarray | None = None,
@@ -999,6 +1001,7 @@ class WindFarmEnv(WindEnv):
     ):
         """
         Advance the simulation n_sim_steps times.
+        Optionally skip x ammount of measurements for what is meaned over.
         Optionally apply the agent action each sim step (yaw or wind method).
         Optionally step baseline using its controller.
 
@@ -1017,6 +1020,12 @@ class WindFarmEnv(WindEnv):
         winddirs = np.zeros((T, n), dtype=np.float32)
         yaws = np.zeros((T, n), dtype=np.float32)
         powers = np.zeros((T, n), dtype=np.float32)
+
+        # Make sure that ignore_steps is either none, or less than T
+        if ignore_steps >= T:
+            raise ValueError("ignore_steps must be less than n_sim_steps")
+        elif ignore_steps < 0:
+            raise ValueError("ignore_steps must be non-negative")
 
         if include_baseline:
             baseline_powers = np.zeros((T, n), dtype=np.float32)
@@ -1070,10 +1079,10 @@ class WindFarmEnv(WindEnv):
                 )
 
         # 6) Aggregate to per-env-step means
-        mean_windspeed = np.mean(windspeeds, axis=0)
-        mean_winddir = np.mean(winddirs, axis=0)
-        mean_yaw = np.mean(yaws, axis=0)
-        mean_power = np.mean(powers, axis=0)  # per-turbine
+        mean_windspeed = np.mean(windspeeds[ignore_steps:, :], axis=0)
+        mean_winddir = np.mean(winddirs[ignore_steps:, :], axis=0)
+        mean_yaw = np.mean(yaws[ignore_steps:, :], axis=0)
+        mean_power = np.mean(powers[ignore_steps:, :], axis=0)  # per-turbine
 
         result = dict(
             time_array=time_array,
@@ -1219,8 +1228,16 @@ class WindFarmEnv(WindEnv):
         # Save the old yaw angles, so we can calculate the change in yaw angles
         self.old_yaws = copy.copy(self.fs.windTurbines.yaw)
 
+        # This is the ammount of steps we need to do, to ensure we have the correct delay
+        steps_with_delay = (
+            self.sim_steps_per_env_step
+            + ((self.delay - self.dt_env) // self.dt_env) * self.sim_steps_per_env_step
+        )
+        ignore_steps = steps_with_delay - self.sim_steps_per_env_step
+
         out = self._advance_and_measure(
-            self.sim_steps_per_env_step,
+            steps_with_delay,
+            ignore_steps=ignore_steps,
             apply_agent_action=True,
             action=action,
             include_baseline=self.Baseline_comp,
