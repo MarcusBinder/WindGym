@@ -254,7 +254,12 @@ class turb_mes:
         """
 
         return max(
-            [self.ws.history_length, self.wd.history_length, self.yaw.history_length]
+            [
+                self.ws.history_length,
+                self.wd.history_length,
+                self.yaw.history_length,
+                self.power.history_length,
+            ]
         )
 
     def observed_variables(self):

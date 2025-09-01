@@ -143,6 +143,7 @@ class WindFarmEnv(WindEnv):
         self.yaw_start = 15.0  # This is the limit for the initialization of the yaw angles. This is used to make sure that the yaw angles are not too large at the start, but still not zero
         # Max power pr turbine. Used in the measurement class
         self.maxturbpower = max(turbine.power(np.arange(10, 25, 1)))
+        self.baseline_wakes = True  # A flag that decides if we include the wakes in the baseline farm. For now always true.
         # The step size for the yaw angles. How manny degress the yaw angles can change pr. step
         # The distance between the particles. This is used in the flow simulation.
         self.d_particle = 0.2
@@ -948,17 +949,17 @@ class WindFarmEnv(WindEnv):
                 include_baseline=self.Baseline_comp,
             )
 
-        # Push means into measurement buffers
-        self.farm_measurements.add_measurements(
-            out["mean_windspeed"],
-            out["mean_winddir"],
-            out["mean_yaw"],
-            out["mean_power"],
-        )
-        # Power history (farm-level)
-        self.farm_pow_deq.append(out["mean_power"].sum())
-        if self.Baseline_comp:
-            self.base_pow_deq.append(out["baseline_power_mean"].sum())
+            # Push means into measurement buffers
+            self.farm_measurements.add_measurements(
+                out["mean_windspeed"],
+                out["mean_winddir"],
+                out["mean_yaw"],
+                out["mean_power"],
+            )
+            # Power history (farm-level)
+            self.farm_pow_deq.append(out["mean_power"].sum())
+            if self.Baseline_comp:
+                self.base_pow_deq.append(out["baseline_power_mean"].sum())
 
         # 5) Get observation and info
         observation = self._get_obs()
@@ -1072,7 +1073,9 @@ class WindFarmEnv(WindEnv):
             time_array[j] = self.fs.time
 
             if include_baseline:
-                baseline_powers[j] = self.fs_baseline.windTurbines.power()
+                baseline_powers[j] = self.fs_baseline.windTurbines.power(
+                    include_wakes=self.baseline_wakes
+                )
                 yaws_baseline[j] = self.fs_baseline.windTurbines.yaw
                 windspeeds_baseline[j] = np.linalg.norm(
                     self.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
