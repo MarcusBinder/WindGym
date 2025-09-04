@@ -11,6 +11,7 @@ import shutil
 import math
 from pathlib import Path
 
+
 # Dynamiks imports
 from dynamiks.dwm import DWMFlowSimulation
 from dynamiks.dwm.particle_deficit_profiles.ainslie import jDWMAinslieGenerator
@@ -35,7 +36,7 @@ from .BasicControllers import local_yaw_controller, global_yaw_controller
 from .Agents import PyWakeAgent
 
 from py_wake.wind_turbines import WindTurbines as WindTurbinesPW
-from collections import deque
+from collections import deque, defaultdict
 import itertools
 import yaml
 from dynamiks.wind_turbines.hawc2_windturbine import HAWC2WindTurbines
@@ -43,6 +44,9 @@ from dynamiks.dwm.particle_motion_models import CutOffFrq
 
 # For live plotting
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+
+from WindGym.utils.WindProbe import WindProbe
+
 
 CutOffFrqLio2021 = CutOffFrq(4)
 
@@ -184,6 +188,8 @@ class WindFarmEnv(WindEnv):
         self._apply_config(cfg)
 
         self.n_turb = len(x_pos)  # The number of turbines
+
+        self.n_probes_per_turb = self._count_probes_from_config()
 
         # Sets the yaw init method. If Random, then the yaw angles will be random. Else they will be zeros
         # If yaw_init is defined (it will be if we initialize from EnvEval) then set it like this. Else just use the value from the yaml
@@ -559,6 +565,10 @@ class WindFarmEnv(WindEnv):
         self.power_avg = self.power_def.get("Power_avg")
         self.power_reward = self.power_def.get("Power_reward")
 
+        # Unpack the wind speed probe parameters
+        self.probes_config = config.get("probes", [])
+        self.turbine_probes = {}
+
     def _init_farm_mes(self):
         """
         This function initializes the farm measurements class.
@@ -569,6 +579,7 @@ class WindFarmEnv(WindEnv):
         # TODO is history_N is 1 or larger, then it is kinda implied that the rolling_mean is true.. Therefore we can change the if self.rolling_mean: check in the Mes() class, to be a if self.history_N >= 1 check... or something like that
         self.farm_measurements = farm_mes(
             n_turbines=self.n_turb,
+            n_probes_per_turb=self.n_probes_per_turb,
             turb_ws=self.mes_level["turb_ws"],
             turb_wd=self.mes_level["turb_wd"],
             turb_TI=self.mes_level["turb_TI"],
@@ -614,6 +625,134 @@ class WindFarmEnv(WindEnv):
         self.farm_pow_deq = deque(maxlen=self.power_avg)
         self.base_pow_deq = deque(maxlen=self.power_avg)
         self.power_len = self.power_avg
+
+        for i, tm in enumerate(self.farm_measurements.turb_mes):
+            probes = self.turbine_probes.get(i, [])
+            tm.probes = probes
+            tm.n_probes = len(probes)
+            tm.probe_min = self.ws_scaling_min
+            tm.probe_max = self.ws_scaling_max
+
+    def _init_probes_free_placement(self):
+        # Initialize wind speed probes
+        self.probes = []
+        for i, p in enumerate(self.probes_config):
+            probe = WindProbe(
+                env=self,
+                position=tuple(p["position"]),
+                include_wakes=p.get("include_wakes", True),
+                exclude_wake_from=p.get("exclude_wake_from", []),
+                time=p.get("time", None),
+            )
+            probe.name = p.get("name", f"probe_{i}")
+            self.probes.append(probe)
+
+    def _count_probes_from_config(self):
+        """
+        Count how many probes are assigned to each turbine index based on probes_config,
+        without needing to fully initialize the probes.
+        """
+        counts = defaultdict(int)
+        for p in self.probes_config:
+            tid = p.get("turbine_index")
+            if tid is not None:
+                counts[tid] += 1
+        return dict(counts)
+
+    def _init_probes(self, yaw_angles):
+        self.probes = []
+        print(yaw_angles)
+
+        yaw_angles = (
+            np.full(len(self.fs.windTurbines.positions_xyz[0]), yaw_angles)
+            if np.isscalar(yaw_angles)
+            else np.array(yaw_angles)
+        )
+        yaw_angles = np.radians(yaw_angles)
+
+        print(yaw_angles)
+        for i, p in enumerate(self.probes_config):
+            if "turbine_index" in p and "relative_position" in p:
+                tid = p["turbine_index"]
+                rel = p["relative_position"]
+                yaw = yaw_angles[tid]
+
+                rel_x, rel_y = rel[0], rel[1]
+                rel_z = rel[2] if len(rel) > 2 else 0.0
+
+                # Rotate relative position by turbine yaw
+                rel_x_rot = rel_x * math.cos(yaw) - rel_y * math.sin(yaw)
+                rel_y_rot = rel_x * math.sin(yaw) + rel_y * math.cos(yaw)
+
+                # Turbine absolute position
+                tp_x = self.fs.windTurbines.positions_xyz[0][tid]
+                tp_y = self.fs.windTurbines.positions_xyz[1][tid]
+                tp_z = self.fs.windTurbines.positions_xyz[2][tid]
+
+                position = (tp_x + rel_x_rot, tp_y + rel_y_rot, tp_z + rel_z)
+            else:
+                position = tuple(p["position"])
+
+            probe = WindProbe(
+                fs=self.fs,
+                position=position,
+                include_wakes=p.get("include_wakes", True),
+                exclude_wake_from=p.get("exclude_wake_from", []),
+                time=p.get("time", None),
+                probe_type=p.get("probe_type"),
+                yaw_angle=yaw,
+                turbine_position=(tp_x, tp_y, tp_z),
+            )
+
+            # Enforce name and turbine index for lookup
+            probe.name = p.get("name", f"probe_{i}")
+            probe.turbine_index = p.get("turbine_index", None)
+
+            self.probes.append(probe)
+
+        # Group probes per turbine for easy access later
+        from collections import defaultdict
+
+        self.turbine_probes = defaultdict(list)
+        for probe in self.probes:
+            if probe.turbine_index is not None:
+                self.turbine_probes[probe.turbine_index].append(probe)
+
+    def _yaw_probes(self, yaw_angles):
+        # Ensure yaw_angles is numpy array in radians
+        print("Yawing probes")
+
+        yaw_angles = np.radians(yaw_angles)
+
+        for probe in self.probes:
+            # Only update if probe has turbine_index and relative_position info
+            if hasattr(probe, "turbine_index") and probe.turbine_index is not None:
+                tid = probe.turbine_index
+                # Find relative position from config (you might store this in probe on init to avoid lookup)
+                rel = None
+                for pconf in self.probes_config:
+                    if pconf.get("name") == probe.name:
+                        rel = pconf.get("relative_position")
+                        break
+
+                if rel is None:
+                    continue  # Can't rotate without relative position
+
+                yaw = yaw_angles[tid]
+
+                rel_x, rel_y = rel[0], rel[1]
+                rel_z = rel[2] if len(rel) > 2 else 0.0
+
+                rel_x_rot = rel_x * np.cos(yaw) - rel_y * np.sin(yaw)
+                rel_y_rot = rel_x * np.sin(yaw) + rel_y * np.cos(yaw)
+
+                tp_x = self.fs.windTurbines.positions_xyz[0][tid]
+                tp_y = self.fs.windTurbines.positions_xyz[1][tid]
+                tp_z = self.fs.windTurbines.positions_xyz[2][tid]
+
+                new_position = (tp_x + rel_x_rot, tp_y + rel_y_rot, tp_z + rel_z)
+                probe.yaw_angle = yaw
+                probe.position = new_position
 
     def _init_spaces(self):
         """
@@ -893,6 +1032,9 @@ class WindFarmEnv(WindEnv):
             yaws=self.yaw_initial,
         )
 
+        # Must init probes after fs
+        self._init_probes(self.fs.windTurbines.yaw)
+
         # Calulate the time it takes for the flow to develop.
         turb_xpos = self.fs.windTurbines.rotor_positions_xyz[0, :]
         dist = turb_xpos.max() - turb_xpos.min()
@@ -1072,6 +1214,8 @@ class WindFarmEnv(WindEnv):
             powers[j] = self.current_powers
             time_array[j] = self.fs.time
 
+            self._yaw_probes(yaws[j])
+
             if include_baseline:
                 baseline_powers[j] = self.fs_baseline.windTurbines.power(
                     include_wakes=self.baseline_wakes
@@ -1080,6 +1224,7 @@ class WindFarmEnv(WindEnv):
                 windspeeds_baseline[j] = np.linalg.norm(
                     self.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
                 )
+                # update probe positions to follow turbine
 
         # 6) Aggregate to per-env-step means
         mean_windspeed = np.mean(windspeeds[ignore_steps:, :], axis=0)
@@ -1366,6 +1511,8 @@ class WindFarmEnv(WindEnv):
             # Return the RGB frame (for recording, saving, etc.)
             return self._render_frame()
         elif self.render_mode == "human":
+            if not hasattr(self, "view"):
+                self.init_render()
             # Show the frame in a window
             frame = self._render_frame_for_human()
             plt.imshow(frame)
@@ -1383,14 +1530,6 @@ class WindFarmEnv(WindEnv):
             fs_use = self.fs_baseline
         else:
             fs_use = self.fs
-
-        x_turb, y_turb = self.fs.windTurbines.positions_xyz[:2]
-        self.a = np.linspace(-200 + min(x_turb), 1000 + max(x_turb), 250)
-        self.b = np.linspace(-200 + min(y_turb), 200 + max(y_turb), 250)
-
-        self.view = XYView(
-            z=self.turbine.hub_height(), x=self.a, y=self.b, adaptive=False
-        )
 
         uvw = fs_use.get_windspeed(self.view, include_wakes=True, xarray=True)
 
@@ -1414,6 +1553,72 @@ class WindFarmEnv(WindEnv):
             yaw=yaw,
             tilt=tilt,
         )
+        # --- Always set equal aspect ratio for consistent scale ---
+        ax1.set_aspect("equal", adjustable="datalim")
+
+        # Plot probes with color depending on probe type
+        if hasattr(self, "probes"):
+            for probe in self.probes:
+                x, y, _ = probe.position  # assuming probe.position = (x, y, z)
+                probe_type = probe.probe_type.upper()
+
+                # Determine color and label
+                if probe_type == "WS":
+                    color = "red"
+                    label = "WS Probe"
+                    value = float(probe.read())
+                    text = f"{value:.2f} m/s"
+                elif probe_type == "TI":
+                    color = "blue"
+                    label = "TI Probe"
+                    value = float(probe.read())  # scalar
+                    text = f"{value:.2f} TI"
+                else:
+                    color = "gray"
+                    label = "Unknown"
+                    text = "N/A"
+
+                ax1.scatter(x, y, color=color, s=25, marker="o", label=label)
+                ax1.text(
+                    x + 5,
+                    y + 5,
+                    text,
+                    color="black",
+                    fontsize=8,
+                    bbox=dict(facecolor="none", alpha=0.6, edgecolor="none"),
+                )
+
+                speed = float(probe.read())
+                arrow_length = speed * 5
+                # --- Draw inflow direction arrow ---
+                inflow_angle = probe.get_inflow_angle_to_turbine()  # radians
+                dx = arrow_length * np.cos(inflow_angle)
+                dy = arrow_length * np.sin(inflow_angle)
+
+                ax1.arrow(
+                    x,
+                    y,
+                    dx,
+                    dy,
+                    width=1.5,  # makes the shaft thicker
+                    head_width=5.0,  # width of the arrow head
+                    head_length=7.0,  # length of the arrow head
+                    fc=color,
+                    ec=color,
+                    alpha=0.8,
+                    length_includes_head=True,  # ensures arrow length includes head
+                )
+
+                ax1.set_title(f"Flow field at {fs_use.time} s")
+                # ax1.axis('off')  # Hide axes for better visuals
+                # ax1.set_aspect('equal', adjustable='datalim')
+
+        # Avoid duplicate legend entries for multiple probes
+        handles, labels = ax1.get_legend_handles_labels()
+        if labels.count("Probe") > 1:
+            # Remove duplicate labels
+            unique = dict(zip(labels, handles))
+            ax1.legend(unique.values(), unique.keys())
 
         canvas = FigureCanvas(fig)
         canvas.draw()

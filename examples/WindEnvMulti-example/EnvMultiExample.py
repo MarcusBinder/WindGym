@@ -15,8 +15,8 @@ def main():
         y_pos=y_pos,
         n_passthrough=10,  # Number of times wind flows over the farm per episode
         turbtype="Random",  # Turbulence type
-        yaml_path="Env1.yaml",  # Environment configuration file
-        render_mode=None,  # Render mode ("human" or None)
+        config="Env1_with_probes.yaml",  # Environment configuration file
+        render_mode="human",  # Render mode ("human" or None)
     )
 
     print("Environment created successfully!")
