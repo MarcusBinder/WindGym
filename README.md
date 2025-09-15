@@ -1,4 +1,12 @@
-# WindGym
+<p align="center">
+  <img src="assets/logo.png" alt="WindGym Logo" width="400"/>
+</p>
+
+<h1 align="center">WindGym</h1>
+
+<p align="center">
+  <b>Reinforcement Learning Environment for Wind Farm Control</b>  
+</p>
 
 A dynamic wind farm environment for developing and evaluating reinforcement learning agents for wind farm control.
 

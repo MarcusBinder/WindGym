@@ -80,6 +80,7 @@ class WindFarmEnv(WindEnv):
         yaw_scaling_max: float = 45,
         TurbBox="Default",
         turbtype="MannGenerate",
+        backend: str = "dynamiks",
         config=None,
         Baseline_comp=False,
         yaw_init=None,
@@ -120,6 +121,9 @@ class WindFarmEnv(WindEnv):
             HTC_path: str: The path to the high fidelity turbine model. If this is Not none, then we assume you want to use that instead of pywake turbines. Note you still need a pywake version of your turbine.
             reset_init: bool: If True, then the environment will be reset at initialization. This is used to save time for things that call the reset method anyways.
         """
+        self.backend = backend.lower().strip()
+        if self.backend not in {"dynamiks", "pywake"}:
+            raise ValueError("backend must be 'dynamiks' or 'pywake'")
         # Check that x_pos and y_pos are the same length
         if len(x_pos) != len(y_pos):
             raise ValueError("x_pos and y_pos must be the same length")
@@ -141,6 +145,12 @@ class WindFarmEnv(WindEnv):
         self.sim_steps_per_env_step = int(self.dt_env / self.dt_sim)
         if self.dt_env % self.dt_sim != 0:
             raise ValueError("dt_env must be a multiple of dt_sim")
+
+        # If we use pywake as backend, then we need to make sure that the dt_sim and dt_env are the same. This is because pywake is a steady state solver, and therefore does not have a timestep.
+        if self.backend == "pywake" and self.dt_env != self.dt_sim:
+            raise ValueError(
+                "When using pywake as backend, dt_env must be equal to dt_sim"
+            )
 
         self.delay = dt_env  # The delay in seconds. By default just use the dt_env. We cant have smaller delays then this.
         self.sample_site = sample_site
@@ -661,7 +671,6 @@ class WindFarmEnv(WindEnv):
 
     def _init_probes(self, yaw_angles):
         self.probes = []
-        print(yaw_angles)
 
         yaw_angles = (
             np.full(len(self.fs.windTurbines.positions_xyz[0]), yaw_angles)
@@ -670,7 +679,6 @@ class WindFarmEnv(WindEnv):
         )
         yaw_angles = np.radians(yaw_angles)
 
-        print(yaw_angles)
         for i, p in enumerate(self.probes_config):
             if "turbine_index" in p and "relative_position" in p:
                 tid = p["turbine_index"]
@@ -685,9 +693,9 @@ class WindFarmEnv(WindEnv):
                 rel_y_rot = rel_x * math.sin(yaw) + rel_y * math.cos(yaw)
 
                 # Turbine absolute position
-                tp_x = self.fs.windTurbines.positions_xyz[0][tid]
-                tp_y = self.fs.windTurbines.positions_xyz[1][tid]
-                tp_z = self.fs.windTurbines.positions_xyz[2][tid]
+                tp_x = self.fs.windTurbines.rotor_positions_xyz[0][tid]
+                tp_y = self.fs.windTurbines.rotor_positions_xyz[1][tid]
+                tp_z = self.fs.windTurbines.rotor_positions_xyz[2][tid]
 
                 position = (tp_x + rel_x_rot, tp_y + rel_y_rot, tp_z + rel_z)
             else:
@@ -720,7 +728,6 @@ class WindFarmEnv(WindEnv):
 
     def _yaw_probes(self, yaw_angles):
         # Ensure yaw_angles is numpy array in radians
-        print("Yawing probes")
 
         yaw_angles = np.radians(yaw_angles)
 
@@ -746,9 +753,9 @@ class WindFarmEnv(WindEnv):
                 rel_x_rot = rel_x * np.cos(yaw) - rel_y * np.sin(yaw)
                 rel_y_rot = rel_x * np.sin(yaw) + rel_y * np.cos(yaw)
 
-                tp_x = self.fs.windTurbines.positions_xyz[0][tid]
-                tp_y = self.fs.windTurbines.positions_xyz[1][tid]
-                tp_z = self.fs.windTurbines.positions_xyz[2][tid]
+                tp_x = self.fs.windTurbines.rotor_positions_xyz[0][tid]
+                tp_y = self.fs.windTurbines.rotor_positions_xyz[1][tid]
+                tp_z = self.fs.windTurbines.rotor_positions_xyz[2][tid]
 
                 new_position = (tp_x + rel_x_rot, tp_y + rel_y_rot, tp_z + rel_z)
                 probe.yaw_angle = yaw
@@ -911,7 +918,6 @@ class WindFarmEnv(WindEnv):
         - Random: Specifies the 'box' as random turbulence.
         - None: Zero turbulence site.
         """
-
         if self.turbtype == "MannLoad":
             # Load the turbbox from predefined folder somewhere
             # selects one at random from the files that were already discovered in __init__
@@ -996,7 +1002,6 @@ class WindFarmEnv(WindEnv):
 
         # 1) Global wind conditions + sites
         self._set_windconditions()
-        self._def_site()
 
         # 2) Fresh measurement buffers
         self._init_farm_mes()
@@ -1010,19 +1015,43 @@ class WindFarmEnv(WindEnv):
 
         # 3) Turbines + main flow sim
         self._init_wts()
-        self.fs = DWMFlowSimulation(
-            site=self.site,
-            windTurbines=self.wts,
-            wind_direction=self.wd,
-            particleDeficitGenerator=jDWMAinslieGenerator(),
-            dt=self.dt,
-            n_particles=self.n_particles,
-            d_particle=self.d_particle,
-            particleMotionModel=HillVortexParticleMotion(
-                temporal_filter=self.temporal_filter
-            ),
-            addedTurbulenceModel=self.addedTurbulenceModel,
-        )
+
+        if self.backend == "dynamiks":
+            # --- ORIGINAL dynamic backend ---
+            self._def_site()
+
+            self.fs = DWMFlowSimulation(
+                site=self.site,
+                windTurbines=self.wts,
+                wind_direction=self.wd,
+                particleDeficitGenerator=jDWMAinslieGenerator(),
+                dt=self.dt,
+                n_particles=self.n_particles,
+                d_particle=self.d_particle,
+                particleMotionModel=HillVortexParticleMotion(
+                    temporal_filter=self.temporal_filter
+                ),
+                addedTurbulenceModel=self.addedTurbulenceModel,
+            )
+        else:
+            # --- NEW steady-state backend (PyWake) ---
+            if self.HTC_path is not None:
+                raise NotImplementedError(
+                    "pywake_steady backend does not support HAWC2WindTurbines."
+                )
+            from .backend.pywake_adapter import (
+                PyWakeFlowSimulationAdapter,
+            )  # or adjust import path
+
+            self.fs = PyWakeFlowSimulationAdapter(
+                x=np.asarray(self.x_pos, float),
+                y=np.asarray(self.y_pos, float),
+                windTurbine=self.turbine,  # py_wake WindTurbines definition
+                ws=self.ws,
+                wd=self.wd,
+                ti=self.ti,
+                dt=self.dt,
+            )
 
         # Initial yaw set (bounded by yaw_start)
         self.fs.windTurbines.yaw = self._yaw_init(
@@ -1051,27 +1080,51 @@ class WindFarmEnv(WindEnv):
         # Ensure time_max is at least 1 to allow at least one step
         self.time_max = max(1, self.time_max)
 
-        # first we run the simulation the time it takes the flow to develop
-        self.fs.run(t_developed)
-
         # 3b) Baseline flow sim (optional)
         if self.Baseline_comp:
-            self.fs_baseline = DWMFlowSimulation(
-                site=self.site_base,
-                windTurbines=self.wts_baseline,
-                wind_direction=self.wd,
-                particleDeficitGenerator=jDWMAinslieGenerator(),
-                dt=self.dt,
-                n_particles=self.n_particles,
-                d_particle=self.d_particle,
-                particleMotionModel=HillVortexParticleMotion(
-                    temporal_filter=self.temporal_filter
-                ),
-                addedTurbulenceModel=self.addedTurbulenceModel,
-            )
+            if self.backend == "dynamiks":
+                self.fs_baseline = DWMFlowSimulation(
+                    site=self.site_base,
+                    windTurbines=self.wts_baseline,
+                    wind_direction=self.wd,
+                    particleDeficitGenerator=jDWMAinslieGenerator(),
+                    dt=self.dt,
+                    n_particles=self.n_particles,
+                    d_particle=self.d_particle,
+                    particleMotionModel=HillVortexParticleMotion(
+                        temporal_filter=self.temporal_filter
+                    ),
+                    addedTurbulenceModel=self.addedTurbulenceModel,
+                )
+            else:
+                if self.HTC_path is not None:
+                    raise NotImplementedError(
+                        "pywake_steady baseline does not support HAWC2WindTurbines."
+                    )
+                from .backend.pywake_adapter import PyWakeFlowSimulationAdapter
+
+                self.fs_baseline = PyWakeFlowSimulationAdapter(
+                    x=np.asarray(self.x_pos, float),
+                    y=np.asarray(self.y_pos, float),
+                    windTurbine=self.turbine,
+                    ws=self.ws,
+                    wd=self.wd,
+                    ti=self.ti,
+                    dt=self.dt,
+                )
+
             # Start baseline with same yaw as agent at reset
             self.fs_baseline.windTurbines.yaw = self.fs.windTurbines.yaw
-            self.fs_baseline.run(t_developed)
+
+            if self.backend == "dynamiks":
+                self.fs.run(t_developed)
+                if self.Baseline_comp:
+                    self.fs_baseline.run(t_developed)
+            else:
+                # Steady-state: nothing to "develop", but keep API consistent
+                self.fs.run(0)
+                if self.Baseline_comp:
+                    self.fs_baseline.run(0)
 
             # If baseline is PyWake, prime its wind estimate
             if (self.BaseController or "").split("_")[0] == "PyWake":
@@ -1672,6 +1725,10 @@ class WindFarmEnv(WindEnv):
             yaw=fs_use.windTurbines.yaw,
             ax=ax,
         )
+        ax.set_title("Flow field at {} s".format(fs_use.time))
+        ax.set_aspect("equal", adjustable="datalim")
+        display.display(plt.gcf())
+        display.clear_output(wait=True)
 
         ax.set_title(f"Flow Field at Time: {fs_use.time:.1f} s")
         ax.set_xlabel("x [m]")
