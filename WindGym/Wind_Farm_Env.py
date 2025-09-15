@@ -62,7 +62,7 @@ For now it only supports the PyWakeWindTurbines, but it should be easy to expand
 
 
 class WindFarmEnv(WindEnv):
-    metadata = {"render_modes": ["human"]}
+    metadata = {"render_modes": ["human", "rgb_array"]}
 
     def __init__(
         self,
@@ -1683,54 +1683,68 @@ class WindFarmEnv(WindEnv):
 
     def _render_frame(self, baseline=False):
         """
-        This is the rendering function.
-        It renders the flow field and the wind turbines
-        Can be much improved, but it is a start
+        Renders the current environment state and returns the frame as an RGB array.
         """
+        # Ensure render objects like self.view are initialized
+        if not hasattr(self, "view"):
+            self.init_render()
 
-        plt.ion()
-        ax1 = plt.gca()
+        # Use the figure and axis created during initialization
+        fig = self.figure
+        ax = self.ax
+        ax.cla()  # Clear the axis for the new frame
 
-        if baseline:
-            fs_use = self.fs_baseline
-        else:
-            fs_use = self.fs
+        fs_use = self.fs_baseline if baseline else self.fs
 
-        uvw = fs_use.get_windspeed(self.view, include_wakes=True, xarray=True)
+        # Define a temporary view for this frame's plot
+        temp_view = XYView(
+            z=self.turbine.hub_height(), x=self.a, y=self.b, ax=ax, adaptive=False
+        )
+        uvw = fs_use.get_windspeed(temp_view, include_wakes=True, xarray=True)
 
-        wt = fs_use.windTurbines
-        x_turb, y_turb = fs_use.windTurbines.positions_xyz[:2]
-        yaw, tilt = wt.yaw_tilt()
+        # Plot the wind speed heatmap
+        ax.pcolormesh(
+            uvw.x.values,
+            uvw.y.values,
+            uvw[0].T,
+            shading="auto",
+            cmap="viridis",
+            vmin=3,
+            vmax=self.ws + 2,
+        )
 
-        # Redudante init_render?
-        """
-        #Init render can now be called as fs needs to be created first
-        #if self.render_mode == "human":
-        #    self.init_render()
-        """
-        # [0] is the u component of the wind speed
-        plt.pcolormesh(uvw.x.values, uvw.y.values, uvw[0].T, shading="nearest")
+        # Get turbine coordinates correctly from .positions_xyz
+        x_turb, y_turb, _ = fs_use.windTurbines.positions_xyz
+
+        # Plot the turbines using the robust method from py_wake
         WindTurbinesPW.plot_xy(
             fs_use.windTurbines,
             x_turb,
             y_turb,
-            types=fs_use.windTurbines.types,
             wd=fs_use.wind_direction,
-            ax=ax1,
-            yaw=yaw,
-            tilt=tilt,
+            yaw=fs_use.windTurbines.yaw,
+            ax=ax,
         )
-        ax1.set_title("Flow field at {} s".format(fs_use.time))
-        ax1.set_aspect("equal", adjustable="datalim")
+        ax.set_title("Flow field at {} s".format(fs_use.time))
+        ax.set_aspect("equal", adjustable="datalim")
         display.display(plt.gcf())
         display.clear_output(wait=True)
 
-        if self.render_mode == "human":
-            pass
+        ax.set_title(f"Flow Field at Time: {fs_use.time:.1f} s")
+        ax.set_xlabel("x [m]")
+        ax.set_ylabel("y [m]")
+        ax.set_aspect("equal", adjustable="box")
+        fig.tight_layout()
 
-        else:
-            # If we have the RGB mode.
-            pass
+        # *** FIX: Use the modern method to capture the canvas to a NumPy array ***
+        canvas = FigureCanvas(fig)
+        canvas.draw()
+        buf = canvas.buffer_rgba()
+        frame = np.asarray(buf)[
+            :, :, :3
+        ]  # Convert buffer to array and keep only RGB channels
+
+        return frame
 
     def _discover_turbulence_files(self, root: Union[str, Path]) -> list[str]:
         p = Path(root)
