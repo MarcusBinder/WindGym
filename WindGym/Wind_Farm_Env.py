@@ -693,9 +693,9 @@ class WindFarmEnv(WindEnv):
                 rel_y_rot = rel_x * math.sin(yaw) + rel_y * math.cos(yaw)
 
                 # Turbine absolute position
-                tp_x = self.fs.windTurbines.positions_xyz[0][tid]
-                tp_y = self.fs.windTurbines.positions_xyz[1][tid]
-                tp_z = self.fs.windTurbines.positions_xyz[2][tid]
+                tp_x = self.fs.windTurbines.rotor_positions_xyz[0][tid]
+                tp_y = self.fs.windTurbines.rotor_positions_xyz[1][tid]
+                tp_z = self.fs.windTurbines.rotor_positions_xyz[2][tid]
 
                 position = (tp_x + rel_x_rot, tp_y + rel_y_rot, tp_z + rel_z)
             else:
@@ -753,9 +753,9 @@ class WindFarmEnv(WindEnv):
                 rel_x_rot = rel_x * np.cos(yaw) - rel_y * np.sin(yaw)
                 rel_y_rot = rel_x * np.sin(yaw) + rel_y * np.cos(yaw)
 
-                tp_x = self.fs.windTurbines.positions_xyz[0][tid]
-                tp_y = self.fs.windTurbines.positions_xyz[1][tid]
-                tp_z = self.fs.windTurbines.positions_xyz[2][tid]
+                tp_x = self.fs.windTurbines.rotor_positions_xyz[0][tid]
+                tp_y = self.fs.windTurbines.rotor_positions_xyz[1][tid]
+                tp_z = self.fs.windTurbines.rotor_positions_xyz[2][tid]
 
                 new_position = (tp_x + rel_x_rot, tp_y + rel_y_rot, tp_z + rel_z)
                 probe.yaw_angle = yaw
