@@ -1766,6 +1766,47 @@ class WindFarmEnv(WindEnv):
         self.farm_measurements = None
         gc.collect()
 
+    def plot_farm(self, baseline=False):
+        """
+        This is the old plot_frame function, which plots the entire farm layout
+        """
+        self.init_render()
+        self._render_farm(baseline=baseline)
+
+    def _render_farm(self, baseline=False):
+        """
+        ):
+        """
+        plt.ion()
+        ax1 = plt.gca()
+
+        if baseline:
+            fs_use = self.fs_baseline
+        else:
+            fs_use = self.fs
+
+        uvw = fs_use.get_windspeed(self.view, include_wakes=True, xarray=True)
+
+        wt = fs_use.windTurbines
+        x_turb, y_turb = fs_use.windTurbines.positions_xyz[:2]
+        yaw, tilt = wt.yaw_tilt()
+
+        plt.pcolormesh(uvw.x.values, uvw.y.values, uvw[0].T, shading="nearest")
+        WindTurbinesPW.plot_xy(
+            fs_use.windTurbines,
+            x_turb,
+            y_turb,
+            # types=fs_use.windTurbines.types,
+            wd=fs_use.wind_direction,
+            ax=ax1,
+            yaw=yaw,
+            tilt=tilt,
+        )
+        ax1.set_title("Flow field at {} s".format(fs_use.time))
+        ax1.set_aspect("equal", adjustable="datalim")
+        display.display(plt.gcf())
+        display.clear_output(wait=True)
+
     def plot_frame(self, baseline=False):
         """
         Plots a single frame of the flow field and the wind turbines
