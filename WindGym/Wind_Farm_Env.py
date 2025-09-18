@@ -315,7 +315,8 @@ class WindFarmEnv(WindEnv):
         if self.wts_baseline is not None:
             self.wts_baseline = None
 
-        if self.HTC_path is not None:
+        if self.HTC_path is not None:  # pragma: no cover
+            # TODO HTC stuff is not covered by the tests atm
             # If we have a high fidelity turbine model, then we need to load it in
 
             # We need to make a unique string, such that the results file doenst get overwritten
@@ -410,7 +411,7 @@ class WindFarmEnv(WindEnv):
                 )
 
             # Definde the turbines
-            if self.HTC_path is not None:
+            if self.HTC_path is not None:  # pragma: no cover
                 # If we have a high fidelity turbine model, then we need to load it in
                 self.wts_baseline = HAWC2WindTurbines(
                     x=self.x_pos,
@@ -1517,7 +1518,7 @@ class WindFarmEnv(WindEnv):
 
         return observation, reward, terminated, truncated, info
 
-    def _deleteHAWCfolder(self):
+    def _deleteHAWCfolder(self):  # pragma: no cover
         """
         This deletes the HAWC2 results folder from the directory.
         This is done to make sure we keep it nice and clean
@@ -1773,7 +1774,7 @@ class WindFarmEnv(WindEnv):
         self.init_render()
         self._render_farm(baseline=baseline)
 
-    def _render_farm(self, baseline=False):
+    def _render_farm(self, baseline=False):  # pragma: no cover
         """
         ):
         """
