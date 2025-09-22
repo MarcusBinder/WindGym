@@ -1726,10 +1726,6 @@ class WindFarmEnv(WindEnv):
             yaw=fs_use.windTurbines.yaw,
             ax=ax,
         )
-        ax.set_title("Flow field at {} s".format(fs_use.time))
-        ax.set_aspect("equal", adjustable="datalim")
-        display.display(plt.gcf())
-        display.clear_output(wait=True)
 
         ax.set_title(f"Flow Field at Time: {fs_use.time:.1f} s")
         ax.set_xlabel("x [m]")
@@ -1804,7 +1800,7 @@ class WindFarmEnv(WindEnv):
             tilt=tilt,
         )
         ax1.set_title("Flow field at {} s".format(fs_use.time))
-        ax1.set_aspect("equal", adjustable="datalim")
+        ax1.set_aspect("equal", adjustable="box")
         display.display(plt.gcf())
         display.clear_output(wait=True)
 
