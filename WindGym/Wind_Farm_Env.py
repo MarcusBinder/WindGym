@@ -95,6 +95,7 @@ class WindFarmEnv(WindEnv):
         HTC_path=None,
         reset_init=True,
         burn_in_passthroughs=2,  # number of passthroughs before episode starts
+        cleanup_on_time_limit: bool = True,
     ):
         """
         This is a steadystate environment. The environment only ever changes wind conditions at reset. Then the windconditions are constatnt for the rest of the episode
@@ -120,6 +121,7 @@ class WindFarmEnv(WindEnv):
             sample_site: pywake site that includes information about the wind conditions. If None we sample uniformly from within the limits.
             HTC_path: str: The path to the high fidelity turbine model. If this is Not none, then we assume you want to use that instead of pywake turbines. Note you still need a pywake version of your turbine.
             reset_init: bool: If True, then the environment will be reset at initialization. This is used to save time for things that call the reset method anyways.
+            cleanup_on_time_limit: bool: If True, then the environment will clean up the HAWC2 files when the maximum time is reached. This is to avoid filling up the disk with files.
         """
         self.backend = backend.lower().strip()
         if self.backend not in {"dynamiks", "pywake"}:
@@ -132,6 +134,7 @@ class WindFarmEnv(WindEnv):
         self.wts = None
         self.wts_baseline = None
         self.burn_in_passthroughs = burn_in_passthroughs
+        self.cleanup_on_time_limit = cleanup_on_time_limit
         # The power setpoint for the farm. This is used if the Track_power is True. (Not used yet)
         self.power_setpoint = 0.0
         self.act_var = (
@@ -268,7 +271,8 @@ class WindFarmEnv(WindEnv):
         self._init_farm_mes()
 
         # The maximum history length of the measurements
-        self.hist_max = self.farm_measurements.max_hist()
+        # self.hist_max = self.farm_measurements.max_hist()
+        self.hist_max = max(self.power_avg, self.farm_measurements.max_hist())
 
         # Figure out the ammount of steps to do at the reset
         if self.fill_window is True:
@@ -848,6 +852,7 @@ class WindFarmEnv(WindEnv):
             "Wind direction at farm measured": self.farm_measurements.get_wd_farm(),
             "Turbulence intensity": self.ti,
             "Power agent": self.fs.windTurbines.power().sum(),
+            "Power agent nowake": self.fs.windTurbines.power(include_wakes=False).sum(),
             "Power pr turbine agent": self.fs.windTurbines.power(),
             "Turbine x positions": self.fs.windTurbines.positions_xyz[0],
             "Turbine y positions": self.fs.windTurbines.positions_xyz[1],
@@ -1492,23 +1497,8 @@ class WindFarmEnv(WindEnv):
             # terminated = {a: True for a in self.agents}
             truncated = True
             # Clean up the flow simulation. This is to make sure that we dont have a memory leak.
-            if self.Baseline_comp:
-                if self.HTC_path is not None:
-                    self.wts_baseline.h2.close()
-                self.fs_baseline = None
-                self.site_base = None
-
-            if self.HTC_path is not None:
-                # Close the connections
-                self.wts.h2.close()
-                self.wts_baseline.h2.close()
-                # Delete the directory
-                self._deleteHAWCfolder()
-
-            self.fs = None
-            self.site = None
-            self.farm_measurements = None
-            gc.collect()
+            if self.cleanup_on_time_limit:
+                self._cleanup_resources()
         else:
             truncated = False
 
@@ -1518,7 +1508,27 @@ class WindFarmEnv(WindEnv):
 
         return observation, reward, terminated, truncated, info
 
-    def _deleteHAWCfolder(self):  # pragma: no cover
+    def _cleanup_resources(self) -> None:
+        """Close handles, delete temp dirs, drop heavy refs to avoid leaks."""
+        if self.Baseline_comp:
+            if self.HTC_path is not None:
+                self.wts_baseline.h2.close()
+            self.fs_baseline = None
+            self.site_base = None
+
+        if self.HTC_path is not None:
+            # Close the connections
+            self.wts.h2.close()
+            self.wts_baseline.h2.close()
+            # Delete the directory
+            self._deleteHAWCfolder()
+
+        self.fs = None
+        self.site = None
+        self.farm_measurements = None
+        gc.collect()
+
+    def _deleteHAWCfolder(self):
         """
         This deletes the HAWC2 results folder from the directory.
         This is done to make sure we keep it nice and clean

@@ -47,7 +47,7 @@ def get_base_yaml_dict(nx=2, ny=1, history_length=5, window_length=2, history_n=
         "act_pen": {"action_penalty": 0.0, "action_penalty_type": "Change"},
         "power_def": {
             "Power_reward": "Baseline",
-            "Power_avg": 50,
+            "Power_avg": 1,
             "Power_scaling": 1.0,
         },
         "mes_level": {
