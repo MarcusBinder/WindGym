@@ -10,6 +10,7 @@ authors = [
   { name="Marcus Nilsen", email="manils@dtu.dk" },
   { name="Julian Quick", email="juqu@dtu.dk" },
   { name="Ernestas Simutis", email="ernim@dtu.dk" },
+  { name="Teodor Olof Benedict Åstrand", email="tobas@dtu.dk" },
 ]
 description = "Wind farm reinforcement learning environment"
 readme = "README.md"
