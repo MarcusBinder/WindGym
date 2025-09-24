@@ -1,10 +1,6 @@
 Contributing Guide
 ==================
-WindGym was started under IEA Wind Task 37 and has been additionally supported by IEA Wind Task 55
-as well as other community-based groups, research organization, and private companies.
-Being a collaborative effort, it is important to establish a common understanding of the
-rules, responsibilities, and expectations from all stakeholders.
-**This document outlines the processes and guidelines for contributing to WindGym.**
+This document outlines the processes and guidelines for contributing to WindGym.
 
 The WindGym repository includes JSON schemas, YAML and NetCDF files that describe examples
 of wind energy systems conforming to the schemas, Python code for working with the schemas
