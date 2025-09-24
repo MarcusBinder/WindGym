@@ -85,7 +85,7 @@ def test_step_determinism_basic(deterministic_env_config_path):
             turbine=V80(),
             x_pos=x_pos,
             y_pos=y_pos,
-            yaml_path=deterministic_env_config_path,
+            config=deterministic_env_config_path,
             seed=common_seed,
             dt_sim=1,
             dt_env=10,
@@ -165,7 +165,7 @@ def test_step_determinism_with_noise(
             turbine=V80(),
             x_pos=x_pos,
             y_pos=y_pos,
-            yaml_path=noisy_yaml_filepath,  # Use the modified YAML path
+            config=noisy_yaml_filepath,  # Use the modified YAML path
             seed=common_seed,
             dt_sim=1,
             dt_env=10,

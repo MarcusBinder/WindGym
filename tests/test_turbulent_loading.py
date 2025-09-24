@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 import yaml
 import xarray as xr
+import re
 
 from WindGym import WindFarmEnv
 from py_wake.examples.data.hornsrev1 import V80
@@ -162,7 +163,7 @@ class TestTurbulenceLoading:
             turbine=V80(),
             x_pos=x_pos,
             y_pos=y_pos,
-            yaml_path=yaml_filepath,
+            config=yaml_filepath,
             turbtype="None",
             reset_init=True,
             seed=42,
@@ -198,7 +199,7 @@ class TestTurbulenceLoading:
             turbine=V80(),
             x_pos=x_pos,
             y_pos=y_pos,
-            yaml_path=yaml_filepath,
+            config=yaml_filepath,
             turbtype="MannLoad",
             TurbBox=str(tf_file_path),
             reset_init=True,
@@ -244,7 +245,7 @@ class TestTurbulenceLoading:
             turbine=V80(),
             x_pos=x_pos,
             y_pos=y_pos,
-            yaml_path=yaml_filepath,
+            config=yaml_filepath,
             turbtype="MannLoad",
             TurbBox=str(turb_dir),
             reset_init=True,
@@ -279,12 +280,15 @@ class TestTurbulenceLoading:
         x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
 
         # Use pytest.raises to assert that the expected exception is thrown
-        with pytest.raises(FileNotFoundError, match="No valid turbulence files"):
+        with pytest.raises(
+            FileNotFoundError,
+            match=re.escape(f"No TF_*.nc files found at: {empty_turb_dir}"),
+        ):
             WindFarmEnv(
                 turbine=V80(),
                 x_pos=x_pos,
                 y_pos=y_pos,
-                yaml_path=yaml_filepath,
+                config=yaml_filepath,
                 turbtype="MannLoad",
                 TurbBox=str(empty_turb_dir),
                 reset_init=True,
@@ -309,7 +313,7 @@ class TestTurbulenceLoading:
             turbine=V80(),
             x_pos=x_pos,
             y_pos=y_pos,
-            yaml_path=yaml_filepath,
+            config=yaml_filepath,
             turbtype="MannGenerate",
             reset_init=True,
             seed=42,
@@ -332,7 +336,7 @@ class TestTurbulenceLoading:
             turbine=V80(),
             x_pos=x_pos,
             y_pos=y_pos,
-            yaml_path=yaml_filepath,
+            config=yaml_filepath,
             turbtype="Random",
             reset_init=True,
             seed=42,
@@ -353,7 +357,7 @@ class TestTurbulenceLoading:
                 turbine=V80(),
                 x_pos=x_pos,
                 y_pos=y_pos,
-                yaml_path=yaml_filepath,
+                config=yaml_filepath,
                 turbtype="ThisIsAnInvalidTurbulenceType",
                 reset_init=True,
                 seed=42,
@@ -377,7 +381,7 @@ class TestTurbulenceLoading:
             turbine=V80(),
             x_pos=x_pos,
             y_pos=y_pos,
-            yaml_path=yaml_filepath,
+            config=yaml_filepath,
             turbtype="MannFixed",
             reset_init=True,
             seed=123,
@@ -401,23 +405,28 @@ class TestTurbulenceLoading:
         invalid_path = "./this/path/does/not/exist"
 
         # Test with a non-existent path
-        with pytest.raises(FileNotFoundError, match="a valid path was not provided"):
+        with pytest.raises(
+            FileNotFoundError,
+            match=re.escape(f"No TF_*.nc files found at: {invalid_path}"),
+        ):
             WindFarmEnv(
                 turbine=V80(),
                 x_pos=x_pos,
                 y_pos=y_pos,
-                yaml_path=yaml_filepath,
+                config=yaml_filepath,
                 turbtype="MannLoad",
                 TurbBox=invalid_path,
             )
 
         # Test with TurbBox=None
-        with pytest.raises(FileNotFoundError, match="a valid path was not provided"):
+        with pytest.raises(
+            FileNotFoundError, match="Provide 'TurbBox' for turbtype='MannLoad'."
+        ):
             WindFarmEnv(
                 turbine=V80(),
                 x_pos=x_pos,
                 y_pos=y_pos,
-                yaml_path=yaml_filepath,
+                config=yaml_filepath,
                 turbtype="MannLoad",
                 TurbBox=None,
             )

@@ -120,7 +120,7 @@ def test_initial_settings_loading(temp_yaml_file_factory, setting, value):
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=yaml_filepath,
+        config=yaml_filepath,
         reset_init=False,
     )  # reset_init=False to speed up, only check config loading
 
@@ -147,7 +147,7 @@ def test_farm_params_loading(temp_yaml_file_factory):
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=yaml_filepath,
+        config=yaml_filepath,
         reset_init=False,
     )
 
@@ -176,7 +176,7 @@ def test_wind_params_loading(temp_yaml_file_factory):
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=yaml_filepath,
+        config=yaml_filepath,
         reset_init=False,
     )
 
@@ -213,7 +213,7 @@ def test_measurement_level_loading(
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=yaml_filepath,
+        config=yaml_filepath,
         reset_init=False,
     )
 
@@ -247,7 +247,7 @@ def test_ws_mes_settings_loading(temp_yaml_file_factory):
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=yaml_filepath,
+        config=yaml_filepath,
         reset_init=False,
     )  # Calls _init_farm_mes
 

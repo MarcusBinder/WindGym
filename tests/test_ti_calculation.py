@@ -116,7 +116,7 @@ def ti_test_env(monkeypatch):
         turbine=V80(),
         x_pos=x_pos,
         y_pos=y_pos,
-        yaml_path=yaml_filepath,
+        config=yaml_filepath,
         dt_sim=1,
         dt_env=5,
         reset_init=False,

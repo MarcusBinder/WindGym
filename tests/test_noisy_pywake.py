@@ -145,7 +145,7 @@ def test_env_instance(dummy_yaml_config):
         "turbine": V80(),
         "x_pos": [0.0],
         "y_pos": [0.0],
-        "yaml_path": config_path,
+        "config": config_path,
         "dt_sim": 1,
         "dt_env": 1,
         "n_passthrough": 1,

@@ -36,7 +36,7 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
         yaw_scaling_max: float = 45,
         TurbBox="Default",
         turbtype="MannGenerate",
-        yaml_path=None,
+        config=None,
         Baseline_comp=False,
         yaw_init=None,
         render_mode=None,
@@ -74,7 +74,7 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
             yaw_scaling_max=yaw_scaling_max,
             TurbBox=TurbBox,
             turbtype=turbtype,
-            yaml_path=yaml_path,
+            config=config,
             Baseline_comp=Baseline_comp,
             yaw_init=yaw_init,
             render_mode=render_mode,
@@ -96,6 +96,7 @@ class WindFarmEnvMulti(ParallelEnv, WindFarmEnv):
         turbine_obs_var = self.farm_measurements.turb_mes[0].observed_variables()
         # The observations for the farm is:
         farm_obs_var = self.farm_measurements.farm_mes.observed_variables()
+        # farm_obs_var = self.farm_measurements.farm_observed_variables
         # The observations for each agents is the number of observations for the turbine + the number of observations for the farm.
         self.obs_var = turbine_obs_var + farm_obs_var
 

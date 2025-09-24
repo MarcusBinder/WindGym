@@ -115,7 +115,7 @@ def basic_env_config(tmp_yaml_file):
         "turbine": V80(),  # <--- Changed to real V80() turbine
         "x_pos": [0, 560],  # Two turbines for multi-agent
         "y_pos": [0, 0],
-        "yaml_path": tmp_yaml_file,
+        "config": tmp_yaml_file,
         "turbtype": "None",  # Crucial: disable turbulence generation for speed and determinism
         "reset_init": True,  # Call reset during constructor
         "dt_sim": 1,
@@ -155,20 +155,14 @@ class TestWindFarmEnvMultiCoverage:
 
         # Recalculate observed_variables from the actual MesClass instances
         # This part is crucial for debugging the 16 vs 18 issue
-        try:
-            turbine_obs_var_actual = env.farm_measurements.turb_mes[
-                0
-            ].observed_variables()
-            farm_obs_var_actual = env.farm_measurements.farm_mes.observed_variables()
-            obs_var_calculated_from_env = turbine_obs_var_actual + farm_obs_var_actual
-            print(f"Actual turbine_obs_var_actual: {turbine_obs_var_actual}")
-            print(f"Actual farm_obs_var_actual: {farm_obs_var_actual}")
-            print(
-                f"Calculated env.obs_var based on MesClass methods: {obs_var_calculated_from_env}"
-            )
-        except Exception as e:
-            print(f"ERROR calculating obs_var from env.farm_measurements: {e}")
-            obs_var_calculated_from_env = -1  # Indicate error
+        turbine_obs_var_actual = env.farm_measurements.turb_mes[0].observed_variables()
+        farm_obs_var_actual = env.farm_measurements.farm_mes.observed_variables()
+        obs_var_calculated_from_env = turbine_obs_var_actual + farm_obs_var_actual
+        print(f"Actual turbine_obs_var_actual: {turbine_obs_var_actual}")
+        print(f"Actual farm_obs_var_actual: {farm_obs_var_actual}")
+        print(
+            f"Calculated env.obs_var based on MesClass methods: {obs_var_calculated_from_env}"
+        )
 
         print(f"env.obs_var property: {env.obs_var}")
         assert hasattr(env, "obs_var")
@@ -655,7 +649,7 @@ class TestWindFarmEnvMultiCoverage:
             "turbine": MagicMock(),  # Mock turbine
             "x_pos": [0],
             "y_pos": [0],  # Single turbine is fine for this test
-            "yaml_path": tmp_yaml_file,
+            "config": tmp_yaml_file,
             "turbtype": "None",
             "reset_init": True,
             "dt_sim": 3,  # dt_sim = 3
@@ -682,3 +676,4 @@ class TestWindFarmEnvMultiCoverage:
         except Exception as e:
             print(f"PettingZoo API compliance test FAILED with error: {e}")
             pytest.fail(f"PettingZoo API compliance test failed: {e}")
+            raise (e)

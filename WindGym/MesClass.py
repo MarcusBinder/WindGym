@@ -163,6 +163,7 @@ class turb_mes:
         TI_max=0.50,
         include_TI=True,
         power_max=2000000,  # 2 MW
+        n_probes_per_turb={},
         ti_sample_count=30,
     ):
         self.ws = Mes(
@@ -205,6 +206,7 @@ class turb_mes:
         self.TI_max = TI_max
         self.include_TI = include_TI
         self.power_max = power_max
+        self.n_probes_per_turb = n_probes_per_turb
 
         if self.include_TI:
             # If we want to include the TI, then we set the get_TI function to the calc_TI function
@@ -254,7 +256,12 @@ class turb_mes:
         """
 
         return max(
-            [self.ws.history_length, self.wd.history_length, self.yaw.history_length]
+            [
+                self.ws.history_length,
+                self.wd.history_length,
+                self.yaw.history_length,
+                self.power.history_length,
+            ]
         )
 
     def observed_variables(self):
@@ -278,6 +285,10 @@ class turb_mes:
 
         # Number of power variables
         obs_var += self.power.current + self.power.rolling_mean * self.power.history_N
+
+        # Number of probes per turbine
+        if hasattr(self, "n_probes_per_turb") and 0 in self.n_probes_per_turb:
+            obs_var += self.n_probes_per_turb[0]
 
         return obs_var
 
@@ -337,10 +348,27 @@ class turb_mes:
         return 2 * (val - min_val) / (max_val - min_val) - 1
 
     def get_measurements(self, scaled=False):
-        # get all the measurements
+        measurements = []
+
+        if hasattr(self, "probes"):
+            # Read values from each probe, regardless of WS or TI
+            probe_values = np.array(
+                [
+                    float(p.read()) if np.isscalar(p.read()) else float(p.read()[0])
+                    for p in self.probes
+                ]
+            )
+
+            if scaled:
+                scaled_values = self._scale_val(
+                    probe_values, self.probe_min, self.probe_max
+                )
+                measurements.append(scaled_values)
+            else:
+                measurements.append(probe_values)
+
         if scaled:
-            # Scale the measurements
-            return np.concatenate(
+            measurements.extend(
                 [
                     self._scale_val(self.get_ws(), self.ws_min, self.ws_max),
                     self._scale_val(self.get_wd(), self.wd_min, self.wd_max),
@@ -350,8 +378,7 @@ class turb_mes:
                 ]
             )
         else:
-            # Return the measurements
-            return np.concatenate(
+            measurements.extend(
                 [
                     self.get_ws(),
                     self.get_wd(),
@@ -360,6 +387,8 @@ class turb_mes:
                     self.get_power(),
                 ]
             )
+
+        return np.concatenate(measurements)
 
 
 class farm_mes(WindEnv):
@@ -371,6 +400,7 @@ class farm_mes(WindEnv):
     def __init__(
         self,
         n_turbines,
+        n_probes_per_turb={},
         turb_ws=True,
         turb_wd=True,
         turb_TI=True,
@@ -411,6 +441,7 @@ class farm_mes(WindEnv):
         ti_sample_count=30,
     ):
         self.n_turbines = n_turbines
+        self.n_probes_per_turb = n_probes_per_turb
         self.turb_mes = []
         self.turb_ws = turb_ws  # do we want measurements from the turbines individually
         self.turb_wd = turb_wd  # do we want measurements from the turbines individually
@@ -519,6 +550,7 @@ class farm_mes(WindEnv):
             TI_max=TI_max,
             include_TI=farm_TI,
             power_max=power_max * n_turbines,
+            n_probes_per_turb=n_probes_per_turb,
             ti_sample_count=ti_sample_count,
         )  # The max power is the sum of all the turbines
 

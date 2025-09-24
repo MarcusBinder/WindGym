@@ -155,7 +155,7 @@ def coliseum_instance(temp_yaml_file_for_coliseum, coliseum_agents):
             turbine=V80(),
             x_pos=x_pos,
             y_pos=y_pos,
-            yaml_path=temp_yaml_file_for_coliseum,
+            config=temp_yaml_file_for_coliseum,
             turbtype="None",
             Baseline_comp=True,
             reset_init=True,
@@ -188,7 +188,7 @@ def fast_farm_eval_factory(temp_yaml_file_for_coliseum):
             turbine=V80(),
             x_pos=x_pos,
             y_pos=y_pos,
-            yaml_path=temp_yaml_file_for_coliseum,
+            config=temp_yaml_file_for_coliseum,
             turbtype="None",  # Key optimization for speed
             reset_init=False,  # Avoid slow reset during object creation
             finite_episode=True,

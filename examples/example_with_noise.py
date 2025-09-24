@@ -324,7 +324,7 @@ def make_env(
             x_pos=x_pos,
             y_pos=y_pos,
             turbine=turbine_obj,
-            yaml_path=temp_yaml_path,
+            config=temp_yaml_path,
             seed=seed,  # Pass the seed for reproducibility of internal randomness
             dt_sim=env_init_params.get("dt_sim", 1),
             dt_env=env_init_params.get("dt_env", 10),
@@ -366,7 +366,7 @@ def make_env(
             "x_pos": x_pos,
             "y_pos": y_pos,
             "turbine": turbine_obj,
-            "yaml_path": temp_yaml_path,
+            "config": temp_yaml_path,
             "seed": seed,
             "dt_sim": env_init_params.get("dt_sim", 1),
             "dt_env": env_init_params.get("dt_env", 10),
@@ -592,6 +592,7 @@ def train_agent(args):
         import traceback
 
         traceback.print_exc()
+        raise (e)
     finally:
         if "vec_env" in locals():
             vec_env.close()

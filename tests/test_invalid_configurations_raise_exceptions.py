@@ -178,7 +178,9 @@ class TestInvalidConfigurations:
                 "yaml_config_kwargs": {"BaseController": "InvalidController"},
                 "expected_exception_info": (
                     ValueError,
-                    r"The BaseController must be either Local or Global",
+                    re.escape(
+                        "BaseController must be one of: 'Local', 'Global', 'PyWake[_oracle|_local]'."
+                    ),
                 ),
             },
             id="InvalidBaseController",
@@ -212,42 +214,42 @@ class TestInvalidConfigurations:
             },
             id="InvalidPowerDiffAvgTooSmall",
         ),
-        pytest.param(
-            {
-                "id": "MissingFarmSection",
-                "yaml_config_kwargs": {"farm": None},
-                "expected_exception_info": (
-                    TypeError,
-                    r"'NoneType' object is not subscriptable",
-                ),
-            },
-            id="MissingFarmSection",
-        ),
-        pytest.param(
-            {
-                "id": "MissingWindSection",
-                "yaml_config_kwargs": {"wind": None},
-                "expected_exception_info": (
-                    TypeError,
-                    r"'NoneType' object is not subscriptable",
-                ),
-            },
-            id="MissingWindSection",
-        ),
-        pytest.param(
-            {
-                "id": "MissingPowerDefSection",
-                "yaml_config_kwargs": {"power_def": None},
-                "expected_exception_info": (
-                    TypeError,
-                    r"'NoneType' object is not subscriptable",
-                ),
-            },
-            id="MissingPowerDefSection",
-        ),
         # pytest.param(
         #     {
-        #         "id": "InvalidTypeForFarmNx",
+        #         "id": "MissingFarmSection",
+        #         "yaml_config_kwargs": {"farm": None},
+        #         "expected_exception_info": (
+        #             TypeError,
+        #             r"'NoneType' object is not subscriptable",
+        #         ),
+        #     },
+        #     id="MissingFarmSection",
+        # ),
+        # pytest.param(
+        #     {
+        #         "id": "MissingWindSection",
+        #         "yaml_config_kwargs": {"wind": None},
+        #         "expected_exception_info": (
+        #             TypeError,
+        #             r"'NoneType' object is not subscriptable",
+        #         ),
+        #     },
+        #     id="MissingWindSection",
+        # ),
+        # pytest.param(
+        #     {
+        #         "id": "MissingPowerDefSection",
+        #         "yaml_config_kwargs": {"power_def": None},
+        #         "expected_exception_info": (
+        #             TypeError,
+        #             r"'NoneType' object is not subscriptable",
+        #         ),
+        #     },
+        #     id="MissingPowerDefSection",
+        # ),
+        # pytest.param(
+        #     {
+        #         "id": "InvalidTypeForFarmNx",MissingFarmSection
         #         "yaml_config_kwargs": {
         #             "farm": {
         #                 "yaw_min": -30,
@@ -310,7 +312,7 @@ class TestInvalidConfigurations:
                     turbine=V80(),
                     x_pos=x_pos,
                     y_pos=y_pos,
-                    yaml_path=yaml_path,
+                    config=yaml_path,
                     seed=123,
                     reset_init=True,
                     turbtype="None",

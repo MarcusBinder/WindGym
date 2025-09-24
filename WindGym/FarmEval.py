@@ -27,7 +27,7 @@ class FarmEval(WindFarmEnv):
         yaw_scaling_max: float = 45,
         yaw_init="Zeros",
         TurbBox="Default",
-        yaml_path=None,
+        config=None,
         Baseline_comp=False,
         render_mode=None,
         turbtype="MannGenerate",
@@ -62,7 +62,7 @@ class FarmEval(WindFarmEnv):
             burn_in_passthroughs=burn_in_passthroughs,
             TurbBox=TurbBox,
             turbtype=turbtype,
-            yaml_path=yaml_path,
+            config=config,
             Baseline_comp=Baseline_comp,  # UPDATE: Changed so that we dont need the baseline farm anymore. Before it was always true! #We always want to compare to the baseline, so this is true
             yaw_init=yaw_init,
             render_mode=render_mode,
@@ -76,11 +76,10 @@ class FarmEval(WindFarmEnv):
             fill_window=fill_window,
             sample_site=sample_site,
         )
-        self.yaml_path = yaml_path
+        self.yaml_path = config  # Saved for legacy reasons
 
     def reset(self, seed=None, options=None):
         # Overwrite the reset function so that we never terminates.
-        # observation, info = WindFarmEnv.reset(self, seed, options)
         observation, info = super().reset(seed=seed, options=options)
         # Only set an "infinite" time_max if the finite_episode flag is False.
         if not self.finite_episode:

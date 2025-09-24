@@ -118,7 +118,7 @@ def run_comparison():
         "turbine": V80(),
         "x_pos": x_pos,
         "y_pos": y_pos,
-        "yaml_path": yaml_filepath,
+        "config": yaml_filepath,
         "Baseline_comp": True,
         "reset_init": False,  # Important: Delay reset until Coliseum does it
     }
