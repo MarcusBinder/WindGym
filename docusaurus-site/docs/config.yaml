@@ -1,0 +1,76 @@
+# config.yaml
+# --- General Environment Settings ---
+yaw_init: "Zeros" # Initial yaw angle method: "Zeros", "Random", or "Defined"
+noise: "None"     # Type of noise to add to measurements: "None", "Normal"
+BaseController: "Local" # Baseline controller type: "Local", "Global", "PyWake"
+ActionMethod: "wind"    # How agent actions are interpreted: "yaw", "wind" (or "absolute" - not implemented)
+Track_power: False      # Whether to track a power setpoint (not yet fully implemented)
+
+# --- Action Penalty Settings ---
+act_pen:
+  action_penalty: 0.0 # Multiplier for the action penalty in the reward function
+  action_penalty_type: "Change" # Type of action penalty: "Change" (based on yaw change), "Total" (based on total yaw magnitude)
+
+# --- Power Definition & Reward Settings ---
+power_def:
+  Power_scaling: 1000000000.0 # Scaling factor for the power reward
+  Power_avg: 50               # Number of steps to average power for reward calculation
+  Power_reward: "Baseline"    # Type of power reward: "Baseline", "Power_avg", "Power_diff", "None"
+
+# --- Measurement Level Settings (Which measurements are included) ---
+mes_level:
+  turb_ws: True    # Include turbine-level wind speed measurements
+  turb_wd: True    # Include turbine-level wind direction measurements
+  turb_TI: False   # Include turbine-level turbulence intensity measurements
+  turb_power: True # Include turbine-level power measurements
+  farm_ws: True    # Include farm-level (average) wind speed measurements
+  farm_wd: True    # Include farm-level (average) wind direction measurements
+  farm_TI: False   # Include farm-level (average) turbulence intensity measurements
+  farm_power: True # Include farm-level (total) power measurements
+  ti_sample_count: 30 # Number of high-frequency samples for TI calculation
+
+# --- Specific Measurement Parameters (How each type of measurement behaves) ---
+# These parameters directly map to the __init__ of Mes and turb_mes classes
+# ws_mes parameters
+ws_mes:
+  ws_current: False       # Include current wind speed
+  ws_rolling_mean: True   # Include rolling mean of wind speed
+  ws_history_N: 1         # Number of rolling windows for wind speed history
+  ws_history_length: 10   # Total length of wind speed history buffer
+  ws_window_length: 10    # Window size for rolling mean of wind speed
+# wd_mes parameters
+wd_mes:
+  wd_current: False
+  wd_rolling_mean: True
+  wd_history_N: 1
+  wd_history_length: 10
+  wd_window_length: 10
+# yaw_mes parameters
+yaw_mes:
+  yaw_current: False
+  yaw_rolling_mean: True
+  yaw_history_N: 2
+  yaw_history_length: 30
+  yaw_window_length: 1
+# power_mes parameters
+power_mes:
+  power_current: False
+  power_rolling_mean: True
+  power_history_N: 1
+  power_history_length: 10
+  power_window_length: 10
+
+# --- Wind Farm Physical Parameters ---
+farm:
+  yaw_min: -45 # Minimum allowable yaw angle in degrees
+  yaw_max: 45  # Maximum allowable yaw angle in degrees
+
+# --- Global Wind Condition Ranges (for random sampling) ---
+wind:
+  ws_min: 8.0  # Minimum wind speed for sampling
+  ws_max: 12.0 # Maximum wind speed for sampling
+  TI_min: 0.07 # Minimum turbulence intensity for sampling
+  TI_max: 0.15 # Maximum turbulence intensity for sampling
+  wd_min: 260.0 # Minimum wind direction for sampling
+  wd_max: 280.0 # Maximum wind direction for sampling
+
