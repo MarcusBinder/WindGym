@@ -48,6 +48,7 @@ The `Coliseum` class, located in `WindGym/utils/evaluate_PPO.py`, is the recomme
 ### Comprehensive Plotting:
 
 Includes built-in methods for visualizing:
+
 - Mean cumulative rewards over time for multiple agents.
 - Summary bar charts comparing average performance across agents.
 - Heatmaps or line plots of agent performance across the wind condition grid.

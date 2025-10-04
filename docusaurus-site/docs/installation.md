@@ -6,11 +6,11 @@ This guide will help you set up your environment to run the **WindGym** simulati
 
 Before you begin, ensure you have the following installed on your system:
 
-* **Git**: You'll need Git to clone the WindGym and its dependency repositories.
-   * Download Git
-* **Pixi**: This is a modern package manager that WindGym uses to manage its Python and other dependencies in an isolated environment.
-   * Install Pixi
-* **Python (3.7 to 3.11)**: Pixi will handle the specific Python version for you, but it's good to be aware of the compatible range.
+- **Git**: You'll need Git to clone the WindGym and its dependency repositories.
+  - Download Git
+- **Pixi**: This is a modern package manager that WindGym uses to manage its Python and other dependencies in an isolated environment.
+  - Install Pixi
+- **Python (3.7 to 3.11)**: Pixi will handle the specific Python version for you, but it's good to be aware of the compatible range.
 
 ## 2. Core WindGym Installation
 
@@ -59,4 +59,3 @@ python -c "from WindGym.Wind_Farm_Env import WindFarmEnv; print('WindGym install
 ```
 
 If you see "WindGym installed successfully!", your basic WindGym environment is ready for you to use!
-
