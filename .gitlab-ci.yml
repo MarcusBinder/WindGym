@@ -81,6 +81,8 @@ pre_commit:
     key: pre-commit-cache # Retains cache across all branches
     paths:
       - ${PRE_COMMIT_HOME}
+  variables:
+    GIT_CLEAN_FLAGS: -ffdx
   tags:
     - linux
   <<: *default_rules
