@@ -1,0 +1,41 @@
+/* src/css/custom.css */
+
+/* Light mode variables */
+:root {
+  --ifm-color-primary: #1877f2; /* Your brand primary color */
+  --ifm-color-primary-dark: #166ae0;
+  --ifm-color-primary-darker: #1562d0;
+  --ifm-color-primary-darkest: #114c9c;
+  --ifm-color-primary-light: #1f82ff;
+  --ifm-color-primary-lighter: #2c8cff;
+  --ifm-color-primary-lightest: #479fff;
+
+  --ifm-code-font-size: 95%; /* Adjust code block font size */
+
+  /* Customize other variables as needed */
+  --ifm-background-color: #f0f2f5; /* Light background for the overall site */
+  --ifm-font-color: #24292f; /* Default text color */
+}
+
+/* Dark mode variables */
+[data-theme='dark'] {
+  --ifm-color-primary: #2e8555; /* A different primary color for dark mode */
+  --ifm-color-primary-dark: #29784c;
+  --ifm-color-primary-darker: #277148;
+  --ifm-color-primary-darkest: #205d3b;
+  --ifm-color-primary-light: #33925d;
+  --ifm-color-primary-lighter: #359962;
+  --ifm-color-primary-lightest: #3cad6e;
+
+  --ifm-background-color: #24292f; /* Dark background for the overall site */
+  --ifm-font-color: #e6edf3; /* Default text color in dark mode */
+}
+
+/* Example: Customize highlighted code line background */
+:root {
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='dark'] {
+  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.1);
+}
