@@ -160,12 +160,15 @@ class WhiteNoiseModel(NoiseModel):
                         )
                     )
                 else:
-                    # For non-circular, scale the noise before adding to scaled observation
-                    # Use the static scaling method directly from the base class
-                    scaled_noise_value = NoiseModel._scale_value_static(
-                        noise_to_add_physical, spec.min_val, spec.max_val
-                    )
-                    noisy_obs[start:end] += scaled_noise_value
+                    # For non-circular, scale the perturbation correctly.
+                    span = spec.max_val - spec.min_val
+                    if span > 0:
+                        # Correct formula for scaling a delta/perturbation
+                        scaled_noise_delta = noise_to_add_physical * (2.0 / span)
+                    else:
+                        scaled_noise_delta = 0.0  # No change if span is zero
+
+                    noisy_obs[start:end] += scaled_noise_delta
 
         return noisy_obs
 
@@ -340,6 +343,10 @@ class MeasurementManager:
         # needing to pass them explicitly to every constructor or method call.
         NoiseModel._unscale_value_static = self._unscale_value
         NoiseModel._scale_value_static = self._scale_value
+
+    def seed(self, seed: Optional[int] = None):
+        """Reseeds the random number generator for the noise model."""
+        self.rng = np.random.default_rng(seed)
 
     # Helper methods for scaling/unscaling values. These belong to MeasurementManager.
     # Make them static methods so they can be easily passed and used by NoiseModels.
@@ -587,11 +594,22 @@ class NoisyWindFarmEnv(gym.Wrapper):
         self.measurement_manager = measurement_manager
         self.action_space = self.base_env.action_space
         self.observation_space = self.base_env.observation_space
-        env = measurement_manager.env
+        self.measurement_manager.env = self.base_env
 
-    def reset(self, **kwargs) -> tuple[np.ndarray, dict]:
-        clean_obs, info = self.base_env.reset(**kwargs)
+    def reset(
+        self, *, seed: int | None = None, options: dict | None = None
+    ) -> tuple[np.ndarray, dict]:
+        # Seed the measurement manager first to ensure noise is reproducible for this episode
+        if seed is not None:
+            self.measurement_manager.seed(seed)
+
+        # Now, call the base environment's reset, which will also be seeded
+        clean_obs, info = self.base_env.reset(seed=seed, options=options)
+
+        # Reset the noise model (e.g., sample a new bias for the episode) using the now-seeded RNG
         self.measurement_manager.reset_noise()
+
+        # Apply the noise to the initial observation
         noisy_obs, noise_info = self.measurement_manager.apply_noise(clean_obs)
         info.update(noise_info)
         info["clean_obs"] = clean_obs
@@ -606,3 +624,52 @@ class NoisyWindFarmEnv(gym.Wrapper):
 
     def close(self):
         self.base_env.close()
+
+
+class AdversarialNoiseModel(NoiseModel):
+    def __init__(self, antagonist_agent, constraints, device):
+        super().__init__()
+        self.antagonist = antagonist_agent
+        self.constraints = constraints
+        self.device = device
+        self.current_bias_state = {}
+
+    def reset_noise(self, specs: list, rng: np.random.Generator):
+        self.current_bias_state = {}
+
+    def apply_noise(self, clean_observations, specs, rng):
+        obs_tensor = torch.Tensor(clean_observations).to(self.device).unsqueeze(0)
+        with torch.no_grad():
+            action = self.antagonist.actor_mean(obs_tensor)
+        antagonist_action = action.squeeze(0).cpu().numpy()
+        noisy_obs = clean_observations.copy()
+        action_idx = 0
+        for spec in specs:
+            is_ws = "ws_current" in spec.name and "turb" in spec.name
+            is_wd = "wd_current" in spec.name and "turb" in spec.name
+            if (is_ws or is_wd) and action_idx < len(antagonist_action):
+                max_bias = (
+                    self.constraints["max_bias_ws"]
+                    if is_ws
+                    else self.constraints["max_bias_wd"]
+                )
+                max_physical_change_per_step = max_bias * 0.1
+                bias_change_physical_delta = (
+                    antagonist_action[action_idx] * max_physical_change_per_step
+                )
+                current_physical_bias = self.current_bias_state.get(spec.name, 0.0)
+                new_physical_bias = current_physical_bias + bias_change_physical_delta
+                new_physical_bias = np.clip(new_physical_bias, -max_bias, max_bias)
+                self.current_bias_state[spec.name] = new_physical_bias
+                action_idx += 1
+                span = spec.max_val - spec.min_val
+                if span > 0:
+                    scaled_bias = (new_physical_bias * 2.0) / span
+                    noisy_obs[spec.index_range[0] : spec.index_range[1]] += scaled_bias
+        return np.clip(noisy_obs, -1.0, 1.0)
+
+    def get_info(self):
+        return {
+            "noise_type": "adversarial (stateful)",
+            "applied_bias (physical_units)": self.current_bias_state.copy(),
+        }
