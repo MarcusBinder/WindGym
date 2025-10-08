@@ -23,12 +23,10 @@ stages:
 
 .default_rules: &default_rules
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: never
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_PIPELINE_SOURCE == "web"  
-    - when: never
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 .docs_rules: &docs_rules
   rules:
