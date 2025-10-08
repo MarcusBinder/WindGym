@@ -182,6 +182,7 @@ class PyWakeAgent(BaseAgent):
         This class pretends to be an agent, so we need to have a predict function.
         If we havent called the optimize function, we do that now, and return the action
         Note that we dont use the obs or the deterministic arguments.
+        Note that the command yaw offset is __always__ defined relative to the incoming wind direction
         """
 
         # Only optimize if we have not done it yet, and if we are not using the lookup table.
@@ -195,27 +196,28 @@ class PyWakeAgent(BaseAgent):
         optimal_yaws = self.optimized_yaws
 
         base_env = self.env.unwrapped
+        wd_error = self.wdir - base_env.wd
+        #    (the wind direction is measured in a left hand system)
         if base_env.ActionMethod == "wind":
             # If the action method is 'wind', we return the set point yaw angles directly.
-            action = self.scale_yaw(optimal_yaws)
+            # subtract w error becuase of left-hand wd versus right-hand yaw
+            x = (optimal_yaws - wd_error) % 360
+
+            # final action is the "least work" path (e.g., 270 --> 90)
+            action = self.scale_yaw(np.minimum(x, 360 - x))
 
         # If using yaw based steering, we need to retun the yaw angles differently
         elif base_env.ActionMethod == "yaw":
-            # error is sensed direction minus true direction
-            wd_error = self.wdir - base_env.wd
-
-            # we adjust the prescribed yaw offset based on the difference between the true and sensed wind direction
-            # this is so that the offset is relative to sensed information, avoiding "oracle" reliance
-            yaw_goal = self.optimized_yaws - wd_error
-
-            yaw_offset = base_env.current_yaw
-            yaw_step = base_env.yaw_step_env  # How much we can change pr step
-
-            step_dir = np.sign(yaw_goal - yaw_offset)
-            step_scale = np.abs(yaw_goal - yaw_offset)
-            # here we replace all values that are larger then the max, with the max
-            step_scale[step_scale > yaw_step] = yaw_step
-            action = step_dir * step_scale / base_env.yaw_step_env
+            sensed_yaw = (
+                base_env.current_yaw
+            )  # - wd_error # don't subtract because we predict __relative__ changes
+            desired_yaw = self.optimized_yaws
+            target_delta_yaw = desired_yaw - sensed_yaw
+            action = (
+                np.sign(target_delta_yaw)
+                * np.minimum(np.abs(target_delta_yaw), base_env.yaw_step_env)
+                / base_env.yaw_step_env
+            )
 
         return action, None
 

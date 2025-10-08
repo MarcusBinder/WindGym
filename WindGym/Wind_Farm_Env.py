@@ -96,6 +96,7 @@ class WindFarmEnv(WindEnv):
         reset_init=True,
         burn_in_passthroughs=2,  # number of passthroughs before episode starts
         cleanup_on_time_limit: bool = True,
+        **kwargs,
     ):
         """
         This is a steadystate environment. The environment only ever changes wind conditions at reset. Then the windconditions are constatnt for the rest of the episode
@@ -123,6 +124,9 @@ class WindFarmEnv(WindEnv):
             reset_init: bool: If True, then the environment will be reset at initialization. This is used to save time for things that call the reset method anyways.
             cleanup_on_time_limit: bool: If True, then the environment will clean up the HAWC2 files when the maximum time is reached. This is to avoid filling up the disk with files.
         """
+        self.kwargs = locals()
+        del self.kwargs["self"]  # Remove 'self' from the dictionary
+
         self.backend = backend.lower().strip()
         if self.backend not in {"dynamiks", "pywake"}:
             raise ValueError("backend must be 'dynamiks' or 'pywake'")
@@ -383,6 +387,7 @@ class WindFarmEnv(WindEnv):
                         yaw_max=45,
                         yaw_min=-45,
                         yaw_step_env=1,
+                        wd=270,
                     ):
                         self.ActionMethod = action_method
                         # Mocking the unwrapped attributes that PyWakeAgent expects
@@ -390,6 +395,7 @@ class WindFarmEnv(WindEnv):
                         self.yaw_max = yaw_max
                         self.yaw_min = yaw_min
                         self.yaw_step_env = yaw_step_env
+                        self.wd = wd
 
                 # When creating temp_env:
                 temp_env = Fake_env(
@@ -1248,12 +1254,13 @@ class WindFarmEnv(WindEnv):
             # 2) Step agent flow
             self.fs.step()
 
-            # 3) Baseline
+            # 3) Baseline, only if requested
             if include_baseline:
-                new_baseline_yaws = self._base_controller(
-                    fs=self.fs_baseline, yaw_step=self.yaw_step_sim
-                )
-                self.fs_baseline.windTurbines.yaw = new_baseline_yaws
+                if apply_agent_action:
+                    new_baseline_yaws = self._base_controller(
+                        fs=self.fs_baseline, yaw_step=self.yaw_step_sim
+                    )
+                    self.fs_baseline.windTurbines.yaw = new_baseline_yaws
                 self.fs_baseline.step()
 
             # 4) Measurements at this sim step
