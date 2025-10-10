@@ -10,6 +10,7 @@ const sidebars = {
     "installation", // Refers to docusaurus-site/docs/installation.md
     "concepts", // Refers to docusaurus-site/docs/concepts.md
     "agents", // Refers to docusaurus-site/docs/agents.md
+    "noise-and-uncertainty",
     "simulations", // Refers to docusaurus-site/docs/simulations.md
     "evaluations", // Refers to docusaurus-site/docs/evaluations.md
     "developer-guidelines",
