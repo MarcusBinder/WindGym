@@ -46,6 +46,8 @@ The `MesClass` module handles all measurements within the WindGym environment. I
 
 Agents interact with the environment by providing actions that modify the wind turbine yaw angles.
 
+![Action Methods Visualization](actions.png)
+
 - **Yaw Angle Control**: The primary action an agent takes is to adjust the yaw angle of each turbine.
 - **`ActionMethod`**: Configurable in the YAML file, this determines how the agent's action translates into a yaw change:
   - `"yaw"`: The action represents a desired _change_ in yaw angle. The environment limits the rate of change per `dt_sim`.
