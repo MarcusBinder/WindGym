@@ -1139,13 +1139,14 @@ class WindFarmEnv(WindEnv):
             if self.Baseline_comp:
                 self.fs_baseline.run(0)
 
-        # If baseline is PyWake, prime its wind estimate
-        if (self.BaseController or "").split("_")[0] == "PyWake":
-            self.pywake_agent.update_wind(
-                wind_speed=self.ws, wind_direction=self.wd, TI=self.ti
-            )
-            self.pywake_ws = self.ws
-            self.pywake_wd = self.wd
+        if self.Baseline_comp:
+            # If baseline is PyWake, prime its wind estimate
+            if (self.BaseController or "").split("_")[0] == "PyWake":
+                self.pywake_agent.update_wind(
+                    wind_speed=self.ws, wind_direction=self.wd, TI=self.ti
+                )
+                self.pywake_ws = self.ws
+                self.pywake_wd = self.wd
 
         # 4) Fill measurement history window (and power deques)
         #    Uses the unified inner loop; no action applied during reset.
