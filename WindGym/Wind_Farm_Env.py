@@ -1128,23 +1128,24 @@ class WindFarmEnv(WindEnv):
             # Start baseline with same yaw as agent at reset
             self.fs_baseline.windTurbines.yaw = self.fs.windTurbines.yaw
 
-            if self.backend == "dynamiks":
-                self.fs.run(t_developed)
-                if self.Baseline_comp:
-                    self.fs_baseline.run(t_developed)
-            else:
-                # Steady-state: nothing to "develop", but keep API consistent
-                self.fs.run(0)
-                if self.Baseline_comp:
-                    self.fs_baseline.run(0)
+        # 3c) Run the flow for the time it takes to develop
+        if self.backend == "dynamiks":
+            self.fs.run(t_developed)
+            if self.Baseline_comp:
+                self.fs_baseline.run(t_developed)
+        else:
+            # Steady-state: nothing to "develop", but keep API consistent
+            self.fs.run(0)
+            if self.Baseline_comp:
+                self.fs_baseline.run(0)
 
-            # If baseline is PyWake, prime its wind estimate
-            if (self.BaseController or "").split("_")[0] == "PyWake":
-                self.pywake_agent.update_wind(
-                    wind_speed=self.ws, wind_direction=self.wd, TI=self.ti
-                )
-                self.pywake_ws = self.ws
-                self.pywake_wd = self.wd
+        # If baseline is PyWake, prime its wind estimate
+        if (self.BaseController or "").split("_")[0] == "PyWake":
+            self.pywake_agent.update_wind(
+                wind_speed=self.ws, wind_direction=self.wd, TI=self.ti
+            )
+            self.pywake_ws = self.ws
+            self.pywake_wd = self.wd
 
         # 4) Fill measurement history window (and power deques)
         #    Uses the unified inner loop; no action applied during reset.
