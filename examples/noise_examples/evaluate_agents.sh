@@ -9,9 +9,9 @@ MATRIX_DIR="evaluation_matrix"
 CONFIG_PATH="env_config/two_turbine_yaw.yaml"
 
 # --- Agent Paths ---
-PROT_CLEAN_PATH=$(ls models/protagonist_training/ts5a4m49/final_model.zip)
-PROT_PROCEDURAL_PATH="models/protagonist_training/ewhkgxaj/final_model.zip"
-ANTAGONIST_PATH=$(ls models/adversary_vs_pywake/*/checkpoints/model.zip)
+PROT_CLEAN_PATH="models/protagonist_training/fazozee3/final_model.zip"
+PROT_PROCEDURAL_PATH="models/protagonist_training/bpr91p95/final_model.zip"
+ANTAGONIST_PATH="models/adversaries_stateful/6qru38oh/final_adversary_model.zip"
 
 # --- Housekeeping ---
 mkdir -p $OUTPUT_DIR
