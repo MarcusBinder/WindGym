@@ -297,6 +297,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/netcdf4-1.7.2-nompi_py311h6623971_104.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/networkx-3.5-pyhe01879c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nodeenv-1.9.1-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/nodejs-24.9.0-heeeca48_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/notebook-7.4.7-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/notebook-shim-0.2.4-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/numpy-1.26.4-py311h64a7726_0.conda
@@ -478,7 +479,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/da/08/05b0c8a65ca83da21b8b5e2d42a10c7d446c4fbbede5020a83887426ac55/blosc2-3.9.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/c1/53/0f51e926799025e31746d454ab2e36f8c3f0d41592bc65cb9840368d3275/cryptography-46.0.2-cp311-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/78/81/f1ea09f563ebab732542cb11bf363710e53f3842458159ea2c160788bc8e/cython-3.1.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: git+https://gitlab.windenergy.dtu.dk/DYNAMIKS/dynamiks.git?rev=77f4f875c6401fde150e351a60143a5b522cf950#77f4f875c6401fde150e351a60143a5b522cf950
+      - pypi: git+https://gitlab.windenergy.dtu.dk/DYNAMIKS/dynamiks.git@77f4f875c6401fde150e351a60143a5b522cf950
       - pypi: https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/eb/40/cd243be7ba9bd9d83fd8515b1aed7e0b822c76cab4bf60398a1b7e024f00/git_lfs-1.6-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/5b/f5/ac71e692aad076d50a0f5f073204346d5f5577daffd21bb4b72c485f8959/h5netcdf-1.6.4-py3-none-any.whl
@@ -506,7 +507,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/85/ba/6d118fb5be0b1e4e74b8ae9d3e53962b22106ae1fee7840b2f06974f049c/wetb-0.1.31-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3a/0c/3662f4a66880196a590b202f0db82d919dd2f89e99a27fadef91c4a33d41/xlsxwriter-3.2.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/44/48/def306413b25c3d01753603b1a222a011b8621aed27cd7f89cbc27e6b0f4/xlwt-1.3.0-py2.py3-none-any.whl
-      - pypi: ./
+      - pypi: .
       osx-arm64:
       - conda: https://conda.anaconda.org/conda-forge/noarch/absl-py-2.3.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ale-py-0.11.0-py311hf32142e_0.conda
@@ -766,6 +767,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/netcdf4-1.7.2-nompi_py311h8c26f9d_104.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/networkx-3.5-pyhe01879c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nodeenv-1.9.1-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/nodejs-24.4.1-hab9d20b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nomkl-1.0-h5ca1d4c_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/notebook-7.4.7-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/notebook-shim-0.2.4-pyhd8ed1ab_1.conda
@@ -922,7 +924,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f2/4d/a3ac39609c86b9d22ef2bae5e665ffebf73f158e65dff5dc6193787a7df6/blosc2-3.9.1-cp311-cp311-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/e0/98/7a8df8c19a335c8028414738490fc3955c0cecbfdd37fcc1b9c3d04bd561/cryptography-46.0.2-cp311-abi3-macosx_10_9_universal2.whl
       - pypi: https://files.pythonhosted.org/packages/cb/b7/51f5566e1309215a7fef744975b2fabb56d3fdc5fa1922fd7e306c14f523/cython-3.1.4-cp311-cp311-macosx_11_0_arm64.whl
-      - pypi: git+https://gitlab.windenergy.dtu.dk/DYNAMIKS/dynamiks.git?rev=77f4f875c6401fde150e351a60143a5b522cf950#77f4f875c6401fde150e351a60143a5b522cf950
+      - pypi: git+https://gitlab.windenergy.dtu.dk/DYNAMIKS/dynamiks.git@77f4f875c6401fde150e351a60143a5b522cf950
       - pypi: https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/eb/40/cd243be7ba9bd9d83fd8515b1aed7e0b822c76cab4bf60398a1b7e024f00/git_lfs-1.6-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/5b/f5/ac71e692aad076d50a0f5f073204346d5f5577daffd21bb4b72c485f8959/h5netcdf-1.6.4-py3-none-any.whl
@@ -950,7 +952,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/85/ba/6d118fb5be0b1e4e74b8ae9d3e53962b22106ae1fee7840b2f06974f049c/wetb-0.1.31-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3a/0c/3662f4a66880196a590b202f0db82d919dd2f89e99a27fadef91c4a33d41/xlsxwriter-3.2.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/44/48/def306413b25c3d01753603b1a222a011b8621aed27cd7f89cbc27e6b0f4/xlwt-1.3.0-py2.py3-none-any.whl
-      - pypi: ./
+      - pypi: .
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-4_kmp_llvm.conda
   build_number: 4
@@ -2131,9 +2133,9 @@ packages:
   purls: []
   size: 63265
   timestamp: 1739569780916
-- pypi: git+https://gitlab.windenergy.dtu.dk/DYNAMIKS/dynamiks.git?rev=77f4f875c6401fde150e351a60143a5b522cf950#77f4f875c6401fde150e351a60143a5b522cf950
+- pypi: git+https://gitlab.windenergy.dtu.dk/DYNAMIKS/dynamiks.git@77f4f875c6401fde150e351a60143a5b522cf950
   name: dynamiks
-  version: 0.0.4.post1.dev29+g77f4f875c
+  version: 0.0.4.post1.dev29+g77f4f87
   requires_dist:
   - numpy
   - py-wake
@@ -2143,15 +2145,6 @@ packages:
   - hipersim>=0.1.7
   - jdwm
   - multiclass-interface
-  - h2lib ; extra == 'test'
-  - h2lib-tests ; extra == 'test'
-  - nbconvert ; extra == 'test'
-  - ipykernel ; extra == 'test'
-  - h2lib ; extra == 'hawc2'
-  - wetb ; extra == 'hawc2'
-  - pyellipsys @ git+https://gitlab.windenergy.dtu.dk/EllipSys/pyellipsys.git@AR ; extra == 'ellipsys'
-  - mpi4py ; extra == 'ellipsys'
-  - mpi4py ; extra == 'mpi'
   - sphinx ; extra == 'docs'
   - python-docs-theme ; extra == 'docs'
   - numpydoc ; extra == 'docs'
@@ -2161,6 +2154,15 @@ packages:
   - sphinx-rtd-theme ; extra == 'docs'
   - ipympl ; extra == 'docs'
   - ipykernel ; extra == 'docs'
+  - pyellipsys @ git+https://gitlab.windenergy.dtu.dk/EllipSys/pyellipsys.git@AR ; extra == 'ellipsys'
+  - mpi4py ; extra == 'ellipsys'
+  - h2lib ; extra == 'hawc2'
+  - wetb ; extra == 'hawc2'
+  - mpi4py ; extra == 'mpi'
+  - h2lib ; extra == 'test'
+  - h2lib-tests ; extra == 'test'
+  - nbconvert ; extra == 'test'
+  - ipykernel ; extra == 'test'
   requires_python: '>=3.7'
 - pypi: https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl
   name: et-xmlfile
@@ -7544,6 +7546,37 @@ packages:
   - pkg:pypi/nodeenv?source=hash-mapping
   size: 34574
   timestamp: 1734112236147
+- conda: https://conda.anaconda.org/conda-forge/linux-64/nodejs-24.9.0-heeeca48_0.conda
+  sha256: 6abb823fd4d28e6474f40dfcf38e772e5869ee755be855cf5d2c0d49f888c75e
+  md5: 8a2a73951c1ea275e76fb1b92d97ff3e
+  depends:
+  - __glibc >=2.28,<3.0.a0
+  - libstdcxx >=14
+  - libgcc >=14
+  - libuv >=1.51.0,<2.0a0
+  - openssl >=3.5.3,<4.0a0
+  - icu >=75.1,<76.0a0
+  - libzlib >=1.3.1,<2.0a0
+  license: MIT
+  license_family: MIT
+  purls: []
+  size: 25557455
+  timestamp: 1759064044872
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/nodejs-24.4.1-hab9d20b_0.conda
+  sha256: c79d2c81f80a9adedc77362f2e8b10879ed0f9806deb6ba2464c1287a05f0b9b
+  md5: 463a537de602f8558604f27395b323d0
+  depends:
+  - libcxx >=19
+  - __osx >=11.0
+  - openssl >=3.5.1,<4.0a0
+  - libuv >=1.51.0,<2.0a0
+  - icu >=75.1,<76.0a0
+  - libzlib >=1.3.1,<2.0a0
+  license: MIT
+  license_family: MIT
+  purls: []
+  size: 17949155
+  timestamp: 1752839389217
 - conda: https://conda.anaconda.org/conda-forge/noarch/nomkl-1.0-h5ca1d4c_0.tar.bz2
   sha256: d38542a151a90417065c1a234866f97fd1ea82a81de75ecb725955ab78f88b4b
   md5: 9a66894dfd07c4510beb6b3f9672ccc0
@@ -8113,8 +8146,8 @@ packages:
   - invoke>=2.0
   - pynacl>=1.5
   - pyasn1>=0.1.7 ; extra == 'gssapi'
-  - gssapi>=1.4.1 ; sys_platform != 'win32' and extra == 'gssapi'
-  - pywin32>=2.1.8 ; sys_platform == 'win32' and extra == 'gssapi'
+  - gssapi>=1.4.1 ; platform_system != 'Windows' and extra == 'gssapi'
+  - pywin32>=2.1.8 ; platform_system == 'Windows' and extra == 'gssapi'
   requires_python: '>=3.9'
 - conda: https://conda.anaconda.org/conda-forge/noarch/parso-0.8.5-pyhcf101f3_0.conda
   sha256: 30de7b4d15fbe53ffe052feccde31223a236dae0495bab54ab2479de30b2990f
@@ -10867,10 +10900,10 @@ packages:
   - pkg:pypi/widgetsnbextension?source=hash-mapping
   size: 889285
   timestamp: 1744291155057
-- pypi: ./
+- pypi: .
   name: windgym
   version: 0.0.2
-  sha256: 08342bba3453a52280a5f3cbfe5614755df7403cfc0253d1196b30fef0658771
+  sha256: 340b75b86ddc9902f7fb3e8764594b38ed1d50393165159da20c8f529b174913
   requires_dist:
   - gymnasium
   - stable-baselines3
