@@ -1,4 +1,4 @@
-# filename: examples/noise_examples/train_protagonist.py (Updated)
+# filename: examples/noise_examples/train_protagonist.py (Updated with Self-Play)
 
 import os
 import tyro
@@ -15,19 +15,82 @@ from dataclasses import dataclass
 import yaml
 import wandb
 import time
+import glob
+from typing import List
 
 # --- WindGym Imports ---
 from WindGym import WindFarmEnv
-from WindGym.Measurement_Manager import MeasurementManager, NoisyWindFarmEnv
+from WindGym.Measurement_Manager import MeasurementManager, NoisyWindFarmEnv, NoiseModel
 from WindGym.utils.generate_layouts import generate_square_grid
 from py_wake.examples.data.hornsrev1 import V80
-from noise_definitions import (
-    create_procedural_noise_model,
-    AdversarialNoiseModel,
-)  # <-- NEW: Import AdversarialNoiseModel
+from noise_definitions import create_procedural_noise_model, AdversarialNoiseModel
 
 
-# --- Command-line Arguments ---
+# ============================================================================
+# 1. NEW: Helper Classes for Synthetic Self-Play
+# ============================================================================
+class NoiseModelPool:
+    """Holds a collection of noise models and allows for seeded random sampling."""
+
+    def __init__(self, noise_models: List[NoiseModel]):
+        if not noise_models:
+            raise ValueError(
+                "NoiseModelPool must be initialized with at least one noise model."
+            )
+        self.models = noise_models
+
+    def sample(self, rng: np.random.Generator) -> NoiseModel:
+        """Selects a noise model from the pool using the provided RNG."""
+        return rng.choice(self.models)
+
+
+class SelfPlayEnvWrapper(gym.Wrapper):
+    """
+    A wrapper that dynamically samples a new noise model from a pool at the start of each episode.
+    """
+
+    def __init__(self, env: WindFarmEnv, noise_model_pool: NoiseModelPool):
+        super().__init__(env)
+        self.noise_model_pool = noise_model_pool
+        self.mm = MeasurementManager(env, seed=env.seed)
+
+        # The observation and action spaces are those of the underlying env
+        self.observation_space = self.env.observation_space
+        self.action_space = self.env.action_space
+
+    def reset(self, **kwargs):
+        # The base env's reset is called first, which correctly seeds its RNG
+        clean_obs, info = self.env.reset(**kwargs)
+
+        # Use the env's seeded RNG to sample a noise model for this episode
+        active_noise_model = self.noise_model_pool.sample(rng=self.env.np_random)
+        self.mm.set_noise_model(active_noise_model)
+
+        # Reset the chosen noise model (e.g., sample a new bias)
+        self.mm.reset_noise()
+
+        # Apply the initial noise
+        noisy_obs, noise_info = self.mm.apply_noise(clean_obs)
+        info.update(noise_info)
+        info["clean_obs"] = clean_obs
+
+        return noisy_obs, info
+
+    def step(self, action: np.ndarray):
+        clean_obs, reward, terminated, truncated, info = self.env.step(action)
+
+        # Apply noise using the model selected during the last reset
+        noisy_obs, noise_info = self.mm.apply_noise(clean_obs)
+
+        info.update(noise_info)
+        info["clean_obs"] = clean_obs
+
+        return noisy_obs, reward, terminated, truncated, info
+
+
+# ============================================================================
+# 2. Command-line Arguments
+# ============================================================================
 @dataclass
 class Args:
     """Script arguments"""
@@ -35,36 +98,37 @@ class Args:
     project_name: str = "WindGym_Protagonist_Training"
     run_name_prefix: str = "PPO_Protagonist"
     seed: int = 42
-    total_timesteps: int = 500000
-    n_envs: int = 4
+    total_timesteps: int = 2000000
+    n_envs: int = 8
 
     yaml_config_path: str = "env_config/two_turbine_yaw.yaml"
 
-    noise_type: str = "procedural"  # 'none', 'procedural', or 'adversarial' # <-- NEW: Added 'adversarial' option
+    noise_type: str = (
+        "procedural"  # 'none', 'procedural', 'adversarial', or 'synthetic_self_play'
+    )
 
-    antagonist_path: str = ""  # <-- NEW: Path to the antagonist model, only used if noise_type is 'adversarial'
+    antagonist_path: str = ""  # Path to a single antagonist model
+    adversary_pool_path: str = (
+        "models/adversaries_stateful/"  # <-- NEW: Path to a directory of antagonists
+    )
 
     learning_rate: float = 3e-4
     gamma: float = 0.99
     net_arch: str = "128,128"
-
     models_dir: str = "models/protagonist_training"
-
-    # PPO-specific arguments
     n_steps: int = 512
     batch_size: int = 64
     n_epochs: int = 10
     ent_coef: float = 0.01
 
 
+# ============================================================================
+# 3. Environment Factory
+# ============================================================================
 def make_env_factory(args: Args, rank: int) -> callable:
-    """
-    Creates a factory function for a single environment instance.
-    This factory encapsulates all necessary setup, including the noise model.
-    """
+    """Creates a factory function for a single environment instance."""
 
     def _init() -> gym.Env:
-        """Initializes and wraps the environment."""
         with open(args.yaml_config_path, "r") as f:
             config = yaml.safe_load(f)
 
@@ -92,65 +156,79 @@ def make_env_factory(args: Args, rank: int) -> callable:
         env_seed = args.seed + rank
         env_instance = WindFarmEnv(**base_env_kwargs, seed=env_seed)
 
-        if args.noise_type != "none":
+        if args.noise_type == "none":
+            return Monitor(env_instance)
+
+        if args.noise_type == "synthetic_self_play":
+            print(f"Rank {rank}: Setting up Synthetic Self-Play pool...")
+            if not args.adversary_pool_path:
+                raise ValueError(
+                    "--adversary-pool-path is required for synthetic_self_play."
+                )
+
+            noise_models = []
+            # 1. Add the procedural noise model to the pool
+            noise_models.append(create_procedural_noise_model())
+
+            # 2. Find and load all adversary models
+            adversary_paths = glob.glob(
+                os.path.join(args.adversary_pool_path, "**/final_adversary_model.zip"),
+                recursive=True,
+            )
+            print(
+                f"Found {len(adversary_paths)} adversaries in '{args.adversary_pool_path}'."
+            )
+
+            for path in adversary_paths:
+                antagonist = PPO.load(path, device="cpu")
+                noise_models.append(
+                    AdversarialNoiseModel(antagonist_agent=antagonist, device="cpu")
+                )
+
+            # 3. Create the pool and the final wrapped environment
+            model_pool = NoiseModelPool(noise_models)
+            wrapped_env = SelfPlayEnvWrapper(env_instance, model_pool)
+
+        else:  # Handle procedural and single adversarial cases
             mm = MeasurementManager(env_instance, seed=env_seed)
             noise_model = None
 
             if args.noise_type == "procedural":
-                print(f"Rank {rank}: Using procedural noise.")
                 noise_model = create_procedural_noise_model()
-
             elif args.noise_type == "adversarial":
-                print(
-                    f"Rank {rank}: Using adversarial noise from '{args.antagonist_path}'."
-                )
                 if not args.antagonist_path:
                     raise ValueError(
                         "--antagonist-path is required for adversarial training."
                     )
-
-                # Load the pre-trained antagonist agent
-                antagonist_agent = PPO.load(args.antagonist_path, device="cpu")
-
-                # Create the adversarial noise model
+                antagonist = PPO.load(args.antagonist_path, device="cpu")
                 noise_model = AdversarialNoiseModel(
-                    antagonist_agent=antagonist_agent, device="cpu"
+                    antagonist_agent=antagonist, device="cpu"
+                )
+            else:
+                raise ValueError(
+                    f"Unsupported noise_type for this block: {args.noise_type}"
                 )
 
-            else:
-                raise ValueError(f"Unsupported noise_type: {args.noise_type}")
-
-            if noise_model:
-                mm.set_noise_model(noise_model)
-
-            # The NoisyWindFarmEnv will wrap the base env and use the configured MeasurementManager
+            mm.set_noise_model(noise_model)
             wrapped_env = NoisyWindFarmEnv(
-                base_env_class=WindFarmEnv,
-                measurement_manager=mm,
-                **env_instance.kwargs,
+                type(env_instance), mm, **env_instance.kwargs
             )
-        else:
-            wrapped_env = env_instance
 
         return Monitor(wrapped_env)
 
     return _init
 
 
+# ============================================================================
+# 4. Main Training Loop
+# ============================================================================
 def main(args: Args):
     if not os.path.exists(args.yaml_config_path):
         raise FileNotFoundError(
             f"YAML configuration file not found at: {args.yaml_config_path}"
         )
 
-    # --- NEW: Create a more descriptive run name ---
-    run_name = f"{args.run_name_prefix}_vs_{args.noise_type}"
-    if args.noise_type == "adversarial":
-        antagonist_id = os.path.basename(os.path.dirname(args.antagonist_path))
-        run_name += f"_{antagonist_id}"
-    run_name += f"_{int(time.time())}"
-    # --- END NEW ---
-
+    run_name = f"{args.run_name_prefix}_vs_{args.noise_type}_{int(time.time())}"
     wandb.init(
         project=args.project_name,
         config=vars(args),
@@ -185,17 +263,14 @@ def main(args: Args):
     callbacks = CallbackList(
         [
             WandbCallback(
-                gradient_save_freq=0,
-                model_save_path=os.path.join(models_save_path, "checkpoints"),
-                verbose=2,
-                model_save_freq=50_000 // args.n_envs,
-            ),
+                model_save_path=os.path.join(models_save_path, "checkpoints"), verbose=2
+            )
         ]
     )
 
     try:
         model.learn(total_timesteps=args.total_timesteps, callback=callbacks)
-        model.save(os.path.join(models_save_path, "final_protagonist_model"))
+        model.save(os.path.join(models_save_path, "final_model"))
         print(f"\n✅ Training complete. Final model saved to '{models_save_path}'")
     finally:
         vec_env.close()
