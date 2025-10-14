@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from WindGym import WindFarmEnv
 from WindGym.utils.generate_layouts import generate_square_grid
 from py_wake.examples.data.hornsrev1 import V80
-from noise_definitions import AdversarialNoiseModel
+from noise_definitions import AdversarialNoiseModel, get_adversarial_constraints
 from WindGym.Measurement_Manager import MeasurementManager
 
 
@@ -108,8 +108,6 @@ class Args:
     total_timesteps: int = 500000
     n_envs: int = 8
     yaml_config_path: str = "env_config/two_turbine_yaw.yaml"
-    max_bias_ws: float = 2.0
-    max_bias_wd: float = 20.0
     learning_rate: float = 3e-4
     gamma: float = 0.99
     net_arch: str = "64,64"
@@ -151,7 +149,7 @@ def make_env_factory(args: Args, rank: int, protagonist_model: PPO) -> callable:
             seed=args.seed + rank,
         )
 
-        constraints = {"max_bias_ws": args.max_bias_ws, "max_bias_wd": args.max_bias_wd}
+        constraints = get_adversarial_constraints()
 
         # The noise model holds a reference to the antagonist that will be trained
         noise_model = AdversarialNoiseModel(constraints=constraints)
