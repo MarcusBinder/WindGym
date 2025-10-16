@@ -21,6 +21,8 @@ from WindGym.Measurement_Manager import MeasurementManager
 from WindGym.utils.generate_layouts import generate_square_grid
 from py_wake.examples.data.hornsrev1 import V80
 from noise_definitions import AdversarialNoiseModel, get_adversarial_constraints
+from stable_baselines3 import PPO
+from utils import load_sb3_weights_into_custom_agent, Agent, layer_init
 
 
 # ============================================================================
@@ -138,6 +140,13 @@ class Args:
     learning_rate: float = 3e-4
     gamma: float = 0.99
     gae_lambda: float = 0.95
+    protagonist_path: str = ""
+    antagonist_path: str = ""
+
+    # REVISED: Flags to specify model type
+    protagonist_is_sb3: bool = False
+    antagonist_is_sb3: bool = False  # For generality, though less common
+    iteration: int = 0
     n_steps: int = 2048
     num_minibatches: int = 32
     update_epochs: int = 10
@@ -147,52 +156,6 @@ class Args:
     max_grad_norm: float = 0.5
     net_arch: str = "128,128"
     models_dir: str = "models/self_play"
-
-
-class Agent(nn.Module):
-    def __init__(self, obs_space, act_space, net_arch):
-        super().__init__()
-        obs_shape = np.array(obs_space.shape).prod()
-        act_shape = np.prod(act_space.shape)
-
-        self.critic = nn.Sequential(
-            layer_init(nn.Linear(obs_shape, net_arch[0])),
-            nn.Tanh(),
-            layer_init(nn.Linear(net_arch[0], net_arch[1])),
-            nn.Tanh(),
-            layer_init(nn.Linear(net_arch[1], 1), std=1.0),
-        )
-        self.actor_mean = nn.Sequential(
-            layer_init(nn.Linear(obs_shape, net_arch[0])),
-            nn.Tanh(),
-            layer_init(nn.Linear(net_arch[0], net_arch[1])),
-            nn.Tanh(),
-            layer_init(nn.Linear(net_arch[1], act_shape), std=0.01),
-        )
-        self.actor_logstd = nn.Parameter(torch.zeros(1, act_shape))
-
-    def get_value(self, x):
-        return self.critic(x)
-
-    def get_action_and_value(self, x, action=None):
-        action_mean = self.actor_mean(x)
-        action_logstd = self.actor_logstd.expand_as(action_mean)
-        action_std = torch.exp(action_logstd)
-        probs = Normal(action_mean, action_std)
-        if action is None:
-            action = probs.sample()
-        return (
-            action,
-            probs.log_prob(action).sum(1),
-            probs.entropy().sum(1),
-            self.critic(x),
-        )
-
-
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, bias_const)
-    return layer
 
 
 # ============================================================================
@@ -243,6 +206,46 @@ def main(args: Args):
         optimizers[agent_id] = optim.Adam(
             agents[agent_id].parameters(), lr=args.learning_rate, eps=1e-5
         )
+
+    # In main() function of train_self_play.py
+
+    # ... (after creating agents and optimizers) ...
+
+    # --- NEW GENERAL MODEL LOADING LOGIC ---
+    # Load Protagonist if a path is provided
+    if args.protagonist_path:
+        if args.protagonist_is_sb3:
+            # Load from a .zip SB3 model
+            agents["protagonist"] = load_sb3_weights_into_custom_agent(
+                args.protagonist_path, agents["protagonist"], device
+            )
+        else:
+            # Load from a .pt custom model
+            print(
+                f"INFO: Loading protagonist from '{os.path.basename(args.protagonist_path)}'"
+            )
+            agents["protagonist"].load_state_dict(
+                torch.load(args.protagonist_path, map_location=device)
+            )
+    else:
+        print("INFO: Protagonist is starting from scratch.")
+
+    # Load Antagonist if a path is provided
+    if args.antagonist_path:
+        if args.antagonist_is_sb3:
+            # This is an edge case but good to support
+            agents["antagonist"] = load_sb3_weights_into_custom_agent(
+                args.antagonist_path, agents["antagonist"], device
+            )
+        else:
+            print(
+                f"INFO: Loading antagonist from '{os.path.basename(args.antagonist_path)}'"
+            )
+            agents["antagonist"].load_state_dict(
+                torch.load(args.antagonist_path, map_location=device)
+            )
+    else:
+        print("INFO: Antagonist is starting from scratch.")
 
     batch_size = int(args.n_envs * args.n_steps)
     minibatch_size = int(batch_size // args.num_minibatches)
@@ -406,7 +409,9 @@ def main(args: Args):
 
     os.makedirs(args.models_dir, exist_ok=True)
     for agent_id, agent_model in agents.items():
-        model_path = os.path.join(args.models_dir, f"{run_name}_{agent_id}.pt")
+        model_path = os.path.join(
+            args.models_dir, f"iter_{args.iteration:03d}_{agent_id}_{args.run_name}.pt"
+        )
         torch.save(agent_model.state_dict(), model_path)
         print(f"Saved {agent_id} model to {model_path}")
 

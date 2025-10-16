@@ -98,25 +98,31 @@ class AdversarialNoiseModel(NoiseModel):
         clean_observations: np.ndarray,
         specs: List[MeasurementSpec],
         rng: np.random.Generator,
+        adv_action: np.ndarray = None,  # <-- Make the action optional
     ) -> np.ndarray:
         """
-        Calculates and applies the adversarial bias for the current step by querying its internal agent.
+        Calculates and applies the adversarial bias.
+        - If adv_action is provided (from a training loop), it uses that action.
+        - If adv_action is None (from a simple evaluation loop), it generates its own action.
         """
         if self.antagonist is None:
             return clean_observations
 
-        # 1. Get antagonist's action based on the clean state of the environment
-        obs_tensor = torch.Tensor(clean_observations).to(self.device).unsqueeze(0)
-        with torch.no_grad():
-            if hasattr(self.antagonist, "predict"):
-                antagonist_action, _ = self.antagonist.predict(
-                    obs_tensor, deterministic=True
-                )
-                antagonist_action = antagonist_action.flatten()
-            else:  # Fallback for raw PyTorch models
-                antagonist_action = (
-                    self.antagonist.actor_mean(obs_tensor).squeeze(0).cpu().numpy()
-                )
+        antagonist_action = None
+        if adv_action is not None:
+            # Use the action passed in by the training loop
+            antagonist_action = adv_action
+        else:
+            # Get the action itself if none was provided
+            obs_tensor = torch.Tensor(clean_observations).to(self.device).unsqueeze(0)
+            with torch.no_grad():
+                if hasattr(self.antagonist, "predict"):
+                    action, _ = self.antagonist.predict(obs_tensor, deterministic=True)
+                    antagonist_action = action.flatten()
+                else:
+                    antagonist_action = (
+                        self.antagonist.actor_mean(obs_tensor).squeeze(0).cpu().numpy()
+                    )
 
         noisy_obs = clean_observations.copy()
         action_idx = 0
