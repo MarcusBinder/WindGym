@@ -200,8 +200,8 @@ def run_comparison():
                 break
 
         applied_biases = bias_component.get("applied_bias (physical_units)", {})
-        ws_bias_str = f'{applied_biases.get("turb_0/ws_current", 0.0):.2f}'
-        wd_bias_str = f'{applied_biases.get("turb_0/wd_current", 0.0):.2f}'
+        ws_bias_str = f"{applied_biases.get('turb_0/ws_current', 0.0):.2f}"
+        wd_bias_str = f"{applied_biases.get('turb_0/wd_current', 0.0):.2f}"
 
         time_steps = history_noisy_agent["step"]
 

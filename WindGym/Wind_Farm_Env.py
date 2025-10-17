@@ -26,6 +26,7 @@ from dynamiks.dwm.added_turbulence_models import (
     SynchronizedAutoScalingIsotropicMannTurbulence,
     AutoScalingIsotropicMannTurbulence,
 )
+from dynamiks.sites._site import MetmastSite
 
 from IPython import display
 
@@ -96,6 +97,8 @@ class WindFarmEnv(WindEnv):
         reset_init=True,
         burn_in_passthroughs=2,  # number of passthroughs before episode starts
         cleanup_on_time_limit: bool = True,
+        wd_function=None,  # A function that takes in the timestep and returns the wind direction
+        max_turb_move=2,  # The maximum distance that the turbines can move in one timestep. This is used to avoid numerical issues with the DWM solver.
         **kwargs,
     ):
         """
@@ -133,6 +136,9 @@ class WindFarmEnv(WindEnv):
         # Check that x_pos and y_pos are the same length
         if len(x_pos) != len(y_pos):
             raise ValueError("x_pos and y_pos must be the same length")
+
+        self.max_turb_move = max_turb_move
+        self.wd_function = wd_function
 
         # Predefined values
         self.wts = None
@@ -907,6 +913,44 @@ class WindFarmEnv(WindEnv):
                 self.TI_inflow_min, self.TI_inflow_max
             )  # The TI is still uniformly distributed.
 
+    def _make_wd_list(self):
+        """
+        Generates a list of wind directions for the entire episode.
+
+        If `self.wd_function` is None, it creates a list with a constant wind
+        direction (using the value of `self.wd` sampled at the beginning of reset).
+        Otherwise, it calls the function for each simulation time step to
+        populate the list.
+        """
+        # Calculate the total number of simulation steps for the episode
+        num_sim_steps = math.ceil(self.time_max / self.dt_sim) + 1
+
+        # Ammount of time to keep the wind direction steady.
+        # steady_state_steps = self.dt_env * np.ceil(self.t_developed / self.dt_env) + self.steps_on_reset*self.dt_env
+        steady_state_steps = (
+            np.ceil(self.t_developed / self.dt_env) + self.steps_on_reset
+        )
+        # Initialize the list
+        self.wd_lst = []
+
+        # Phase 1: Burn-in period - constant wind direction
+        self.wd_lst.extend([self.wd] * int(steady_state_steps))
+
+        # Phase 2: Episode period - either constant or time-varying
+        if self.wd_function is None:
+            # Continue with constant wind direction
+            self.wd_lst.extend([self.wd] * num_sim_steps)
+        else:
+            # Generate time-varying wind directions starting from t_developed
+            for i in range(num_sim_steps):
+                # Time starts at t_developed and increases
+                t = i * self.dt_sim
+                self.wd_lst.append(self.wd_function(t))
+
+        # Ensure the first value in the list matches the initial wind direction
+        # This is important for consistency with other initialization steps.
+        self.wd_lst[0] = self.wd
+
     def _sample_site(self, dirs, As, ks, freqs):
         """
         sample wind direction and wind speed from the site
@@ -991,11 +1035,50 @@ class WindFarmEnv(WindEnv):
             # Throw and error:
             raise ValueError("Invalid turbulence type specified")
 
-        self.site = TurbulenceFieldSite(ws=self.ws, turbulenceField=tf_agent)
+        # Calculate t_developed and time_max based on farm geometry
+        turb_pos = np.stack([self.x_pos, self.y_pos])
+        center = (turb_pos.max(1) + turb_pos.min(1)) / 2
+        distances = np.sqrt(np.sum((turb_pos - center[:, np.newaxis]) ** 2, axis=0))
+        max_dist = np.max(distances)
+
+        # Time for flow to develop (distance from origin to furthest turbine)
+        turbine_max_dist = np.sqrt(np.sum(turb_pos**2, axis=0)).max()
+        t_inflow = turbine_max_dist / self.ws
+        self.t_developed = math.ceil(t_inflow * self.burn_in_passthroughs)
+        self.time_max = math.ceil(t_inflow * self.n_passthrough)
+
+        # For single turbine, use rotor diameter
+        if self.n_turb == 1:
+            self.time_max = math.ceil((self.D * self.n_passthrough) / self.ws)
+
+        self.time_max = max(1, self.time_max)
+
+        # Calculate max wind direction change rate
+        d_theta_lim = self.max_turb_move * 360 / (2 * np.pi * max_dist)
+
+        # Make the wd list for the entire episode
+        self._make_wd_list()
+
+        self.site = MetmastSite(
+            ws=self.ws,
+            turbulenceField=tf_agent,  # no turbulence field in this example)
+            wd_lst=self.wd_lst,  # the wind direction time series
+            dt=self.dt_sim,  # seconds between samples in the time series
+            max_wd_step=d_theta_lim,  # Maximum change in WD per second (deg/s)
+            update_interval=self.dt_sim,  # How often to update the WD from the list
+        )
 
         if self.Baseline_comp:  # I am pretty sure we need to have 2 sites, as the flow simulation is run on the site, and the measurements are taken from the site.
             tf_base = copy.deepcopy(tf_agent)
-            self.site_base = TurbulenceFieldSite(ws=self.ws, turbulenceField=tf_base)
+            # self.site_base = TurbulenceFieldSite(ws=self.ws, turbulenceField=tf_base)
+            self.site_base = MetmastSite(
+                ws=self.ws,
+                turbulenceField=tf_base,  # no turbulence field in this example)
+                wd_lst=self.wd_lst,
+                dt=self.dt_sim,
+                max_wd_step=d_theta_lim,  # Maximum change in WD per second (deg/s)
+                update_interval=self.dt_sim,  # How often to update the WD from the list
+            )
             tf_base = None
         tf_agent = None
         gc.collect()
@@ -1046,7 +1129,18 @@ class WindFarmEnv(WindEnv):
                 addedTurbulenceModel=self.addedTurbulenceModel,
             )
         else:
-            # --- NEW steady-state backend (PyWake) ---
+            # PyWake backend: calculate times but don't need wind direction list
+            turb_pos = np.stack([self.x_pos, self.y_pos])
+            turbine_max_dist = np.sqrt(np.sum(turb_pos**2, axis=0)).max()
+            t_inflow = turbine_max_dist / self.ws
+            self.t_developed = math.ceil(t_inflow * self.burn_in_passthroughs)
+            self.time_max = math.ceil(t_inflow * self.n_passthrough)
+
+            if self.n_turb == 1:
+                self.time_max = math.ceil((self.D * self.n_passthrough) / self.ws)
+
+            self.time_max = max(1, self.time_max)
+
             if self.HTC_path is not None:
                 raise NotImplementedError(
                     "pywake_steady backend does not support HAWC2WindTurbines."
@@ -1075,22 +1169,6 @@ class WindFarmEnv(WindEnv):
 
         # Must init probes after fs
         self._init_probes(self.fs.windTurbines.yaw)
-
-        # Calulate the time it takes for the flow to develop.
-        turb_xpos = self.fs.windTurbines.rotor_positions_xyz[0, :]
-        dist = turb_xpos.max() - turb_xpos.min()
-
-        # Time it takes for the flow to travel from one side of the farm to the other
-        t_inflow = dist / self.ws
-        t_developed = math.ceil(t_inflow * self.burn_in_passthroughs)
-        self.time_max = math.ceil(t_inflow * self.n_passthrough)
-
-        if self.n_turb == 1:
-            # For a single turbine, base the time on flow passing the rotor diameter
-            self.time_max = math.ceil((self.D * self.n_passthrough) / self.ws)
-
-        # Ensure time_max is at least 1 to allow at least one step
-        self.time_max = max(1, self.time_max)
 
         # 3b) Baseline flow sim (optional)
         if self.Baseline_comp:
@@ -1130,9 +1208,9 @@ class WindFarmEnv(WindEnv):
 
         # 3c) Run the flow for the time it takes to develop
         if self.backend == "dynamiks":
-            self.fs.run(t_developed)
+            self.fs.run(self.t_developed)
             if self.Baseline_comp:
-                self.fs_baseline.run(t_developed)
+                self.fs_baseline.run(self.t_developed)
         else:
             # Steady-state: nothing to "develop", but keep API consistent
             self.fs.run(0)
@@ -1254,7 +1332,12 @@ class WindFarmEnv(WindEnv):
                 self._adjust_yaws(action)
 
             # 2) Step agent flow
+            wd_old = self.fs.wind_direction
             self.fs.step()
+
+            wd_new = self.fs.wind_direction
+            delta_wd = wd_new - wd_old
+            self.fs.windTurbines.yaw += delta_wd
 
             # 3) Baseline, only if requested
             if include_baseline:
@@ -1263,7 +1346,12 @@ class WindFarmEnv(WindEnv):
                         fs=self.fs_baseline, yaw_step=self.yaw_step_sim
                     )
                     self.fs_baseline.windTurbines.yaw = new_baseline_yaws
+                wd_old_baseline = self.fs_baseline.wind_direction
                 self.fs_baseline.step()
+
+                wd_new_baseline = self.fs_baseline.wind_direction
+                delta_wd_baseline = wd_new_baseline - wd_old_baseline
+                self.fs_baseline.windTurbines.yaw += delta_wd_baseline
 
             # 4) Measurements at this sim step
             self._take_measurements()

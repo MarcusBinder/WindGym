@@ -371,7 +371,7 @@ def test_ppo_compatibility(wind_farm_env):
     num_steps_to_take = 2
     print(f"Taking {num_steps_to_take} manual steps...")
     for i in range(num_steps_to_take):
-        print(f"Step {i+1}/{num_steps_to_take}...")
+        print(f"Step {i + 1}/{num_steps_to_take}...")
 
         # Predict action from the model
         action, _ = model.predict(
@@ -422,7 +422,7 @@ def test_ppo_compatibility(wind_farm_env):
         # Handle episode termination/truncation (and reset for next step if needed)
         if terminated or truncated:
             print(
-                f"Episode terminated/truncated early at step {i+1} during manual steps, resetting."
+                f"Episode terminated/truncated early at step {i + 1} during manual steps, resetting."
             )
             # For this minimal test, you might simply break here or ensure it handles a new reset
             # For a proper RL loop, you'd always reset and continue
