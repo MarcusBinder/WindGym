@@ -330,7 +330,7 @@ def eval_single_fast(
             ax3.plot(time_deq, yaw_deq, label=np.arange(n_turb))
             ax3.set_title("Turbine yaws [deg]")
             ax3.legend(
-                [f"T{i+1}" for i in range(n_turb)],
+                [f"T{i + 1}" for i in range(n_turb)],
                 loc="upper left",
                 bbox_to_anchor=(1, 1),
             )
