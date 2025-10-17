@@ -80,7 +80,7 @@ class WindFarmEnv(WindEnv):
         yaw_scaling_min: float = -45,
         yaw_scaling_max: float = 45,
         TurbBox="Default",
-        turbtype="MannGenerate",
+        turbtype="Random",
         backend: str = "dynamiks",
         config=None,
         Baseline_comp=False,
