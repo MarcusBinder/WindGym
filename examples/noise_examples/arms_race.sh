@@ -14,9 +14,9 @@ CONFIG_PATH="env_config/two_turbine_yaw.yaml"
 SEED=42
 PROT_DIR="models/protagonist_training"
 ADV_DIR="models/adversaries_stateful"
-N_ENVS=4
-PROTAGONIST_TIMESTEPS=5000
-ADVERSARY_TIMESTEPS=5000
+N_ENVS=6
+PROTAGONIST_TIMESTEPS=250000
+ADVERSARY_TIMESTEPS=250000
 MAX_ITERATIONS=8
 
 # ===================================================================================
