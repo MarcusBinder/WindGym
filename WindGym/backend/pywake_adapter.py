@@ -84,7 +84,7 @@ class _AdapterWindTurbines:
         )  # e.g., ["V80"] or ["DTU10MW"]
         # Map by type index if present; default to the first name
         maxlen = max(len(s) for s in base_names)
-        dtype = f"<U{maxlen if maxlen>0 else 1}"
+        dtype = f"<U{maxlen if maxlen > 0 else 1}"
         names_arr = np.empty(N, dtype=dtype)
         for i in range(N):
             t = int(self.types[i]) if i < len(self.types) else 0
