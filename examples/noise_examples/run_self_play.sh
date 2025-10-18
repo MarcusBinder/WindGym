@@ -7,7 +7,7 @@ set -e # Exit immediately if a command exits with a non-zero status.
 
 # --- Configuration ---
 MAX_ITERATIONS=4
-SP_TIMESTEPS_PER_ITER=4000 
+SP_TIMESTEPS_PER_ITER=500000
 PROCEDURAL_START=false
 # IMPORTANT: Update this path to your protagonist trained on procedural noise (.zip file)
 PROCEDURAL_PROT_PATH="models/protagonist_training/YOUR_PROCEDURAL_MODEL_ID/final_model.zip" 
