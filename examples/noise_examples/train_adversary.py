@@ -142,7 +142,7 @@ def make_env_factory(args: Args, rank: int, protagonist_model: PPO) -> callable:
             turbine=turbine_obj,
             config=args.yaml_config_path,
             turbtype=config.get("turbtype", "None"),
-            dt_sim=1,
+            dt_sim=5,
             dt_env=10,
             reset_init=True,
             Baseline_comp=True,

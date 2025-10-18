@@ -191,6 +191,8 @@ def main(args: Args):
         turbine=V80(),
         config=args.yaml_config_path,
         turbtype="None",
+        dt_sim=5,
+        dt_env=10,
         seed=args.seed,
         reset_init=False,
     )
