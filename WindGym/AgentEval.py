@@ -44,128 +44,33 @@ Wind turbine has a lambda function, so we must use the pathos library to paralle
 """
 
 
-def eval_single_fast(
+def _run_simulation_loop(
     env,
     model,
-    model_step=1,
-    ws=10.0,
-    ti=0.05,
-    wd=270,
-    turbbox="Default",
-    save_figs=False,
-    scale_obs=None,
-    t_sim=1000,
-    name="NoName",
-    debug=False,
-    deterministic=False,
-    return_loads=False,
-    cleanup=True,
+    total_steps,
+    step_val,
+    device,
+    save_figs,
+    scaling,
+    name,
+    wd,
+    deterministic,
+    baseline_comp,
+    powerF_a,
+    powerT_a,
+    yaw_a,
+    ws_a,
+    time_plot,
+    rew_plot,
+    powerF_b,
+    powerT_b,
+    yaw_b,
+    ws_b,
+    pct_inc,
+    obs,
+    user_vars,
+    user_var_data,
 ):
-    """
-    This function evaluates the agent for a single wind direction, and then saves the results in a xarray dataset.
-    The function can also save the figures, if save_figs is set to True.
-
-    Args:
-    env: The environment to evaluate the agent on.
-    model: The agent to evaluate.
-    model_step: The step of the model. This is used to keep track of the model step in the xarray dataset.
-    ws: The wind speed to simulate.
-    ti: The turbulence intensity to simulate.
-    wd: The wind direction to simulate.
-    turbbox: The turbulence box to simulate.
-    save_figs: If True, the function will save the figures.
-    scale_obs: If True, the function will scale the observations for the plots.
-    t_sim: The time to simulate.
-    name: The name of the evaluation.
-    debug: If True, the function will print debug information on the plots.
-    deterministic: If True, the agent will be deterministic.
-
-    """
-
-    device = torch.device("cpu")
-
-    if hasattr(env.unwrapped, "parent_pipes"):
-        raise AssertionError(
-            "The eval_single_fast function is not compatible with vectorized versions of the environment. Please use unvectorized envs instead."
-        )
-
-    env.set_wind_vals(ws=ws, ti=ti, wd=wd)
-    baseline_comp = env.Baseline_comp
-
-    if not isinstance(scale_obs, list):  # if not a list, make it one
-        scaling = [scale_obs]
-    if debug:  # If debug, do both.
-        scaling = [True, False]
-        save_figs = True
-
-    if model is None:
-        AssertionError("You need to specify a model to evaluate the agent.")
-
-    # Calculate the correct number of steps
-    step_val = (
-        env.sim_steps_per_env_step
-    )  # This is the number of steps per environment step
-    total_steps = (
-        t_sim // env.dt_env + 1
-    )  # This is the total number of steps to simulate
-    time = total_steps * step_val + 1
-
-    n_turb = env.n_turb  # Number of turbines
-    n_ws = 1  # Number of wind speeds to simulate
-    n_wd = 1  # Number of wind direction simulate
-    n_turbbox = 1  # Number of turbulence boxes to simulate
-    n_TI = 1  # Number of turbulence intensities to simulate
-
-    # Initialize the arrays to store the results
-    # _a is the agent and _b is the baseline
-    powerF_a = np.zeros((time), dtype=np.float32)
-    powerT_a = np.zeros((time, n_turb), dtype=np.float32)
-    yaw_a = np.zeros((time, n_turb), dtype=np.float32)
-    ws_a = np.zeros((time, n_turb), dtype=np.float32)
-    time_plot = np.zeros((time), dtype=int)
-    rew_plot = np.zeros((time), dtype=np.float32)
-
-    if baseline_comp:
-        powerF_b = np.zeros((time), dtype=np.float32)
-        powerT_b = np.zeros((time, n_turb), dtype=np.float32)
-        yaw_b = np.zeros((time, n_turb), dtype=np.float32)
-        ws_b = np.zeros((time, n_turb), dtype=np.float32)
-        pct_inc = np.zeros((time), dtype=np.float32)
-
-    # Initialize the environment
-    obs, info = env.reset()
-
-    # This checks if we are using a pywakeagent. If we are, then we do this:
-    if hasattr(model, "pywakeagent") or hasattr(model, "florisagent"):
-        model.update_wind(ws, wd, ti)
-        model.predict(obs, deterministic=deterministic)[0]
-    # This checks if we are using an agent that needs the environment. If we are, then we do this
-    if hasattr(model, "UseEnv"):
-        model.yaw_max = env.yaw_max
-        model.yaw_min = env.yaw_min
-        model.env = env
-
-    # Put the initial values in the arrays
-    powerF_a[0] = env.fs.windTurbines.power().sum()
-    powerT_a[0] = env.fs.windTurbines.power()
-    yaw_a[0] = env.fs.windTurbines.yaw
-    ws_a[0] = np.linalg.norm(env.fs.windTurbines.rotor_avg_windspeed, axis=1)
-    time_plot[0] = env.fs.time
-    # There is no reward at the first time step, so we just set it to zero.
-    rew_plot[0] = 0.0
-
-    if baseline_comp:
-        powerF_b[0] = env.fs_baseline.windTurbines.power().sum()
-        powerT_b[0] = env.fs_baseline.windTurbines.power()
-        yaw_b[0] = env.fs_baseline.windTurbines.yaw
-        ws_b[0] = np.linalg.norm(
-            env.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
-        )
-        pct_inc[0] = (
-            ((powerF_a[0] - powerF_b[0]) / powerF_b[0]) * 100
-        )  # Percentage increase in power output. This should be zero (or close to zero) at the first time step.
-
-    # If save_figs is True, initalize some parameters here.
     if save_figs:
         FOLDER = "./Temp_Figs_{}_ws{}_wd{}/".format(name, env.ws, wd)
         if not os.path.exists(FOLDER):
@@ -180,64 +85,48 @@ def eval_single_fast(
         pow_deq.append(powerF_a[0])
         yaw_deq.append(yaw_a[0])
         ws_deq.append(ws_a[0])
-        # These are used for y limits on the plot.
         pow_max = powerF_a[0] * 1.2
         pow_min = powerF_a[0] * 0.8
-        yaw_max = 5
-        yaw_min = -5
+        yaw_max_val = 5
+        yaw_min_val = -5
         ws_max = env.ws + 2
         ws_min = 3
 
-        # Define the x and y values for the flow field plot
         a = np.linspace(-200 + min(env.x_pos), 300 + max(env.x_pos), 200)
         b = np.linspace(-200 + min(env.y_pos), 200 + max(env.y_pos), 200)
 
-    # Run the simulation
     for i in range(0, total_steps):
-        if hasattr(model, "model_type"):
-            if model.model_type == "CleanRL":
-                obs = np.expand_dims(obs, 0)
-                action, _, _ = model.get_action(
-                    torch.Tensor(obs).to(device), deterministic=deterministic
-                )
-                action = action.detach().cpu().numpy()
-                action = action.flatten()
-        else:  # This is for the other models (Pywake and such)
+        if hasattr(model, "model_type") and model.model_type == "CleanRL":
+            obs = np.expand_dims(obs, 0)
+            action, _, _ = model.get_action(
+                torch.Tensor(obs).to(device), deterministic=deterministic
+            )
+            action = action.detach().cpu().numpy().flatten()
+        else:
             action = model.predict(obs, deterministic=deterministic)[0]
 
         obs, reward, terminated, truncated, info = env.step(action)
 
-        # Put the values in the arrays
-        powerF_a[i * step_val + 1 : i * step_val + step_val + 1] = info["powers"].sum(
-            axis=1
-        )
-        powerT_a[i * step_val + 1 : i * step_val + step_val + 1] = info["powers"]
-        yaw_a[i * step_val + 1 : i * step_val + step_val + 1] = info["yaws"]
-        ws_a[i * step_val + 1 : i * step_val + step_val + 1] = info["windspeeds"]
-        time_plot[i * step_val + 1 : i * step_val + step_val + 1] = info["time_array"]
-        rew_plot[i * step_val + 1 : i * step_val + step_val + 1] = reward
+        for var in user_vars:
+            if var in info:
+                user_var_data[var].append(info[var])
+        idx_start, idx_end = i * step_val + 1, (i + 1) * step_val + 1
+        powerF_a[idx_start:idx_end] = info["powers"].sum(axis=1)
+        powerT_a[idx_start:idx_end] = info["powers"]
+        yaw_a[idx_start:idx_end] = info["yaws"]
+        ws_a[idx_start:idx_end] = info["windspeeds"]
+        time_plot[idx_start:idx_end] = info["time_array"]
+        rew_plot[idx_start:idx_end] = reward
 
         if baseline_comp:
-            powerF_b[i * step_val + 1 : i * step_val + step_val + 1] = info[
-                "baseline_powers"
-            ].sum(axis=1)
-            powerT_b[i * step_val + 1 : i * step_val + step_val + 1] = info[
-                "baseline_powers"
-            ]
-            yaw_b[i * step_val + 1 : i * step_val + step_val + 1] = info[
-                "yaws_baseline"
-            ]
-            ws_b[i * step_val + 1 : i * step_val + step_val + 1] = info[
-                "windspeeds_baseline"
-            ]
-
-            pct_inc[i * step_val + 1 : i * step_val + step_val + 1] = (
-                (
-                    (info["powers"].sum(axis=1) - info["baseline_powers"].sum(axis=1))
-                    / info["baseline_powers"].sum(axis=1)
-                )
-                * 100
-            )  # Percentage increase in power output. This should be zero (or close to zero) at the first time step.
+            powerF_b[idx_start:idx_end] = info["baseline_powers"].sum(axis=1)
+            powerT_b[idx_start:idx_end] = info["baseline_powers"]
+            yaw_b[idx_start:idx_end] = info["yaws_baseline"]
+            ws_b[idx_start:idx_end] = info["windspeeds_baseline"]
+            pct_inc[idx_start:idx_end] = (
+                (info["powers"].sum(axis=1) - info["baseline_powers"].sum(axis=1))
+                / info["baseline_powers"].sum(axis=1)
+            ) * 100
 
         if save_figs:
             time_deq.append(time_plot[i])
@@ -251,13 +140,10 @@ def eval_single_fast(
             view = XYView(z=70, x=a, y=b, ax=fig.gca(), adaptive=False)
 
             wt = env.fs.windTurbines
-            # x_turb, y_turb = wt.positions_xyz(self.env.fs.wind_direction, self.env.fs.center_offset)[:2]
             x_turb, y_turb = wt.positions_xyz[:2]
             yaw, tilt = wt.yaw_tilt()
 
-            # Plot the flowfield in ax1
             uvw = env.fs.get_windspeed(view, include_wakes=True, xarray=True)
-            # [0] is the u component of the wind speed
             plt.pcolormesh(
                 uvw.x.values,
                 uvw.y.values,
@@ -268,14 +154,10 @@ def eval_single_fast(
             )
             plt.colorbar().set_label("Wind speed [m/s]")
 
-            # This is code taken from PyWake, but slightly modified to fit our needs.
             colors = ["k", "gray", "r", "g"] * 5
-
             x, y, D = [np.asarray(v) for v in [x_turb, y_turb, wt.diameter()]]
             R = D / 2
-            types = np.zeros_like(
-                x, dtype=int
-            )  # Assuming all turbines are of the same type
+            types = np.zeros_like(x, dtype=int)
             for ii, (x_, y_, r, t, yaw_, tilt_) in enumerate(
                 zip(x, y, R, types, yaw, tilt)
             ):
@@ -293,10 +175,7 @@ def eval_single_fast(
 
                 for ii, (x_, y_, r) in enumerate(zip(x, y, R)):
                     text = ax1.annotate(
-                        ii + 1,
-                        (x_ - r, y_ + r),
-                        fontsize=10,
-                        color="white",
+                        ii + 1, (x_ - r, y_ + r), fontsize=10, color="white"
                     )
                     text.set_path_effects(
                         [
@@ -309,100 +188,85 @@ def eval_single_fast(
             plt.gca().xaxis.set_major_locator(plt.NullLocator())
             plt.gca().yaxis.set_major_locator(plt.NullLocator())
 
-            ax2 = plt.subplot2grid(
-                (3, 3),
-                (0, 2),
-            )
-            ax3 = plt.subplot2grid(
-                (3, 3),
-                (1, 2),
-            )
-            ax4 = plt.subplot2grid(
-                (3, 3),
-                (2, 2),
-            )
+            ax2 = plt.subplot2grid((3, 3), (0, 2))
+            ax3 = plt.subplot2grid((3, 3), (1, 2))
+            ax4 = plt.subplot2grid((3, 3), (2, 2))
 
-            # Plot the power in ax2
             ax2.plot(time_deq, pow_deq, color="orange")
             ax2.set_title("Farm power [W]")
-
-            # Plot the yaws in ax3
-            ax3.plot(time_deq, yaw_deq, label=np.arange(n_turb))
+            ax3.plot(time_deq, yaw_deq, label=np.arange(env.n_turb))
             ax3.set_title("Turbine yaws [deg]")
             ax3.legend(
-                [f"T{i + 1}" for i in range(n_turb)],
+                [f"T{i + 1}" for i in range(env.n_turb)],
                 loc="upper left",
                 bbox_to_anchor=(1, 1),
             )
-
-            # Plot the rotor windspeeds in ax4
-            ax4.plot(time_deq, ws_deq, label=np.arange(n_turb))
+            ax4.plot(time_deq, ws_deq, label=np.arange(env.n_turb))
             ax4.set_title("Local wind speed [m/s]")
             ax4.set_xlabel("Time [s]")
 
-            # Set the x limits for the plots
-            ax2.set_xlim(time_deq[0], time_deq[-1])
-            ax3.set_xlim(time_deq[0], time_deq[-1])
-            ax4.set_xlim(time_deq[0], time_deq[-1])
+            for ax in [ax2, ax3, ax4]:
+                ax.set_xlim(time_deq[0], time_deq[-1])
+                ax.grid()
 
             pow_max = max(pow_max, powerF_a[i] * 1.2)
             pow_min = min(pow_min, powerF_a[i] * 0.8)
-            yaw_max = max(yaw_max, max(yaw_a[i]) * 1.2)
-            # This value can be negative, so we multiply 1.2, instead of 0.8
-            yaw_min = min(yaw_min, min(yaw_a[i]) * 1.2)
+            yaw_max_val = max(yaw_max_val, max(yaw_a[i]) * 1.2)
+            yaw_min_val = min(yaw_min_val, min(yaw_a[i]) * 1.2)
             ws_max = max(ws_max, max(ws_a[i]) * 1.2)
             ws_min = min(ws_min, min(ws_a[i]) * 0.8)
 
-            # Set the y limits for the plots. If we go over/under the limits, the plot will adjust the limits.
             ax2.set_ylim(pow_min, pow_max)
-            ax3.set_ylim(yaw_min, yaw_max)
+            ax3.set_ylim(yaw_min_val, yaw_max_val)
             ax4.set_ylim(ws_min, ws_max)
-            # ax2.set_xticks([])
-            # ax3.set_xticks([])
 
             ax2.tick_params(axis="x", colors="white")
             ax3.tick_params(axis="x", colors="white")
-
-            # Set the number of ticks on the x-axis to 5
             ax4.locator_params(axis="x", nbins=5)
 
-            ax2.grid()
-            ax3.grid()
-            ax4.grid()
-
             img_name = FOLDER + "img_{:05d}.png".format(i)
-
-            # Add a text to the plot with the sensor values
-            for scale in scaling:  # scaling can be a list with True and False. If True, we add the scaled observations to the plot. If False, we only add the unscaled observations.
+            for scale in scaling:
                 if scale is not None:
-                    turb_ws = np.round(env.farm_measurements.get_ws_turb(scale), 2)
-                    turb_wd = np.round(env.farm_measurements.get_wd_turb(scale), 2)
-                    turb_TI = np.round(env.farm_measurements.get_TI_turb(scale), 2)
-                    turb_yaw = np.round(env.farm_measurements.get_yaw_turb(scale), 2)
-                    farm_ws = np.round(env.farm_measurements.get_ws_farm(scale), 2)
-                    farm_wd = np.round(env.farm_measurements.get_wd_farm(scale), 2)
-                    farm_TI = np.round(env.farm_measurements.get_TI(scale), 2)
-                    if scale:
-                        text_plot = f" Agent observations scaled: \n Turbine level wind speed: {turb_ws} \n Turbine level wind direction: {turb_wd} \n Turbine level yaw: {turb_yaw} \n Turbine level TI: {turb_TI} \n Farm level wind speed: {farm_ws} \n Farm level wind direction: {farm_wd} \n Farm level TI: {farm_TI} "
-                        ax1.text(
-                            1.1,
-                            1.3,
-                            text_plot,
-                            verticalalignment="top",
-                            horizontalalignment="left",
-                            transform=ax1.transAxes,
-                        )
-                    else:
-                        text_plot = f" Agent observations: \n Turbine level wind speed: {turb_ws} [m/s] \n Turbine level wind direction: {turb_wd} [deg] \n Turbine level yaw: {turb_yaw} [deg] \n Turbine level TI: {turb_TI} \n Farm level wind speed: {farm_ws} [m/s] \n Farm level wind direction: {farm_wd} [deg] \n Farm level TI: {farm_TI} "
-                        ax1.text(
-                            -0.1,
-                            1.3,
-                            text_plot,
-                            verticalalignment="top",
-                            horizontalalignment="left",
-                            transform=ax1.transAxes,
-                        )
-            # So I coudnt figure out how to add some space to the left, so I added a white text, and then use that to stretch the plot. Whatever, it works
+                    obs_data = {
+                        "ws_turb": np.round(
+                            env.farm_measurements.get_ws_turb(scale), 2
+                        ),
+                        "wd_turb": np.round(
+                            env.farm_measurements.get_wd_turb(scale), 2
+                        ),
+                        "TI_turb": np.round(
+                            env.farm_measurements.get_TI_turb(scale), 2
+                        ),
+                        "yaw_turb": np.round(
+                            env.farm_measurements.get_yaw_turb(scale), 2
+                        ),
+                        "ws_farm": np.round(
+                            env.farm_measurements.get_ws_farm(scale), 2
+                        ),
+                        "wd_farm": np.round(
+                            env.farm_measurements.get_wd_farm(scale), 2
+                        ),
+                        "TI": np.round(env.farm_measurements.get_TI(scale), 2),
+                    }
+                    text_plot = f"""
+                    {'Agent observations scaled:' if scale else 'Agent observations:'}
+                    Turbine level wind speed: {obs_data['ws_turb']} {'[m/s]' if not scale else ''}
+                    Turbine level wind direction: {obs_data['wd_turb']} {'[deg]' if not scale else ''}
+                    Turbine level yaw: {obs_data['yaw_turb']} {'[deg]' if not scale else ''}
+                    Turbine level TI: {obs_data['TI_turb']}
+                    Farm level wind speed: {obs_data['ws_farm']} {'[m/s]' if not scale else ''}
+                    Farm level wind direction: {obs_data['wd_farm']} {'[deg]' if not scale else ''}
+                    Farm level TI: {obs_data['TI']}
+                    """
+                    ax1.text(
+                        1.1 if scale else -0.1,
+                        1.3,
+                        text_plot,
+                        verticalalignment="top",
+                        horizontalalignment="left",
+                        transform=ax1.transAxes,
+                    )
+
             ax1.text(
                 1.95,
                 0.5,
@@ -412,7 +276,6 @@ def eval_single_fast(
                 transform=ax1.transAxes,
                 color="white",
             )
-
             plt.savefig(
                 img_name,
                 dpi=100,
@@ -422,15 +285,120 @@ def eval_single_fast(
             plt.clf()
             plt.close("all")
 
-    # Reshape the arrays and put them in a xarray dataset
+
+def eval_single_fast(
+    env,
+    model,
+    model_step=1,
+    ws=10.0,
+    ti=0.05,
+    wd=270,
+    turbbox="Default",
+    save_figs=False,
+    scale_obs=None,
+    t_sim=1000,
+    name="NoName",
+    debug=False,
+    deterministic=False,
+    return_loads=False,
+    cleanup=True,
+    user_vars=[],
+):
+    device = torch.device("cpu")
+    if hasattr(env.unwrapped, "parent_pipes"):
+        raise AssertionError(
+            "The eval_single_fast function is not compatible with vectorized versions of the environment. Please use unvectorized envs instead."
+        )
+
+    env.set_wind_vals(ws=ws, ti=ti, wd=wd)
+    baseline_comp = env.Baseline_comp
+    scaling = [scale_obs] if not isinstance(scale_obs, list) else scale_obs
+    if debug:
+        scaling = [True, False]
+        save_figs = True
+    if model is None:
+        raise AssertionError("You need to specify a model to evaluate the agent.")
+
+    step_val = env.sim_steps_per_env_step
+    total_steps = t_sim // env.dt_env + 1
+    time = total_steps * step_val + 1
+    n_turb = env.n_turb
+
+    powerF_a = np.zeros(time, dtype=np.float32)
+    powerT_a = np.zeros((time, n_turb), dtype=np.float32)
+    yaw_a = np.zeros((time, n_turb), dtype=np.float32)
+    ws_a = np.zeros((time, n_turb), dtype=np.float32)
+    time_plot = np.zeros(time, dtype=int)
+    rew_plot = np.zeros(time, dtype=np.float32)
+
+    powerF_b = np.zeros(time, dtype=np.float32) if baseline_comp else None
+    powerT_b = np.zeros((time, n_turb), dtype=np.float32) if baseline_comp else None
+    yaw_b = np.zeros((time, n_turb), dtype=np.float32) if baseline_comp else None
+    ws_b = np.zeros((time, n_turb), dtype=np.float32) if baseline_comp else None
+    pct_inc = np.zeros(time, dtype=np.float32) if baseline_comp else None
+
+    obs, info = env.reset()
+
+    if hasattr(model, "pywakeagent") or hasattr(model, "florisagent"):
+        model.update_wind(ws, wd, ti)
+        model.predict(obs, deterministic=deterministic)
+    if hasattr(model, "UseEnv"):
+        model.yaw_max = env.yaw_max
+        model.yaw_min = env.yaw_min
+        model.env = env
+
+    powerF_a[0] = env.fs.windTurbines.power().sum()
+    powerT_a[0] = env.fs.windTurbines.power()
+    yaw_a[0] = env.fs.windTurbines.yaw
+    ws_a[0] = np.linalg.norm(env.fs.windTurbines.rotor_avg_windspeed, axis=1)
+    time_plot[0] = env.fs.time
+    rew_plot[0] = 0.0
+    if baseline_comp:
+        powerF_b[0] = env.fs_baseline.windTurbines.power().sum()
+        powerT_b[0] = env.fs_baseline.windTurbines.power()
+        yaw_b[0] = env.fs_baseline.windTurbines.yaw
+        ws_b[0] = np.linalg.norm(
+            env.fs_baseline.windTurbines.rotor_avg_windspeed, axis=1
+        )
+        pct_inc[0] = ((powerF_a[0] - powerF_b[0]) / powerF_b[0]) * 100
+
+    user_var_data = {var: [] for var in user_vars}
+
+    _run_simulation_loop(
+        env,
+        model,
+        total_steps,
+        step_val,
+        device,
+        save_figs,
+        scaling,
+        name,
+        wd,
+        deterministic,
+        baseline_comp,
+        powerF_a,
+        powerT_a,
+        yaw_a,
+        ws_a,
+        time_plot,
+        rew_plot,
+        powerF_b,
+        powerT_b,
+        yaw_b,
+        ws_b,
+        pct_inc,
+        obs,
+        user_vars,
+        user_var_data,
+    )
+
+    n_ws, n_wd, n_TI, n_turbbox = 1, 1, 1, 1
     powerF_a = powerF_a.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
     powerT_a = powerT_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
     yaw_a = yaw_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
     ws_a = ws_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
     rew_plot = rew_plot.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
 
-    # # Then create a xarray dataset with the results
-    # Common data variables
     data_vars = {
         "powerF_a": (
             ("time", "ws", "wd", "TI", "turbbox", "model_step", "deterministic"),
@@ -481,7 +449,6 @@ def eval_single_fast(
         ),
     }
 
-    # Add baseline variables if applicable
     if baseline_comp:
         powerF_b = powerF_b.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
         powerT_b = powerT_b.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
@@ -557,7 +524,6 @@ def eval_single_fast(
             }
         )
 
-    # Common coordinates
     coords = {
         "ws": np.array([ws]),
         "wd": np.array([wd]),
@@ -569,28 +535,40 @@ def eval_single_fast(
         "deterministic": np.array([deterministic]),
     }
 
-    # Create the dataset
     if not return_loads:
+        for var, data in user_var_data.items():
+            data = np.array(data)
+            expected_len = total_steps
+            if data.shape[0] != expected_len:
+                # Pad with NaNs if the data is not the expected length
+                padding = np.full((expected_len - data.shape[0],) + data.shape[1:], np.nan)
+                data = np.concatenate((data, padding), axis=0)
+
+            if data.ndim == 1:
+                dims = ("total_steps", "ws", "wd", "TI", "turbbox", "model_step", "deterministic")
+                data = data.reshape(total_steps, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+            else:
+                dims = ("total_steps", "turb", "ws", "wd", "TI", "turbbox", "model_step", "deterministic")
+                data = data.reshape(total_steps, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+            data_vars[var] = (dims, data)
+
+        # Update coords to include total_steps if any user_vars were added
+        if user_vars:
+            coords["total_steps"] = np.arange(total_steps)
         ds = xr.Dataset(data_vars=data_vars, coords=coords)
-        # Do this to remove it from memory
         env.timestep = env.time_max
-        obs, reward, terminated, truncated, info = env.step(action)
+        obs, reward, terminated, truncated, info = env.step(np.zeros(env.n_turb))
         env.close()
         return ds
-    # Do this if we have the HTC and want the loads as well.
     elif env.HTC_path is not None:
-        # If the HTC_path is not None, then ill assume we also want to include the loads
-        # First make sure we have written the lates results
-        env.wts.h2.write_output()  # I am not sure this is needed tho
+        env.wts.h2.write_output()
 
         all_data = []
-        # For each turbine read the data and put in into an array
         for i in range(n_turb):
             file_name = env.wts.htc_lst[i].output.filename.values[0] + ".hdf5"
             test_string = env.wts.htc_lst[i].modelpath + file_name
             time, data, info = gtsdf.load(test_string)
 
-            # Store each turbine's data in a dictionary
             all_data.append(
                 {
                     "Ae rot. torque": data[:, 10],
@@ -608,10 +586,7 @@ def eval_single_fast(
                 }
             )
 
-        # Assuming all turbines share the same time vector
         time = all_data[0]["time"]
-
-        # Stack data into arrays with shape (turbine, time)
         blade_mx = np.stack([d["Blade_Mx"] for d in all_data]).T
         blade_my = np.stack([d["Blade_My"] for d in all_data]).T
         tower_mx = np.stack([d["Tower_Mx"] for d in all_data]).T
@@ -622,42 +597,23 @@ def eval_single_fast(
         WSP_gl_coo_Vx = np.stack([d["WSP gl. coo.,Vx"] for d in all_data]).T
         WSP_gl_coo_Vy = np.stack([d["WSP gl. coo.,Vy"] for d in all_data]).T
         WSP_gl_coo_Vz = np.stack([d["WSP gl. coo.,Vz"] for d in all_data]).T
-        yaw_a = np.stack([d["yaw_a"] for d in all_data]).T
+        yaw_a_loads = np.stack([d["yaw_a"] for d in all_data]).T
 
-        # Reshape the data to match the xarray dataset dimensions
-        blade_mx = blade_mx.reshape(
-            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
-        )
-        blade_my = blade_my.reshape(
-            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
-        )
-        tower_mx = tower_mx.reshape(
-            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
-        )
-        tower_my = tower_my.reshape(
-            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
-        )
-        Ae_rot_torque = Ae_rot_torque.reshape(
-            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
-        )
-        Ae_rot_power = Ae_rot_power.reshape(
-            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
-        )
-        Ae_rot_thrust = Ae_rot_thrust.reshape(
-            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
-        )
-        WSP_gl_coo_Vx = WSP_gl_coo_Vx.reshape(
-            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
-        )
-        WSP_gl_coo_Vy = WSP_gl_coo_Vy.reshape(
-            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
-        )
-        WSP_gl_coo_Vz = WSP_gl_coo_Vz.reshape(
-            time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1
-        )
-        yaw_a = yaw_a.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
+        def reshape_data(arr):
+            return arr.reshape(time.shape[0], n_turb, n_ws, n_wd, n_TI, n_turbbox, 1)
 
-        # Create xarray dataset with 'turb' and 'time' dimensions
+        blade_mx = reshape_data(blade_mx)
+        blade_my = reshape_data(blade_my)
+        tower_mx = reshape_data(tower_mx)
+        tower_my = reshape_data(tower_my)
+        Ae_rot_torque = reshape_data(Ae_rot_torque)
+        Ae_rot_power = reshape_data(Ae_rot_power)
+        Ae_rot_thrust = reshape_data(Ae_rot_thrust)
+        WSP_gl_coo_Vx = reshape_data(WSP_gl_coo_Vx)
+        WSP_gl_coo_Vy = reshape_data(WSP_gl_coo_Vy)
+        WSP_gl_coo_Vz = reshape_data(WSP_gl_coo_Vz)
+        yaw_a_loads = reshape_data(yaw_a_loads)
+
         ds_load = xr.Dataset(
             data_vars={
                 "Blade_Mx": (
@@ -702,7 +658,7 @@ def eval_single_fast(
                 ),
                 "yaw_a": (
                     ("time", "turb", "ws", "wd", "TI", "turbbox", "model_step"),
-                    yaw_a,
+                    yaw_a_loads,
                 ),
             },
             coords={
@@ -715,9 +671,6 @@ def eval_single_fast(
                 "model_step": np.array([model_step]),
             },
         )
-        # Clean up also.
-        # To make sure that the turbulence box is removed from memory, we set the current timestep to be equal to the max, and then do one last step.
-        # This clears the turbulence box from memory, and makes sure that we dont have any issues with the turbulence box being in memory.
         env.wts.h2.close()
         if baseline_comp:
             env.wts_baseline.h2.close()
@@ -727,16 +680,11 @@ def eval_single_fast(
             env.fs = None
             env.site = None
             env.farm_measurements = None
-            del env.fs
-            del env.site
-            del env.farm_measurements
-
+            del env.fs, env.site, env.farm_measurements
             if baseline_comp:
                 env.fs_baseline = None
                 env.site_base = None
-                del env.fs_baseline
-                del env.site_base
-
+                del env.fs_baseline, env.site_base
         return ds_load
 
 

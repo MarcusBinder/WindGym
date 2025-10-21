@@ -10,3 +10,4 @@ register(
     id="WindGym/WindFarmEnv-v0",
     entry_point="WindGym.envs:WindFarmEnv",
 )
+from .AgentEval import eval_single_fast as AgentEvalFast
