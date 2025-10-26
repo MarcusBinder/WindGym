@@ -180,6 +180,92 @@ def calculate_expected_obs_dim(config_dict, n_turbines):
 
 class TestSpecificFeatures:
     @pytest.mark.parametrize(
+        "mes_level_config",
+        [
+            {
+                "turb_ws": True,
+                "turb_wd": True,
+                "turb_TI": True,
+                "turb_power": True,
+                "farm_ws": True,
+                "farm_wd": True,
+                "farm_TI": True,
+                "farm_power": True,
+            },
+            {
+                "turb_ws": False,
+                "turb_wd": False,
+                "turb_TI": False,
+                "turb_power": False,
+                "farm_ws": False,
+                "farm_wd": False,
+                "farm_TI": False,
+                "farm_power": False,
+            },
+            {
+                "turb_ws": True,
+                "turb_wd": False,
+                "turb_TI": True,
+                "turb_power": False,
+                "farm_ws": True,
+                "farm_wd": False,
+                "farm_TI": False,
+                "farm_power": True,
+            },
+        ],
+        ids=["All_Features_On", "All_Features_Off", "Mixed_Features"],
+    )
+    def test_get_num_raw_features_coverage(
+        self, temp_yaml_filepath_factory, mes_level_config, mock_mann_methods
+    ):
+        """Tests `_get_num_raw_features` by varying the `mes_level` config."""
+        n_turb_nx, n_turb_ny = 2, 1
+        config_dict = get_base_yaml_dict(nx=n_turb_nx, ny=n_turb_ny)
+        config_dict["mes_level"] = mes_level_config
+        yaml_filepath = temp_yaml_filepath_factory(config_dict, "num_raw_features_test")
+
+        x_pos, y_pos = generate_square_grid(
+            turbine=V80(), nx=n_turb_nx, ny=n_turb_ny, xDist=5, yDist=3
+        )
+
+        env = WindFarmEnv(
+            turbine=V80(),
+            x_pos=x_pos,
+            y_pos=y_pos,
+            config=yaml_filepath,
+            reset_init=True,
+            seed=42,
+            turbtype="None",
+        )
+
+        expected_count = 0
+        n_turb = n_turb_nx * n_turb_ny
+        if mes_level_config.get("turb_ws", False):
+            expected_count += n_turb
+        if mes_level_config.get("turb_wd", False):
+            expected_count += n_turb
+        if mes_level_config.get("turb_TI", False):
+            expected_count += n_turb
+        if mes_level_config.get("turb_power", False):
+            expected_count += n_turb
+        if mes_level_config.get("farm_ws", False):
+            expected_count += 1
+        if mes_level_config.get("farm_wd", False):
+            expected_count += 1
+        if mes_level_config.get("farm_TI", False):
+            expected_count += 1
+        if mes_level_config.get("farm_power", False):
+            expected_count += 1
+
+        actual_count = env._get_num_raw_features()
+
+        assert (
+            actual_count == expected_count
+        ), f"Expected {expected_count} raw features, but got {actual_count}."
+
+        env.close()
+
+    @pytest.mark.parametrize(
         "fill_window_config_val, expected_steps_on_reset_factor_str",
         [(True, "hist_max"), (3, "val_3"), (False, "val_1"), (10, "hist_max_capped")],
     )

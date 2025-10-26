@@ -13,6 +13,64 @@ from WindGym.Agents import ConstantAgent
 from py_wake.examples.data.hornsrev1 import V80
 from WindGym.utils.generate_layouts import generate_square_grid
 
+# Add these imports at the top of tests/test_agent_eval.py
+import torch
+from unittest.mock import patch
+
+
+# Add this fixture inside tests/test_agent_eval.py
+@pytest.fixture
+def mock_cleanrl_agent(basic_farm_eval_env):
+    """Creates a mock agent that mimics the CleanRL agent structure."""
+
+    class MockCleanRLAgent:
+        def __init__(self):
+            self.model_type = "CleanRL"
+            self.action_shape = basic_farm_eval_env.action_space.shape
+            self.device = "cpu"
+
+        def get_action(self, obs, deterministic=False):
+            action_tensor = torch.zeros(self.action_shape, device=self.device)
+            return action_tensor, None, None
+
+    return MockCleanRLAgent()
+
+
+# Add these new test functions to tests/test_agent_eval.py
+def test_agent_eval_fast_with_cleanrl_agent(basic_farm_eval_env, mock_cleanrl_agent):
+    """
+    Tests AgentEvalFast with a mock 'CleanRL' model_type agent.
+    """
+    ds = AgentEvalFast(
+        basic_farm_eval_env,
+        mock_cleanrl_agent,
+        ws=8.0,
+        ti=0.07,
+        wd=270,
+        t_sim=20,
+    )
+    assert ds is not None
+    assert isinstance(ds, xr.Dataset)
+    assert "powerF_a" in ds.data_vars
+
+
+@patch("matplotlib.pyplot.show")
+def test_agent_eval_plot_initial_runs(
+    mock_show, basic_farm_eval_env, simple_constant_agent
+):
+    """
+    Tests that the plot_initial method runs without raising an exception.
+    """
+    agent_evaluator = AgentEval(
+        env=basic_farm_eval_env,
+        model=simple_constant_agent,
+        name="TestPlotInitial",
+        t_sim=20,
+    )
+    agent_evaluator.plot_initial()
+
+    mock_show.assert_called()
+
 
 @pytest.fixture
 def temp_yaml_file_factory():

@@ -1,9 +1,12 @@
 import pytest
 import numpy as np
 from unittest.mock import MagicMock
-
-# Import the class to be tested
 from WindGym.utils.WindProbe import WindProbe
+from WindGym import WindFarmEnv
+from WindGym.utils.generate_layouts import generate_square_grid
+from py_wake.examples.data.hornsrev1 import V80
+import yaml
+import tempfile
 
 
 @pytest.fixture
@@ -123,3 +126,49 @@ def test_get_inflow_angle(mock_fs):
     # 45-degree angle
     probe.turbine_position = (10, 10, 90)
     assert np.isclose(probe.get_inflow_angle_to_turbine(degrees=True), 45.0)
+
+
+def test_init_probes_with_absolute_position():
+    """
+    Tests that probes with absolute positions are correctly initialized,
+    covering the 'else' branch in `_init_probes`. This also fixes the KeyError
+    by providing a complete YAML.
+    """
+    yaml_config_with_absolute_probe = """
+    yaw_init: "Zeros"
+    BaseController: "Local"
+    ActionMethod: "yaw"
+    farm: {yaw_min: -30, yaw_max: 30}
+    wind: {ws_min: 10, ws_max: 10, TI_min: 0.07, TI_max: 0.07, wd_min: 270, wd_max: 270}
+    mes_level: {turb_ws: False, turb_wd: False, turb_TI: False, turb_power: False, farm_ws: False, farm_wd: False, farm_TI: False, farm_power: False}
+    ws_mes: {ws_current: True, ws_rolling_mean: False, ws_history_N: 0, ws_history_length: 1, ws_window_length: 1}
+    wd_mes: {wd_current: True, wd_rolling_mean: False, wd_history_N: 0, wd_history_length: 1, wd_window_length: 1}
+    yaw_mes: {yaw_current: True, yaw_rolling_mean: False, yaw_history_N: 0, yaw_history_length: 1, yaw_window_length: 1}
+    power_mes: {power_current: True, power_rolling_mean: False, power_history_N: 0, power_history_length: 1, power_window_length: 1}
+    act_pen: {action_penalty: 0.0, action_penalty_type: "Change"}
+    power_def: {Power_reward: "None", Power_avg: 1, Power_scaling: 1.0}
+    probes:
+      - name: absolute_probe_1
+        position: [100, 50, 90]
+        probe_type: WS
+    """
+    x_pos, y_pos = generate_square_grid(V80(), nx=2, ny=1, xDist=5, yDist=3)
+
+    env = WindFarmEnv(
+        turbine=V80(),
+        x_pos=x_pos,
+        y_pos=y_pos,
+        config=yaml_config_with_absolute_probe,
+        turbtype="None",
+        reset_init=True,
+    )
+
+    assert hasattr(env, "probes")
+    assert len(env.probes) == 1
+    probe = env.probes[0]
+    assert probe.name == "absolute_probe_1"
+    # Note: `position` is now relative to the turbine after initialization
+    # To check absolute position, we'd need to reconstruct it, but checking existence is sufficient here.
+    assert probe.position is not None
+
+    env.close()

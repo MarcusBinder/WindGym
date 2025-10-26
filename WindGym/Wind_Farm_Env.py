@@ -716,7 +716,9 @@ class WindFarmEnv(WindEnv):
 
                 position = (tp_x + rel_x_rot, tp_y + rel_y_rot, tp_z + rel_z)
             else:
+                yaw = 0
                 position = tuple(p["position"])
+                tp_x, tp_y, tp_z = p.get("turbine_position", (0, 0, 0))
 
             probe = WindProbe(
                 fs=self.fs,

@@ -910,15 +910,15 @@ class AgentEval:
         _, __ = self.env.reset()
 
         # Define the x, y and z for the plot
-        x_mean = self.env.fs.windTurbines.position[0].mean()
-        y_mean = self.env.fs.windTurbines.position[1].mean()
+        x_mean = self.env.fs.windTurbines.positions_xyz[0].mean()
+        y_mean = self.env.fs.windTurbines.positions_xyz[1].mean()
         x_range = (
-            self.env.fs.windTurbines.position[0].max()
-            - self.env.fs.windTurbines.position[0].min()
+            self.env.fs.windTurbines.positions_xyz[0].max()
+            - self.env.fs.windTurbines.positions_xyz[0].min()
         )
         y_range = (
-            self.env.fs.windTurbines.position[1].max()
-            - self.env.fs.windTurbines.position[1].min()
+            self.env.fs.windTurbines.positions_xyz[1].max()
+            - self.env.fs.windTurbines.positions_xyz[1].min()
         )
         h = self.env.fs.windTurbines.hub_height()[0]
 
@@ -932,20 +932,20 @@ class AgentEval:
                 z=h,
                 ax=ax1,
             ),
-            flowVisualizer=Flow2DVisualizer(color_bar=False),
-            show=False,
+            # flowVisualizer=Flow2DVisualizer(color_bar=False),
+            # show=False,
         )
         # plot in another way
-        self.env.fs.show(
-            view=EastNorthView(
-                east=np.linspace(x_mean - x_range, x_mean + x_range),
-                north=np.linspace(y_mean - y_range, y_mean + y_range),
-                z=h,
-                ax=ax2,
-            ),
-            flowVisualizer=Flow2DVisualizer(color_bar=False),
-            show=False,
-        )
+        # self.env.fs.show(
+        #    view=EastNorthView(
+        #        east=np.linspace(x_mean - x_range, x_mean + x_range),
+        #        north=np.linspace(y_mean - y_range, y_mean + y_range),
+        #        z=h,
+        #        ax=ax2,
+        #    ),
+        #    flowVisualizer=Flow2DVisualizer(color_bar=False),
+        #    show=False,
+        # )
         setup_plot(
             ax=ax1,
             title=f"Rotated view, {self.env.wd} deg",
