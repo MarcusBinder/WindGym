@@ -1,4 +1,5 @@
 # tests/test_specific_features.py
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -14,6 +15,7 @@ from gymnasium.utils.env_checker import check_env
 from WindGym.utils.generate_layouts import (
     generate_square_grid,
 )  # Import the layout generator
+from tkinter import TclError
 
 
 # Helper to get a base, mostly complete YAML dictionary for tests
@@ -313,6 +315,62 @@ class TestSpecificFeatures:
                 raise e
         finally:
             env.close()
+
+    def test_render_with_probes(self, temp_yaml_filepath_factory, mock_mann_methods):
+        """
+        Tests that the render method correctly visualizes probes if they are defined
+        in the configuration, covering the `if hasattr(self, "probes")` block.
+        """
+        config_dict = get_base_yaml_dict()
+        config_dict["probes"] = [
+            {
+                "name": "test_probe",
+                "position": [100, 50, 90],
+                "probe_type": "WS",
+                "turbine_position": [0, 0, 90],
+            },
+            {
+                "name": "test_ti_probe",
+                "relative_position": [-100, 50, 0],
+                "turbine_index": 0,
+                "probe_type": "TI",
+            },
+            {
+                "name": "test_unknown_probe",
+                "position": [200, 50, 90],
+                "probe_type": "UNKNOWN",
+                "turbine_position": [0, 0, 90],
+            },
+        ]
+        yaml_filepath = temp_yaml_filepath_factory(config_dict, "render_with_probes")
+
+        x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
+        env = None
+        try:
+            env = WindFarmEnv(
+                turbine=V80(),
+                x_pos=x_pos,
+                y_pos=y_pos,
+                config=yaml_filepath,
+                render_mode="rgb_array",
+                reset_init=True,
+                turbtype="None",
+            )
+
+            with (
+                patch("matplotlib.pyplot.show"),
+                patch("matplotlib.pyplot.imshow"),
+                patch("matplotlib.pyplot.pause"),
+            ):
+                frame = env.render()  # Should run without error and return a frame
+                assert isinstance(frame, np.ndarray)
+                assert frame.shape[2] == 3  # Check for RGB channels
+
+        except TclError:
+            pytest.skip("Skipping human render mode test in headless environment.")
+        finally:
+            if env:
+                env.close()
 
     @pytest.mark.parametrize(
         "turb_wd_enabled, farm_wd_enabled, wd_current, wd_rolling, wd_hist_n",
