@@ -237,11 +237,18 @@ class WindFarmEnv(WindEnv):
             else:
                 self._yaw_init = self._return_zeros
 
-        # Define the power tracking reward function TODO Not implemented yet. Also make the power_setpoint an observable parameter
+        # Define the power tracking reward function
+        # TODO: Implement power tracking reward - requires power_setpoint as observable parameter
         if self.Track_power:
-            self.power_setpoint = 42  # ???
+            self.power_setpoint = 42  # Placeholder value
             self._track_rew = self.track_rew_avg
-            raise NotImplementedError("The Track_power is not implemented yet")
+            raise NotImplementedError(
+                "Track_power feature is not yet implemented. "
+                "This feature would allow reward calculation based on tracking a power setpoint. "
+                "Implementation requires: (1) power_setpoint as environment parameter, "
+                "(2) observation space extension to include setpoint, "
+                "(3) track_rew_avg() reward function implementation."
+            )
         else:
             self._track_rew = self.track_rew_none
 
@@ -1094,6 +1101,135 @@ class WindFarmEnv(WindEnv):
         tf_agent = None
         gc.collect()
 
+    def _initialize_flow_simulation_dynamiks(self) -> None:
+        """Initialize the main DWM flow simulation for the dynamiks backend."""
+        self.fs = DWMFlowSimulation(
+            site=self.site,
+            windTurbines=self.wts,
+            wind_direction=self.wd,
+            particleDeficitGenerator=jDWMAinslieGenerator(),
+            dt=self.dt,
+            n_particles=self.n_particles,
+            d_particle=self.d_particle,
+            particleMotionModel=HillVortexParticleMotion(
+                temporal_filter=self.temporal_filter
+            ),
+            addedTurbulenceModel=self.addedTurbulenceModel,
+        )
+
+    def _initialize_flow_simulation_pywake(self) -> None:
+        """Initialize the PyWake steady-state flow simulation backend."""
+        # Calculate development and simulation times
+        turb_pos = np.stack([self.x_pos, self.y_pos])
+        turbine_max_dist = np.sqrt(np.sum(turb_pos**2, axis=0)).max()
+        t_inflow = turbine_max_dist / self.ws
+        self.t_developed = math.ceil(t_inflow * self.burn_in_passthroughs)
+        self.time_max = math.ceil(t_inflow * self.n_passthrough)
+
+        if self.n_turb == 1:
+            self.time_max = math.ceil((self.D * self.n_passthrough) / self.ws)
+
+        self.time_max = max(1, self.time_max)
+
+        if self.HTC_path is not None:
+            raise NotImplementedError(
+                "pywake_steady backend does not support HAWC2WindTurbines."
+            )
+
+        from .backend.pywake_adapter import PyWakeFlowSimulationAdapter
+
+        self.fs = PyWakeFlowSimulationAdapter(
+            x=np.asarray(self.x_pos, float),
+            y=np.asarray(self.y_pos, float),
+            windTurbine=self.turbine,
+            ws=self.ws,
+            wd=self.wd,
+            ti=self.ti,
+            dt=self.dt,
+        )
+
+    def _initialize_baseline_simulation(self) -> None:
+        """Initialize the baseline flow simulation for comparison."""
+        if not self.Baseline_comp:
+            return
+
+        if self.backend == "dynamiks":
+            self.fs_baseline = DWMFlowSimulation(
+                site=self.site_base,
+                windTurbines=self.wts_baseline,
+                wind_direction=self.wd,
+                particleDeficitGenerator=jDWMAinslieGenerator(),
+                dt=self.dt,
+                n_particles=self.n_particles,
+                d_particle=self.d_particle,
+                particleMotionModel=HillVortexParticleMotion(
+                    temporal_filter=self.temporal_filter
+                ),
+                addedTurbulenceModel=self.addedTurbulenceModel,
+            )
+        else:
+            if self.HTC_path is not None:
+                raise NotImplementedError(
+                    "pywake_steady baseline does not support HAWC2WindTurbines."
+                )
+            from .backend.pywake_adapter import PyWakeFlowSimulationAdapter
+
+            self.fs_baseline = PyWakeFlowSimulationAdapter(
+                x=np.asarray(self.x_pos, float),
+                y=np.asarray(self.y_pos, float),
+                windTurbine=self.turbine,
+                ws=self.ws,
+                wd=self.wd,
+                ti=self.ti,
+                dt=self.dt,
+            )
+
+        # Start baseline with same yaw as agent at reset
+        self.fs_baseline.windTurbines.yaw = self.fs.windTurbines.yaw
+
+    def _run_development_phase(self) -> None:
+        """Run flow simulation for development time to reach steady state."""
+        if self.backend == "dynamiks":
+            self.fs.run(self.t_developed)
+            if self.Baseline_comp:
+                self.fs_baseline.run(self.t_developed)
+        else:
+            # Steady-state: nothing to "develop", but keep API consistent
+            self.fs.run(0)
+            if self.Baseline_comp:
+                self.fs_baseline.run(0)
+
+        if self.Baseline_comp:
+            # If baseline is PyWake, prime its wind estimate
+            if (self.BaseController or "").split("_")[0] == "PyWake":
+                self.pywake_agent.update_wind(
+                    wind_speed=self.ws, wind_direction=self.wd, TI=self.ti
+                )
+                self.pywake_ws = self.ws
+                self.pywake_wd = self.wd
+
+    def _fill_measurement_history(self) -> None:
+        """Fill measurement buffers with initial readings (no agent actions)."""
+        for _ in range(self.steps_on_reset):
+            out = self._advance_and_measure(
+                self.sim_steps_per_env_step,
+                apply_agent_action=False,
+                action=None,
+                include_baseline=self.Baseline_comp,
+            )
+
+            # Push means into measurement buffers
+            self.farm_measurements.add_measurements(
+                out["mean_windspeed"],
+                out["mean_winddir"],
+                out["mean_yaw"],
+                out["mean_power"],
+            )
+            # Power history (farm-level)
+            self.farm_pow_deq.append(out["mean_power"].sum())
+            if self.Baseline_comp:
+                self.base_pow_deq.append(out["baseline_power_mean"].sum())
+
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
         """
         Reset the environment. This is called at the start of every episode.
@@ -1123,52 +1259,10 @@ class WindFarmEnv(WindEnv):
         self._init_wts()
 
         if self.backend == "dynamiks":
-            # --- ORIGINAL dynamic backend ---
             self._def_site()
-
-            self.fs = DWMFlowSimulation(
-                site=self.site,
-                windTurbines=self.wts,
-                wind_direction=self.wd,
-                particleDeficitGenerator=jDWMAinslieGenerator(),
-                dt=self.dt,
-                n_particles=self.n_particles,
-                d_particle=self.d_particle,
-                particleMotionModel=HillVortexParticleMotion(
-                    temporal_filter=self.temporal_filter
-                ),
-                addedTurbulenceModel=self.addedTurbulenceModel,
-            )
+            self._initialize_flow_simulation_dynamiks()
         else:
-            # PyWake backend: calculate times but don't need wind direction list
-            turb_pos = np.stack([self.x_pos, self.y_pos])
-            turbine_max_dist = np.sqrt(np.sum(turb_pos**2, axis=0)).max()
-            t_inflow = turbine_max_dist / self.ws
-            self.t_developed = math.ceil(t_inflow * self.burn_in_passthroughs)
-            self.time_max = math.ceil(t_inflow * self.n_passthrough)
-
-            if self.n_turb == 1:
-                self.time_max = math.ceil((self.D * self.n_passthrough) / self.ws)
-
-            self.time_max = max(1, self.time_max)
-
-            if self.HTC_path is not None:
-                raise NotImplementedError(
-                    "pywake_steady backend does not support HAWC2WindTurbines."
-                )
-            from .backend.pywake_adapter import (
-                PyWakeFlowSimulationAdapter,
-            )  # or adjust import path
-
-            self.fs = PyWakeFlowSimulationAdapter(
-                x=np.asarray(self.x_pos, float),
-                y=np.asarray(self.y_pos, float),
-                windTurbine=self.turbine,  # py_wake WindTurbines definition
-                ws=self.ws,
-                wd=self.wd,
-                ti=self.ti,
-                dt=self.dt,
-            )
+            self._initialize_flow_simulation_pywake()
 
         # Initial yaw set (bounded by yaw_start)
         self.fs.windTurbines.yaw = self._yaw_init(
@@ -1182,82 +1276,13 @@ class WindFarmEnv(WindEnv):
         self._init_probes(self.fs.windTurbines.yaw)
 
         # 3b) Baseline flow sim (optional)
-        if self.Baseline_comp:
-            if self.backend == "dynamiks":
-                self.fs_baseline = DWMFlowSimulation(
-                    site=self.site_base,
-                    windTurbines=self.wts_baseline,
-                    wind_direction=self.wd,
-                    particleDeficitGenerator=jDWMAinslieGenerator(),
-                    dt=self.dt,
-                    n_particles=self.n_particles,
-                    d_particle=self.d_particle,
-                    particleMotionModel=HillVortexParticleMotion(
-                        temporal_filter=self.temporal_filter
-                    ),
-                    addedTurbulenceModel=self.addedTurbulenceModel,
-                )
-            else:
-                if self.HTC_path is not None:
-                    raise NotImplementedError(
-                        "pywake_steady baseline does not support HAWC2WindTurbines."
-                    )
-                from .backend.pywake_adapter import PyWakeFlowSimulationAdapter
-
-                self.fs_baseline = PyWakeFlowSimulationAdapter(
-                    x=np.asarray(self.x_pos, float),
-                    y=np.asarray(self.y_pos, float),
-                    windTurbine=self.turbine,
-                    ws=self.ws,
-                    wd=self.wd,
-                    ti=self.ti,
-                    dt=self.dt,
-                )
-
-            # Start baseline with same yaw as agent at reset
-            self.fs_baseline.windTurbines.yaw = self.fs.windTurbines.yaw
+        self._initialize_baseline_simulation()
 
         # 3c) Run the flow for the time it takes to develop
-        if self.backend == "dynamiks":
-            self.fs.run(self.t_developed)
-            if self.Baseline_comp:
-                self.fs_baseline.run(self.t_developed)
-        else:
-            # Steady-state: nothing to "develop", but keep API consistent
-            self.fs.run(0)
-            if self.Baseline_comp:
-                self.fs_baseline.run(0)
-
-        if self.Baseline_comp:
-            # If baseline is PyWake, prime its wind estimate
-            if (self.BaseController or "").split("_")[0] == "PyWake":
-                self.pywake_agent.update_wind(
-                    wind_speed=self.ws, wind_direction=self.wd, TI=self.ti
-                )
-                self.pywake_ws = self.ws
-                self.pywake_wd = self.wd
+        self._run_development_phase()
 
         # 4) Fill measurement history window (and power deques)
-        #    Uses the unified inner loop; no action applied during reset.
-        for _ in range(self.steps_on_reset):
-            out = self._advance_and_measure(
-                self.sim_steps_per_env_step,
-                apply_agent_action=False,
-                action=None,
-                include_baseline=self.Baseline_comp,
-            )
-
-            # Push means into measurement buffers
-            self.farm_measurements.add_measurements(
-                out["mean_windspeed"],
-                out["mean_winddir"],
-                out["mean_yaw"],
-                out["mean_power"],
-            )
-            # Power history (farm-level)
-            self.farm_pow_deq.append(out["mean_power"].sum())
-            if self.Baseline_comp:
-                self.base_pow_deq.append(out["baseline_power_mean"].sum())
+        self._fill_measurement_history()
 
         # 5) Get observation and info
         observation = self._get_obs()
@@ -1470,7 +1495,12 @@ class WindFarmEnv(WindEnv):
                 self.fs.windTurbines.yaw = np.clip(new_yaws, self.yaw_min, self.yaw_max)
 
         elif self.ActionMethod == "absolute":
-            raise NotImplementedError("The absolute method is not implemented yet")
+            raise NotImplementedError(
+                "ActionMethod='absolute' is not yet implemented. "
+                "Currently supported methods are 'yaw' and 'wind'. "
+                "The 'absolute' method would interpret actions as direct yaw angle setpoints "
+                "rather than relative adjustments. Use ActionMethod='yaw' or 'wind' instead."
+            )
 
         else:
             raise ValueError("The ActionMethod must be yaw, wind or absolute")

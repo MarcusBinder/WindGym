@@ -1,3 +1,6 @@
+from typing import Any, Literal, Optional, Tuple
+import numpy as np
+import numpy.typing as npt
 from ..BasicControllers import (
     local_yaw_controller,
     global_yaw_controller,
@@ -11,7 +14,24 @@ The agent will always try and get to zero yaw offset
 
 
 class GreedyAgent(BaseAgent):
-    def __init__(self, type="local", yaw_max=45, yaw_min=-45, yaw_step=1, env=None):
+    def __init__(
+        self,
+        type: Literal["local", "global"] = "local",
+        yaw_max: float = 45,
+        yaw_min: float = -45,
+        yaw_step: float = 1,
+        env: Optional[Any] = None,
+    ) -> None:
+        """
+        Initialize greedy yaw controller agent.
+
+        Args:
+            type: Controller type - "local" for turbine-local or "global" for farm-global control
+            yaw_max: Maximum yaw angle
+            yaw_min: Minimum yaw angle
+            yaw_step: Maximum yaw change per step (degrees)
+            env: Gymnasium environment instance
+        """
         # This is used in a hasattr in the AgentEval class/function.
         self.UseEnv = True
         self.env = env
@@ -27,11 +47,16 @@ class GreedyAgent(BaseAgent):
         elif type == "global":
             self.controller = global_yaw_controller
 
-    def predict(self, *args, **kwargs):
+    def predict(
+        self, *args: Any, **kwargs: Any
+    ) -> Tuple[npt.NDArray[np.float64], None]:
         """
-        This class pretends to be an agent, so we need to have a predict function.
-        If we havent called the optimize function, we do that now, and return the action
-        Note that we dont use the obs or the deterministic arguments.
+        Compute greedy yaw control action to minimize yaw offset.
+
+        Note: Ignores obs and deterministic arguments.
+
+        Returns:
+            Tuple of (scaled_yaw_action, None)
         """
         yaw_goal = self.controller(fs=self.env.fs, yaw_step=self.yaw_step)
 

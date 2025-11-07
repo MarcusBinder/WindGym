@@ -4,17 +4,43 @@ These can be used either as a base controller for comparing the performance dire
 
 """
 
+from typing import Any
 import numpy as np
+import numpy.typing as npt
 
 
-def local_yaw_controller(fs, yaw_step=1):
+def _compute_step_limited_adjustment(
+    offset: npt.NDArray[np.float64], max_step: float
+) -> npt.NDArray[np.float64]:
     """
-    fs: Flow simulation object
-    new_yaw: np.array of new yaw angles for each turbine
+    Compute step-limited adjustment towards target, preventing overshoot.
 
-    This is the logic for the base controller. It just wants to move back to have zero yaw angles.
-    It works on the "local" wind conditions, and tries to move the yaw angles back to zero.
-    Note that it doesnt filter the local winddirections in any way, so it just moves perfectly towards the winddirection at every step.
+    Args:
+        offset: Desired adjustment (signed values)
+        max_step: Maximum absolute step size
+
+    Returns:
+        Step-limited adjustment (same sign as offset, magnitude <= max_step)
+    """
+    step_dir = np.sign(offset)
+    step_scale = np.abs(offset)
+    step_scale[step_scale > max_step] = max_step
+    return step_dir * step_scale
+
+
+def local_yaw_controller(fs: Any, yaw_step: float = 1) -> npt.NDArray[np.float64]:
+    """
+    Compute yaw control action based on local turbine wind conditions.
+
+    Aligns each turbine with its local wind direction (computed from rotor-averaged wind speed).
+    Uses greedy step-limited control to minimize yaw offset without overshooting.
+
+    Args:
+        fs: Flow simulation object with windTurbines attribute
+        yaw_step: Maximum yaw change per step (degrees)
+
+    Returns:
+        Array of new yaw angles for each turbine (degrees)
     """
     # Fist we get the current yaw offset, in relation to the "global wind"
     yaw_baseline = fs.windTurbines.yaw
@@ -30,43 +56,34 @@ def local_yaw_controller(fs, yaw_step=1):
     # The desired yaw offset is the difference between the baseline yaw and the baseline wind direction
     yaw_offset = wind_dir_baseline - yaw_baseline
 
-    # We find the direction of the yaw_action, by taking the sign
-    step_dir = np.sign(yaw_offset)
-
-    # Then we find the size of the steps. This is the minimum of the yaw_offset and the yaw_step. This is to make sure that we dont overshoot the target, and to kap the max step taken to be the yaw_step
-    # this is how large the steps would be, if it was unlimited
-    step_scale = np.abs(yaw_offset)
-    # here we replace all values that are larger then the max, with the max
-    step_scale[step_scale > yaw_step] = yaw_step
-
-    yaw_action = step_dir * step_scale
+    # Compute step-limited adjustment
+    yaw_action = _compute_step_limited_adjustment(yaw_offset, yaw_step)
 
     new_yaw = yaw_baseline + yaw_action
 
     return new_yaw
 
 
-def global_yaw_controller(fs, yaw_step=1):
+def global_yaw_controller(fs: Any, yaw_step: float = 1) -> npt.NDArray[np.float64]:
     """
-    fs: Flow simulation object
-    new_yaw: np.array of new yaw angles for each turbine
+    Compute yaw control action based on global wind direction.
 
-    This is the logic for the base controller. But now it only sees the "global" wind direction.
+    Aligns all turbines with the global wind direction (ignores local wake effects).
+    Uses greedy step-limited control to minimize yaw offset without overshooting.
+
+    Args:
+        fs: Flow simulation object with windTurbines attribute
+        yaw_step: Maximum yaw change per step (degrees)
+
+    Returns:
+        Array of new yaw angles for each turbine (degrees)
     """
 
     # The current yaw offset, in relation to the "global wind"
     yaw_offset = fs.windTurbines.yaw
 
-    # Frst we find the direction of the yaw_action, by taking the sign
-    step_dir = np.sign(yaw_offset)
-
-    # Then we find the size of the steps. This is the minimum of the yaw_offset and the yaw_step. This is to make sure that we dont overshoot the target, and to kap the max step taken to be the yaw_step
-    # this is how large the steps would be, if it was unlimited
-    step_scale = np.abs(yaw_offset)
-    # here we replace all values that are larger then the max, with the max
-    step_scale[step_scale > yaw_step] = yaw_step
-
-    yaw_action = step_dir * step_scale
+    # Compute step-limited adjustment
+    yaw_action = _compute_step_limited_adjustment(yaw_offset, yaw_step)
 
     new_yaw = yaw_offset - yaw_action
 
