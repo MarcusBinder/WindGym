@@ -1,7 +1,7 @@
 from collections import deque
 import itertools
 import numpy as np
-from .WindEnv import WindEnv
+from .wind_env import WindEnv
 
 """
 This file contains the classes for the measurements of the wind farm.

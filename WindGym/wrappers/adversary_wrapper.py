@@ -3,7 +3,7 @@ import numpy as np
 from collections import deque
 import gymnasium as gym
 from gymnasium.core import ActType, ObsType
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 
 class AdversaryWrapper(gym.wrappers.vector.RecordEpisodeStatistics):

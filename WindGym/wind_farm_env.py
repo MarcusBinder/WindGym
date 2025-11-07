@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Any, Dict, Optional, Union
+import warnings
 import numpy as np
 import gymnasium as gym
 import matplotlib.pyplot as plt
@@ -18,7 +19,6 @@ from dynamiks.dwm.particle_deficit_profiles.ainslie import jDWMAinslieGenerator
 from dynamiks.dwm.particle_motion_models import HillVortexParticleMotion
 
 # from dynamiks.dwm.particle_motion_models import ParticleMotionModel
-from dynamiks.sites import TurbulenceFieldSite
 from dynamiks.sites.turbulence_fields import MannTurbulenceField, RandomTurbulence
 from dynamiks.wind_turbines import PyWakeWindTurbines
 from dynamiks.views import XYView
@@ -31,8 +31,8 @@ from dynamiks.sites._site import MetmastSite
 from IPython import display
 
 # WindGym imports
-from .WindEnv import WindEnv
-from .MesClass import farm_mes
+from .wind_env import WindEnv
+from .mes_class import farm_mes
 from .BasicControllers import local_yaw_controller, global_yaw_controller
 from .Agents import PyWakeAgent
 
@@ -46,7 +46,7 @@ from dynamiks.dwm.particle_motion_models import CutOffFrq
 # For live plotting
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-from WindGym.utils.WindProbe import WindProbe
+from WindGym.utils.wind_probe import WindProbe
 
 
 CutOffFrqLio2021 = CutOffFrq(4)
@@ -64,6 +64,11 @@ For now it only supports the PyWakeWindTurbines, but it should be easy to expand
 
 class WindFarmEnv(WindEnv):
     metadata = {"render_modes": ["human", "rgb_array"]}
+
+    # Default configuration constants
+    DEFAULT_YAW_INIT_LIMIT = 15.0  # Maximum yaw angle for random initialization (degrees)
+    POWER_WINDOW_DIVISOR = 10  # Divisor for calculating power window size from power_avg
+    MIN_POWER_AVG_THRESHOLD = 40  # Minimum power_avg value for Power_diff reward
 
     def __init__(
         self,
@@ -167,7 +172,7 @@ class WindFarmEnv(WindEnv):
 
         self.delay = dt_env  # The delay in seconds. By default just use the dt_env. We cant have smaller delays then this.
         self.sample_site = sample_site
-        self.yaw_start = 15.0  # This is the limit for the initialization of the yaw angles. This is used to make sure that the yaw angles are not too large at the start, but still not zero
+        self.yaw_start = self.DEFAULT_YAW_INIT_LIMIT  # This is the limit for the initialization of the yaw angles. This is used to make sure that the yaw angles are not too large at the start, but still not zero
         # Max power pr turbine. Used in the measurement class
         self.maxturbpower = max(turbine.power(np.arange(10, 25, 1)))
         self.baseline_wakes = True  # A flag that decides if we include the wakes in the baseline farm. For now always true.
@@ -252,12 +257,12 @@ class WindFarmEnv(WindEnv):
         elif self.power_reward == "Power_diff":
             # TODO rethink this way of doing it.
             self._power_rew = self.power_rew_diff  # The power_diff reward function
-            # We set this to 10, to have some space in the middle.
-            self._power_wSize = self.power_avg // 10
-            if self.power_avg < 40:
-                # Why 40? I just chose this as the minimum value. In reality 2 could have sufficed, but to save myself a headache, I set it to 10
+            # We set this to POWER_WINDOW_DIVISOR, to have some space in the middle.
+            self._power_wSize = self.power_avg // self.POWER_WINDOW_DIVISOR
+            if self.power_avg < self.MIN_POWER_AVG_THRESHOLD:
                 raise ValueError(
-                    "The Power_avg must be larger then 40 for the Power_diff reward. Also it should probably be way larger my guy"
+                    f"The Power_avg must be larger than {self.MIN_POWER_AVG_THRESHOLD} for the Power_diff reward. "
+                    f"Got power_avg={self.power_avg}. Consider using a larger power_avg value."
                 )
         else:
             raise ValueError(
@@ -522,7 +527,6 @@ class WindFarmEnv(WindEnv):
             self.yaml_path = None
             return config
         if isinstance(config, (str, Path)):  #
-            p = Path(str(config))
             config_str = str(config)
             if os.path.exists(config_str):  # treat as file
                 with open(config_str, "r") as f:
@@ -829,8 +833,10 @@ class WindFarmEnv(WindEnv):
         """
 
         # Add a deprecation warning to this:
-        raise DeprecationWarning(
-            "This function is deprecated. Use _take_measurements instead, and then put them into the mes class yourself"
+        warnings.warn(
+            "This function is deprecated. Use _take_measurements instead, and then put them into the mes class yourself",
+            DeprecationWarning,
+            stacklevel=2
         )
 
         self._take_measurements()
@@ -1035,7 +1041,10 @@ class WindFarmEnv(WindEnv):
             self.addedTurbulenceModel = None  # AutoScalingIsotropicMannTurbulence()
         else:
             # Throw and error:
-            raise ValueError("Invalid turbulence type specified")
+            raise ValueError(
+                f"Invalid turbulence type '{self.turbtype}'. "
+                f"Valid options are: 'Mann', 'Random', 'MannFixed', 'None'"
+            )
 
         # Calculate t_developed and time_max based on farm geometry
         turb_pos = np.stack([self.x_pos, self.y_pos])
@@ -1561,7 +1570,12 @@ class WindFarmEnv(WindEnv):
             self.base_pow_deq.append(out["baseline_power_mean"].sum())
 
         if np.any(np.isnan(self.farm_pow_deq)):
-            raise Exception("NaN Power")
+            nan_turbines = np.where(np.isnan(out["mean_power"]))[0]
+            raise ValueError(
+                f"NaN detected in power calculations. Turbines with NaN power: {nan_turbines.tolist()}. "
+                f"This may be caused by invalid simulation parameters, extreme yaw angles, or numerical instability. "
+                f"Current yaw angles: {self.current_yaw}, Wind speed: {self.ws}, Wind direction: {self.wd}"
+            )
 
         # Build observation / info
         observation = self._get_obs()

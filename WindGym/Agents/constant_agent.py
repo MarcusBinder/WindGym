@@ -1,5 +1,5 @@
 import numpy as np
-from .BaseAgent import BaseAgent
+from .base_agent import BaseAgent
 
 """
 The ConstantAgent is a class used for evaluating the performance, under predefinned constant yaw angles.

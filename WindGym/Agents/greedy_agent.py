@@ -2,7 +2,7 @@ from ..BasicControllers import (
     local_yaw_controller,
     global_yaw_controller,
 )
-from .BaseAgent import BaseAgent
+from .base_agent import BaseAgent
 
 """
 This is the basic agent class. It is used to create a simple agent that can be used in the AgentEval class.

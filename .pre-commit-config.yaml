@@ -6,8 +6,7 @@ repos:
       # Run the linter.
       - id: ruff
         types_or: [python, pyi]
-        # TODO: should remove the ignore flag and fix errors !
-        args: ["--fix", "--extend-ignore=F401,F841"]
+        args: ["--fix"]
         exclude: '^docusaurus-site/'
       # Run the formatter.
       - id: ruff-format

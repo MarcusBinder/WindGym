@@ -52,5 +52,5 @@ class WindEnv(gym.Env):
             return np.ones(self.n_turb) * yaw_vals[0]
         else:
             raise ValueError(
-                "So I am pretty sure something has gone wrong here. The specified yaw values are not the right length."
+                f"Invalid yaw values length. Expected {self.n_turb} values (number of turbines) or 1 value (broadcast to all turbines), but got {len(yaw_vals)} values."
             )

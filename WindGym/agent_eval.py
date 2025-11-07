@@ -3,8 +3,7 @@ import numpy as np
 
 # import concurrent.futures
 # import multiprocessing
-from dynamiks.views import XYView, EastNorthView
-from dynamiks.visualizers.flow_visualizers import Flow2DVisualizer
+from dynamiks.views import XYView
 from py_wake.utils.plotting import setup_plot
 import os
 
@@ -13,14 +12,10 @@ import matplotlib.patheffects as path_effects
 from matplotlib.patches import Ellipse
 
 from collections import deque
-from py_wake.wind_turbines import WindTurbines as WindTurbinesPW
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 from wetb.gtsdf import gtsdf
-from wetb.fatigue_tools.fatigue import eq_load
 
 
 # from pathos.pools import ProcessPool
@@ -1370,11 +1365,9 @@ class AgentEval:
                 if plot_var == "Power":
                     to_plot = "powerT_"
                     plot_title = "Turbine power"
-                    y_label = "Power [W]"
                 elif plot_var == "Yaw":
                     to_plot = "yaw_"
                     plot_title = "Yaw offset [deg]"
-                    y_label = "Yaw offset [deg]"
                 elif plot_var == "Rotor wind speed":
                     to_plot = "ws_"
                     plot_title = "Rotor wind speed [m/s]"

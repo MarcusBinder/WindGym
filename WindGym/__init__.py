@@ -1,10 +1,19 @@
 from gymnasium.envs.registration import register
-from .Wind_Farm_Env import WindFarmEnv
-from .AgentEval import AgentEval
-from .Agents import PyWakeAgent
-from .FarmEval import FarmEval
-from .WindEnvMulti import WindFarmEnvMulti
-from .AgentEval import eval_single_fast as AgentEvalFast
+from .wind_farm_env import WindFarmEnv as WindFarmEnv
+from .agent_eval import AgentEval as AgentEval
+from .Agents import PyWakeAgent as PyWakeAgent
+from .farm_eval import FarmEval as FarmEval
+from .wind_env_multi import WindFarmEnvMulti as WindFarmEnvMulti
+from .agent_eval import eval_single_fast as AgentEvalFast
+
+__all__ = [
+    "WindFarmEnv",
+    "AgentEval",
+    "PyWakeAgent",
+    "FarmEval",
+    "WindFarmEnvMulti",
+    "AgentEvalFast",
+]
 
 register(
     id="WindGym/WindFarmEnv-v0",

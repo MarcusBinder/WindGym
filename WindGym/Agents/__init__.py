@@ -2,8 +2,11 @@
 Base container for all "basic" agents.
 """
 
-from .GreedyAgent import GreedyAgent
-from .PyWakeAgent import PyWakeAgent, NoisyPyWakeAgent
-from .BaseAgent import BaseAgent
-from .RandomAgent import RandomAgent
-from .ConstantAgent import ConstantAgent
+from .greedy_agent import GreedyAgent as GreedyAgent
+from .pywake_agent import (
+    PyWakeAgent as PyWakeAgent,
+    NoisyPyWakeAgent as NoisyPyWakeAgent,
+)
+from .base_agent import BaseAgent as BaseAgent
+from .random_agent import RandomAgent as RandomAgent
+from .constant_agent import ConstantAgent as ConstantAgent

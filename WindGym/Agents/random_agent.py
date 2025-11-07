@@ -1,4 +1,4 @@
-from .BaseAgent import BaseAgent
+from .base_agent import BaseAgent
 
 """
 This agent takes random actions, and is used to test the environment.

@@ -7,12 +7,10 @@ from py_wake.literature.gaussian_models import Blondel_Cathelain_2020
 from py_wake.turbulence_models import CrespoHernandez
 from py_wake.deflection_models.jimenez import JimenezWakeDeflection
 from py_wake.site import UniformSite
-from dynamiks.views import XYView
 
 # from py_wake.utils.grid_types import XYGrid
 from py_wake import HorizontalGrid
-from dynamiks.utils.geometry import get_east_north_height, get_xyz
-from py_wake.flow_map import Points
+from dynamiks.utils.geometry import get_xyz
 
 
 class _XArrayLikeUVW:
