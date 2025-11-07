@@ -1,7 +1,8 @@
 from __future__ import annotations
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, Tuple
 import warnings
 import numpy as np
+import numpy.typing as npt
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import copy
@@ -852,19 +853,31 @@ class WindFarmEnv(WindEnv):
             self.current_ws, self.current_wd, self.current_yaw, self.powers
         )
 
-    def _get_obs(self):
+    def _get_obs(self) -> npt.NDArray[np.float32]:
         """
-        Gets the sensordata from the farm_measurements class, and scales it to be between -1 and 1
-        If you want to implement your own handling of the observations, then you can do that here by overwriting this function
+        Get scaled and clipped observation from farm measurements.
+
+        Retrieves sensor data from the farm_measurements class and normalizes it
+        to the range [-1, 1]. This method can be overridden to implement custom
+        observation handling.
+
+        Returns:
+            Observation array with shape (obs_dim,), values clipped to [-1, 1]
         """
 
         values = self.farm_measurements.get_measurements(scaled=True)
         return np.clip(values, -1.0, 1.0).astype(np.float32)
 
-    def _get_info(self):
+    def _get_info(self) -> Dict[str, Any]:
         """
-        Return info dictionary.
-        If we have a baseline comparison, then we also return the baseline values.
+        Build and return diagnostic information dictionary.
+
+        Collects current state information including yaw angles, wind conditions,
+        power production, and turbine positions. If baseline comparison is enabled,
+        also includes baseline controller performance metrics.
+
+        Returns:
+            Dictionary with diagnostic data for logging and analysis
         """
         return_dict = {
             "yaw angles agent": self.current_yaw,
@@ -1230,13 +1243,27 @@ class WindFarmEnv(WindEnv):
             if self.Baseline_comp:
                 self.base_pow_deq.append(out["baseline_power_mean"].sum())
 
-    def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
+    def reset(
+        self, seed: Optional[int] = None, options: Optional[dict] = None
+    ) -> Tuple[npt.NDArray[np.float32], Dict[str, Any]]:
         """
-        Reset the environment. This is called at the start of every episode.
-        - The wind conditions are sampled, and the site is set.
-        - The flow simulation is run for the time it takes for the flow to develop.
-        - The measurements are filled up with the initial values.
+        Reset the environment to initial state for a new episode.
 
+        Performs environment initialization:
+        1. Sample new wind conditions (speed, direction, turbulence)
+        2. Initialize measurement buffers
+        3. Set up flow simulation (agent and optional baseline)
+        4. Run simulation for development time (burn-in period)
+        5. Fill measurement history with initial observations
+
+        Args:
+            seed: Random seed for reproducibility (sets self.np_random)
+            options: Optional configuration overrides (currently unused)
+
+        Returns:
+            Tuple of (observation, info) where:
+                - observation: Initial observation array, shape (obs_dim,)
+                - info: Dictionary with initial diagnostic information
         """
         # Seed the RNG used by this Env (sets self.np_random)
         super().reset(seed=seed)
@@ -1559,15 +1586,29 @@ class WindFarmEnv(WindEnv):
         )
         return (power_latest - power_oldest) / self.n_turb
 
-    def step(self, action):
+    def step(
+        self, action: npt.NDArray[np.float64]
+    ) -> Tuple[npt.NDArray[np.float32], float, bool, bool, Dict[str, Any]]:
         """
-        The step function
-        1. Adjust the yaw angles of the turbines
-        2. Take a step in the flow simulation
-        3. Update the measurements
-        4. Calculate the reward
-        5. Return the observation, reward, terminated, truncated and info
+        Execute one environment step with the given action.
 
+        Performs the following operations:
+        1. Adjust the yaw angles of the turbines based on action
+        2. Advance the flow simulation for dt_env seconds
+        3. Update measurement buffers with new observations
+        4. Calculate reward (power production - action penalty)
+        5. Check for truncation (time limit reached)
+
+        Args:
+            action: Scaled yaw control action in range [-1, 1], shape (n_turb,)
+
+        Returns:
+            Tuple of (observation, reward, terminated, truncated, info) where:
+                - observation: Normalized observation array, shape (obs_dim,)
+                - reward: Scalar reward value (power - penalty)
+                - terminated: Always False (no terminal states in this env)
+                - truncated: True if time_max reached, False otherwise
+                - info: Dictionary with diagnostic information
         """
 
         # Save the old yaw angles, so we can calculate the change in yaw angles
@@ -1712,8 +1753,16 @@ class WindFarmEnv(WindEnv):
             )
             shutil.rmtree(htc_folder_baseline)
 
-    def render(self):
-        """Render method required by PettingZoo API."""
+    def render(self) -> Optional[npt.NDArray[np.uint8]]:
+        """
+        Render the environment visualization.
+
+        Returns RGB array if render_mode="rgb_array", displays matplotlib window
+        if render_mode="human", or returns None if no render mode is set.
+
+        Returns:
+            RGB frame array (H, W, 3) if rgb_array mode, None otherwise
+        """
         if self.render_mode == "rgb_array":
             # Return the RGB frame (for recording, saving, etc.)
             return self._render_frame()
@@ -1727,6 +1776,7 @@ class WindFarmEnv(WindEnv):
             plt.title("Wind Farm Environment - Render")
             plt.show(block=False)
             plt.pause(0.001)  # Pause to allow window to update
+        return None
 
     def _render_frame_for_human(self, baseline=False):
         """Render the environment and return an RGB frame as a numpy array."""
@@ -1906,7 +1956,13 @@ class WindFarmEnv(WindEnv):
                 return files
         raise FileNotFoundError(f"No TF_*.nc files found at: {root}")
 
-    def close(self):
+    def close(self) -> None:
+        """
+        Clean up environment resources and close visualization windows.
+
+        Releases flow simulations, sites, measurements, and triggers garbage
+        collection to free memory. Should be called when done using the environment.
+        """
         plt.close()
         if self.Baseline_comp:
             self.fs_baseline = None
