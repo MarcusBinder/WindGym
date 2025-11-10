@@ -36,6 +36,7 @@ from .MesClass import farm_mes
 from .BasicControllers import local_yaw_controller, global_yaw_controller
 from .Agents import PyWakeAgent
 from .core.reward_calculator import RewardCalculator
+from .core.wind_manager import WindManager
 
 from py_wake.wind_turbines import WindTurbines as WindTurbinesPW
 from collections import deque, defaultdict
@@ -246,6 +247,17 @@ class WindFarmEnv(WindEnv):
             action_penalty=self.action_penalty,
             action_penalty_type=self.action_penalty_type,
             power_window_size=power_window_size,
+        )
+
+        # Initialize the wind manager
+        self.wind_manager = WindManager(
+            ws_min=self.ws_inflow_min,
+            ws_max=self.ws_inflow_max,
+            wd_min=self.wd_inflow_min,
+            wd_max=self.wd_inflow_max,
+            ti_min=self.TI_inflow_min,
+            ti_max=self.TI_inflow_max,
+            sample_site=sample_site,
         )
 
         # Read in the turb boxes
@@ -869,84 +881,8 @@ class WindFarmEnv(WindEnv):
             )  # Just the largest component
         return return_dict
 
-    def _set_windconditions(self):
-        """
-        Sets the global windconditions for the environment
-        """
 
-        if self.sample_site is None:
-            # The wind speed is a random number between ws_min and ws_max
-            self.ws = self._random_uniform(self.ws_inflow_min, self.ws_inflow_max)
-            # The turbulence intensity is a random number between TI_min and TI_max
-            self.ti = self._random_uniform(self.TI_inflow_min, self.TI_inflow_max)
-            # The wind direction is a random number between wd_min and wd_max
-            self.wd = self._random_uniform(self.wd_inflow_min, self.wd_inflow_max)
-        else:
-            # wind resource
-            dirs = np.arange(0, 360, 1)  # wind directions
-            ws = np.arange(3, 25, 1)  # wind speeds
-            local_wind = self.sample_site.local_wind(x=0, y=0, wd=dirs, ws=ws)
-            freqs = local_wind.Sector_frequency_ilk[0, :, 0]
-            As = local_wind.Weibull_A_ilk[0, :, 0]  # weibull A
-            ks = local_wind.Weibull_k_ilk[0, :, 0]  # weibull k
 
-            self.wd, self.ws = self._sample_site(dirs, As, ks, freqs)
-
-            self.wd = np.clip(self.wd, self.wd_inflow_min, self.wd_inflow_max)
-            self.ws = np.clip(self.ws, self.ws_inflow_min, self.ws_inflow_max)
-
-            self.ti = self._random_uniform(
-                self.TI_inflow_min, self.TI_inflow_max
-            )  # The TI is still uniformly distributed.
-
-    def _make_wd_list(self):
-        """
-        Generates a list of wind directions for the entire episode.
-
-        If `self.wd_function` is None, it creates a list with a constant wind
-        direction (using the value of `self.wd` sampled at the beginning of reset).
-        Otherwise, it calls the function for each simulation time step to
-        populate the list.
-        """
-        # Calculate the total number of simulation steps for the episode
-        num_sim_steps = math.ceil(self.time_max / self.dt_sim) + 1
-
-        # Ammount of time to keep the wind direction steady.
-        # steady_state_steps = self.dt_env * np.ceil(self.t_developed / self.dt_env) + self.steps_on_reset*self.dt_env
-        steady_state_steps = (
-            np.ceil(self.t_developed / self.dt_env) + self.steps_on_reset
-        )
-        # Initialize the list
-        self.wd_lst = []
-
-        # Phase 1: Burn-in period - constant wind direction
-        self.wd_lst.extend([self.wd] * int(steady_state_steps))
-
-        # Phase 2: Episode period - either constant or time-varying
-        if self.wd_function is None:
-            # Continue with constant wind direction
-            self.wd_lst.extend([self.wd] * num_sim_steps)
-        else:
-            # Generate time-varying wind directions starting from t_developed
-            for i in range(num_sim_steps):
-                # Time starts at t_developed and increases
-                t = i * self.dt_sim
-                self.wd_lst.append(self.wd_function(t))
-
-        # Ensure the first value in the list matches the initial wind direction
-        # This is important for consistency with other initialization steps.
-        self.wd_lst[0] = self.wd
-
-    def _sample_site(self, dirs, As, ks, freqs):
-        """
-        sample wind direction and wind speed from the site
-        """
-        idx = self.np_random.choice(np.arange(dirs.size), 1, p=freqs)
-        wd = dirs[idx]
-        A = As[idx]
-        k = ks[idx]
-        ws = A * self.np_random.weibull(k)
-        return wd.item(), ws.item()
 
     def _def_site(self):
         """
@@ -1043,7 +979,14 @@ class WindFarmEnv(WindEnv):
         d_theta_lim = self.max_turb_move * 360 / (2 * np.pi * max_dist)
 
         # Make the wd list for the entire episode
-        self._make_wd_list()
+        self.wd_lst = self.wind_manager.make_wind_direction_list(
+            base_wd=self.wd,
+            time_max=self.time_max,
+            dt_sim=self.dt_sim,
+            t_developed=self.t_developed,
+            steps_on_reset=self.steps_on_reset,
+            wd_function=self.wd_function,
+        )
 
         self.site = MetmastSite(
             ws=self.ws,
@@ -1081,8 +1024,12 @@ class WindFarmEnv(WindEnv):
         super().reset(seed=seed)
         self.timestep = 0
 
+        # Set random generators for managers
+        self.wind_manager.np_random = self.np_random
+
         # 1) Global wind conditions + sites
-        self._set_windconditions()
+        wind_cond = self.wind_manager.sample_conditions()
+        self.ws, self.wd, self.ti = wind_cond.unpack()
 
         # 2) Fresh measurement buffers
         self._init_farm_mes()

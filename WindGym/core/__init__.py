@@ -6,5 +6,6 @@ of the wind farm environment, promoting separation of concerns and maintainabili
 """
 
 from .reward_calculator import RewardCalculator
+from .wind_manager import WindManager, WindConditions
 
-__all__ = ["RewardCalculator"]
+__all__ = ["RewardCalculator", "WindManager", "WindConditions"]
