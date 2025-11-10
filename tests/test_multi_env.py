@@ -8,7 +8,7 @@ from gymnasium.spaces import Box
 from pettingzoo.test import parallel_api_test  # Good for comprehensive API compliance
 
 # Import the class under test
-from WindGym.WindEnvMulti import WindFarmEnvMulti
+from WindGym.wind_env_multi import WindFarmEnvMulti
 
 # Import necessary components that WindFarmEnvMulti uses internally
 from WindGym.Wind_Farm_Env import WindFarmEnv

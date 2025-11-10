@@ -22,8 +22,8 @@ from dynamiks.views import XYView
 from IPython import display
 
 # WindGym imports
-from .WindEnv import WindEnv
-from .MesClass import FarmMes
+from .wind_env import WindEnv
+from .mes_class import FarmMes
 from .core.reward_calculator import RewardCalculator
 from .core.wind_manager import WindManager
 from .core.turbulence_manager import TurbulenceManager

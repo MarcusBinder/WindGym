@@ -1,4 +1,4 @@
-from .Wind_Farm_Env import WindFarmEnv
+from .wind_farm_env import WindFarmEnv
 
 
 """

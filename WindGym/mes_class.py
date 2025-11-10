@@ -4,7 +4,7 @@ from typing import Callable
 import itertools
 import numpy as np
 from numpy.typing import NDArray
-from .WindEnv import WindEnv
+from .wind_env import WindEnv
 
 """
 This file contains the classes for the measurements of the wind farm.
@@ -212,10 +212,10 @@ class TurbMes:
         self.n_probes_per_turb: dict = n_probes_per_turb
 
         if self.include_TI:
-            # If we want to include the TI, then we set the get_TI function to the calc_TI function
+            # Set get_TI function to calc_TI for TI calculations
             self.get_TI: Callable[[bool], NDArray[np.float32]] = self.calc_TI
         else:
-            # If not, then we just add an empty array. This is skipped in the np.concatenate function, so it should not matter
+            # Return empty array (skipped in np.concatenate)
             self.get_TI: Callable[[bool], NDArray[np.float32]] = self.empty_np
 
     def add_hf_ws(self, measurement: float) -> None:
@@ -350,7 +350,9 @@ class TurbMes:
         else:
             return self.power.get_measurements()
 
-    def _scale_val(self, val: NDArray[np.float32], min_val: float, max_val: float) -> NDArray[np.float32]:
+    def _scale_val(
+        self, val: NDArray[np.float32], min_val: float, max_val: float
+    ) -> NDArray[np.float32]:
         # Scale the value from -1 to 1
         return 2 * (val - min_val) / (max_val - min_val) - 1
 
@@ -450,12 +452,11 @@ class FarmMes(WindEnv):
         self.n_turbines: int = n_turbines
         self.n_probes_per_turb: dict = n_probes_per_turb
         self.turb_mes: list[TurbMes] = []
-        self.turb_ws: bool = turb_ws  # do we want measurements from the turbines individually
-        self.turb_wd: bool = turb_wd  # do we want measurements from the turbines individually
-        self.turb_TI: bool = turb_TI  # do we want measurements from the turbines individually
-        self.turb_power: bool = (
-            turb_power  # do we want measurements from the turbines individually
-        )
+        # Do we want measurements from the turbines individually?
+        self.turb_ws: bool = turb_ws
+        self.turb_wd: bool = turb_wd
+        self.turb_TI: bool = turb_TI
+        self.turb_power: bool = turb_power
 
         # do we want measurements from the farm, i.e. the average of the turbines
         self.farm_ws: bool = farm_ws
@@ -473,13 +474,15 @@ class FarmMes(WindEnv):
         self.power_max: float = power_max
 
         if turb_TI or farm_TI:
-            # If we return the TI, then we check for the number of data points.
-            if ti_sample_count < 10:  # A small number might lead to a noisy TI signal.
+            # If we return the TI, check the number of data points
+            if ti_sample_count < 10:  # Small sample = noisy TI signal
                 print(
-                    f"Warning: You are only using the last {ti_sample_count} high-frequency samples for TI calculations. A low number might result in a noisy estimate."
+                    f"Warning: You are only using the last {ti_sample_count} "
+                    "high-frequency samples for TI calculations. "
+                    "A low number might result in a noisy estimate."
                 )
 
-        # We assume that the farm oberservations would take the same form as the turbine observations.
+        # Farm observations take the same form as turbine observations
         self.farm_observed_variables = (
             farm_ws * (ws_current + ws_rolling_mean * ws_history_N)
             + farm_wd * (wd_current + wd_rolling_mean * wd_history_N)
@@ -525,7 +528,7 @@ class FarmMes(WindEnv):
                 )
             )
 
-        # Create a class for the farm measurements. This is still used for the info dictionary, so even if there are no farm level measurements returned, it is still created
+        # Create farm measurements (used for info dict even if no farm obs)
         self.farm_mes: TurbMes = TurbMes(
             ws_current=ws_current and farm_ws,
             ws_rolling_mean=ws_rolling_mean and farm_ws,
@@ -562,10 +565,10 @@ class FarmMes(WindEnv):
         )  # The max power is the sum of all the turbines
 
         if self.farm_TI:
-            # If we want to include the TI, then we set the get_TI function to the calc_TI function
+            # Set get_TI function to get_TI_farm for farm TI calculations
             self.get_TI: Callable[[bool], float] = self.get_TI_farm
         else:
-            # If not, then we just add an empty array. This is skipped in the np.concatenate function, so it should not matter
+            # Return empty array (skipped in np.concatenate)
             self.get_TI: Callable[[bool], NDArray[np.float32]] = self.empty_np
 
     def empty_np(self, scaled: bool = False) -> NDArray[np.float32]:
@@ -600,7 +603,13 @@ class FarmMes(WindEnv):
                 np.sum(measurement)
             )  # Instead of mean, we sum the power
 
-    def add_measurements(self, ws: NDArray[np.floating], wd: NDArray[np.floating], yaws: NDArray[np.floating], powers: NDArray[np.floating]) -> None:
+    def add_measurements(
+        self,
+        ws: NDArray[np.floating],
+        wd: NDArray[np.floating],
+        yaws: NDArray[np.floating],
+        powers: NDArray[np.floating],
+    ) -> None:
         # add measurements to the ws, wd and yaw in one go
         for turb, speed, direction, yaw, power in zip(
             self.turb_mes, ws, wd, yaws, powers
