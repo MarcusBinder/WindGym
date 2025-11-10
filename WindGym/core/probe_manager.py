@@ -10,7 +10,7 @@ from collections import defaultdict
 import numpy as np
 import math
 
-from ..Sensors import WindProbe
+from ..utils.WindProbe import WindProbe
 
 
 class ProbeManager:
