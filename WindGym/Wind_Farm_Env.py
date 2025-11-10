@@ -230,11 +230,6 @@ class WindFarmEnv(WindEnv):
                 self._yaw_init = self._return_zeros
 
         # Initialize the reward calculator
-        # For Power_diff reward, we need to set up the window size
-        power_window_size = None
-        if self.power_reward == "Power_diff":
-            # We set this to 10, to have some space in the middle.
-            power_window_size = self.power_avg // 10
 
         self.reward_calculator = RewardCalculator(
             power_reward_type=self.power_reward,
@@ -242,7 +237,7 @@ class WindFarmEnv(WindEnv):
             power_scaling=self.Power_scaling,
             action_penalty=self.action_penalty,
             action_penalty_type=self.action_penalty_type,
-            power_window_size=power_window_size,
+            power_window_size=self.power_avg,
         )
 
         # Initialize the wind manager
