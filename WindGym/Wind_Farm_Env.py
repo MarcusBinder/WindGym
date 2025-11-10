@@ -639,6 +639,13 @@ class WindFarmEnv(WindEnv):
         return return_dict
 
 
+    def _set_windconditions(self):
+        """
+        Sets the global windconditions for the environment
+        """
+        wind_cond = self.wind_manager.sample_conditions()
+        self.ws, self.wd, self.ti = wind_cond.unpack()
+
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
         """
         Reset the environment. This is called at the start of every episode.
@@ -655,8 +662,9 @@ class WindFarmEnv(WindEnv):
         self.wind_manager.np_random = self.np_random
 
         # 1) Global wind conditions + sites
-        wind_cond = self.wind_manager.sample_conditions()
-        self.ws, self.wd, self.ti = wind_cond.unpack()
+        # wind_cond = self.wind_manager.sample_conditions()
+        # self.ws, self.wd, self.ti = wind_cond.unpack()
+        self._set_windconditions()
 
         # 2) Fresh measurement buffers
         self._init_farm_mes()
