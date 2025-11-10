@@ -58,8 +58,7 @@ class RewardCalculator:
         valid_power_rewards = {"Baseline", "Power_avg", "Power_diff", "None"}
         if self.power_reward_type not in valid_power_rewards:
             raise ValueError(
-                f"power_reward_type must be one of {valid_power_rewards}, "
-                f"got '{self.power_reward_type}'"
+                "The Power_reward must be either Baseline, Power_avg, None or Power_diff"
             )
 
         if self.power_reward_type == "Power_diff":
@@ -69,8 +68,7 @@ class RewardCalculator:
                 )
             if self._power_window_size < 40:
                 raise ValueError(
-                    f"power_window_size must be at least 40 for Power_diff reward. You used {self._power_window_size} "
-                    "Consider using a much larger value for better results."
+                    "The Power_avg must be larger then 40 for the Power_diff reward"
                 )
 
         if self.track_power:
