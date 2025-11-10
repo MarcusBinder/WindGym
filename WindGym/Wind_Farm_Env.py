@@ -199,7 +199,6 @@ class WindFarmEnv(WindEnv):
         self.n_passthrough = n_passthrough
         self.timestep = 0
 
-        self.TF_files = []
         # The initial yaw of the turbines. This is used if the yaw_init is "Defined"
         self.yaw_initial = [0]
 
@@ -263,6 +262,8 @@ class WindFarmEnv(WindEnv):
             turbulence_box_path=TurbBox,
             max_turb_move=max_turb_move,
         )
+        # Expose turbulence files list for compatibility
+        self.TF_files = self.turbulence_manager.turbulence_files
 
         # Initialize the renderer
         self.renderer = WindFarmRenderer(render_mode=render_mode)
