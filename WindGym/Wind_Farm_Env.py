@@ -1265,3 +1265,17 @@ class WindFarmEnv(WindEnv):
             features += 1
 
         return features
+
+    @property
+    def pywake_agent(self):
+        """Expose pywake_agent from baseline_manager for backward compatibility."""
+        if self.baseline_manager is not None:
+            return self.baseline_manager.pywake_agent
+        return None
+
+    @property
+    def py_agent_mode(self):
+        """Expose py_agent_mode from baseline_manager for backward compatibility."""
+        if self.baseline_manager is not None:
+            return self.baseline_manager.py_agent_mode
+        return None
