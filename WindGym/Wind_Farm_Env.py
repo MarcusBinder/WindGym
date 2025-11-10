@@ -16,17 +16,8 @@ from pathlib import Path
 from dynamiks.dwm import DWMFlowSimulation
 from dynamiks.dwm.particle_deficit_profiles.ainslie import jDWMAinslieGenerator
 from dynamiks.dwm.particle_motion_models import HillVortexParticleMotion
-
-# from dynamiks.dwm.particle_motion_models import ParticleMotionModel
-from dynamiks.sites import TurbulenceFieldSite
-from dynamiks.sites.turbulence_fields import MannTurbulenceField, RandomTurbulence
 from dynamiks.wind_turbines import PyWakeWindTurbines
 from dynamiks.views import XYView
-from dynamiks.dwm.added_turbulence_models import (
-    SynchronizedAutoScalingIsotropicMannTurbulence,
-    AutoScalingIsotropicMannTurbulence,
-)
-from dynamiks.sites._site import MetmastSite
 
 from IPython import display
 
@@ -37,6 +28,7 @@ from .BasicControllers import local_yaw_controller, global_yaw_controller
 from .Agents import PyWakeAgent
 from .core.reward_calculator import RewardCalculator
 from .core.wind_manager import WindManager
+from .core.turbulence_manager import TurbulenceManager
 
 from py_wake.wind_turbines import WindTurbines as WindTurbinesPW
 from collections import deque, defaultdict
@@ -260,11 +252,12 @@ class WindFarmEnv(WindEnv):
             sample_site=sample_site,
         )
 
-        # Read in the turb boxes
-        if turbtype == "MannLoad":
-            if not TurbBox:
-                raise FileNotFoundError("Provide 'TurbBox' for turbtype='MannLoad'.")
-            self.TF_files = self._discover_turbulence_files(TurbBox)
+        # Initialize the turbulence manager
+        self.turbulence_manager = TurbulenceManager(
+            turbulence_type=turbtype,
+            turbulence_box_path=TurbBox,
+            max_turb_move=max_turb_move,
+        )
 
         # If we need to have a "baseline" farm, then we need to set up the baseline controller
         # This could be moved to the Power_reward check, but I have a feeling this will be expanded in the future, when we include damage.
@@ -882,136 +875,6 @@ class WindFarmEnv(WindEnv):
         return return_dict
 
 
-
-
-    def _def_site(self):
-        """
-          We choose a random turbulence box and scale it to the correct TI and wind speed.
-        This is repeated for the baseline if we have that.
-
-        The turbulence box used for the simulation can be one of the following:
-        - MannLoad: The turbulence box is loaded from predefined Mann turbulence box files.
-        - MannGenerate: A random turbulence box is generated.
-        - MannFixed: A fixed turbulence box is used with a constant seed.
-        - Random: Specifies the 'box' as random turbulence.
-        - None: Zero turbulence site.
-        """
-        if self.turbtype == "MannLoad":
-            # Load the turbbox from predefined folder somewhere
-            # selects one at random from the files that were already discovered in __init__
-            tf_file = self.np_random.choice(self.TF_files)
-            tf_agent = MannTurbulenceField.from_netcdf(filename=tf_file)
-            tf_agent.scale_TI(TI=self.ti, U=self.ws)
-            self.addedTurbulenceModel = SynchronizedAutoScalingIsotropicMannTurbulence()
-
-        elif self.turbtype == "MannGenerate":
-            # Create the turbbox with a random seed.
-            # TODO this can be improved in the future.
-            TF_seed = self.np_random.integers(0, 100000)
-            tf_agent = MannTurbulenceField.generate(
-                alphaepsilon=0.1,  # use correct alphaepsilon or scale later
-                L=33.6,  # length scale
-                Gamma=3.9,  # anisotropy parameter
-                # numbers should be even and should be large enough to cover whole farm in all dimensions and time, see above
-                Nxyz=(
-                    4096,
-                    512,
-                    64,
-                ),  # Maybe 8192 would be better. This is untimately farm size specific. But for now this is good enough.
-                dxyz=(self.D / 20, self.D / 10, self.D / 10),  # Liew suggest /50
-                seed=TF_seed,  # seed for random generator
-            )
-            tf_agent.scale_TI(TI=self.ti, U=self.ws)
-            self.addedTurbulenceModel = SynchronizedAutoScalingIsotropicMannTurbulence()
-
-        elif self.turbtype == "Random":
-            # Specifies the 'box' as random turbulence
-            TF_seed = self.np_random.integers(0, 100000)
-            tf_agent = RandomTurbulence(ti=self.ti, ws=self.ws, seed=TF_seed)
-            self.addedTurbulenceModel = AutoScalingIsotropicMannTurbulence()
-
-        elif self.turbtype == "MannFixed":
-            # Generates a fixed mann box
-            TF_seed = 1234  # Hardcoded for now
-            tf_agent = MannTurbulenceField.generate(
-                alphaepsilon=0.1,  # use correct alphaepsilon or scale later
-                L=33.6,  # length scale
-                Gamma=3.9,  # anisotropy parameter
-                # numbers should be even and should be large enough to cover whole farm in all dimensions and time, see above
-                Nxyz=(2048, 512, 64),
-                dxyz=(3.0, 3.0, 3.0),
-                seed=TF_seed,  # seed for random generator
-            )
-            tf_agent.scale_TI(TI=self.ti, U=self.ws)
-            self.addedTurbulenceModel = SynchronizedAutoScalingIsotropicMannTurbulence()
-
-        elif self.turbtype == "None":
-            # Zero turbulence site.
-            tf_agent_seed = self.np_random.integers(
-                2**31
-            )  # Generate a seed from the main RNG
-            tf_agent = RandomTurbulence(ti=0, ws=self.ws, seed=tf_agent_seed)
-
-            self.addedTurbulenceModel = None  # AutoScalingIsotropicMannTurbulence()
-        else:
-            # Throw and error:
-            raise ValueError("Invalid turbulence type specified")
-
-        # Calculate t_developed and time_max based on farm geometry
-        turb_pos = np.stack([self.x_pos, self.y_pos])
-        center = (turb_pos.max(1) + turb_pos.min(1)) / 2
-        distances = np.sqrt(np.sum((turb_pos - center[:, np.newaxis]) ** 2, axis=0))
-        max_dist = np.max(distances)
-
-        # Time for flow to develop (distance from origin to furthest turbine)
-        turbine_max_dist = np.sqrt(np.sum(turb_pos**2, axis=0)).max()
-        t_inflow = turbine_max_dist / self.ws
-        self.t_developed = math.ceil(t_inflow * self.burn_in_passthroughs)
-        self.time_max = math.ceil(t_inflow * self.n_passthrough)
-
-        # For single turbine, use rotor diameter
-        if self.n_turb == 1:
-            self.time_max = math.ceil((self.D * self.n_passthrough) / self.ws)
-
-        self.time_max = max(1, self.time_max)
-
-        # Calculate max wind direction change rate
-        d_theta_lim = self.max_turb_move * 360 / (2 * np.pi * max_dist)
-
-        # Make the wd list for the entire episode
-        self.wd_lst = self.wind_manager.make_wind_direction_list(
-            base_wd=self.wd,
-            time_max=self.time_max,
-            dt_sim=self.dt_sim,
-            t_developed=self.t_developed,
-            steps_on_reset=self.steps_on_reset,
-            wd_function=self.wd_function,
-        )
-
-        self.site = MetmastSite(
-            ws=self.ws,
-            turbulenceField=tf_agent,  # no turbulence field in this example)
-            wd_lst=self.wd_lst,  # the wind direction time series
-            dt=self.dt_sim,  # seconds between samples in the time series
-            max_wd_step=d_theta_lim,  # Maximum change in WD per second (deg/s)
-            update_interval=self.dt_sim,  # How often to update the WD from the list
-        )
-
-        if self.Baseline_comp:  # I am pretty sure we need to have 2 sites, as the flow simulation is run on the site, and the measurements are taken from the site.
-            tf_base = copy.deepcopy(tf_agent)
-            # self.site_base = TurbulenceFieldSite(ws=self.ws, turbulenceField=tf_base)
-            self.site_base = MetmastSite(
-                ws=self.ws,
-                turbulenceField=tf_base,  # no turbulence field in this example)
-                wd_lst=self.wd_lst,
-                dt=self.dt_sim,
-                max_wd_step=d_theta_lim,  # Maximum change in WD per second (deg/s)
-                update_interval=self.dt_sim,  # How often to update the WD from the list
-            )
-            tf_base = None
-        tf_agent = None
-        gc.collect()
-
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
         """
         Reset the environment. This is called at the start of every episode.
@@ -1044,9 +907,53 @@ class WindFarmEnv(WindEnv):
         # 3) Turbines + main flow sim
         self._init_wts()
 
+        # Set random generator for turbulence manager
+        self.turbulence_manager.np_random = self.np_random
+
         if self.backend == "dynamiks":
             # --- ORIGINAL dynamic backend ---
-            self._def_site()
+            # Generate wind direction list for the episode
+            # First need to calculate time parameters using turbulence manager
+            turb_pos = np.stack([self.x_pos, self.y_pos]).T
+            self.t_developed, self.time_max = (
+                self.turbulence_manager._calculate_time_parameters(
+                    turbine_positions=turb_pos,
+                    rotor_diameter=self.D,
+                    ws=self.ws,
+                    n_passthrough=self.n_passthrough,
+                    burn_in_passthroughs=self.burn_in_passthroughs,
+                )
+            )
+
+            # Generate wind direction list
+            wd_list = self.wind_manager.make_wind_direction_list(
+                base_wd=self.wd,
+                time_max=self.time_max,
+                dt_sim=self.dt_sim,
+                t_developed=self.t_developed,
+                steps_on_reset=self.steps_on_reset,
+                wd_function=self.wd_function,
+            )
+
+            # Create sites and turbulence fields
+            (
+                self.site,
+                self.site_base,
+                _,
+                _,
+                self.addedTurbulenceModel,
+            ) = self.turbulence_manager.create_sites(
+                ws=self.ws,
+                wd=self.wd,
+                ti=self.ti,
+                wd_list=wd_list,
+                dt_sim=self.dt_sim,
+                turbine_positions=turb_pos,
+                rotor_diameter=self.D,
+                n_passthrough=self.n_passthrough,
+                burn_in_passthroughs=self.burn_in_passthroughs,
+                create_baseline=self.Baseline_comp,
+            )
 
             self.fs = DWMFlowSimulation(
                 site=self.site,
@@ -1062,17 +969,17 @@ class WindFarmEnv(WindEnv):
                 addedTurbulenceModel=self.addedTurbulenceModel,
             )
         else:
-            # PyWake backend: calculate times but don't need wind direction list
-            turb_pos = np.stack([self.x_pos, self.y_pos])
-            turbine_max_dist = np.sqrt(np.sum(turb_pos**2, axis=0)).max()
-            t_inflow = turbine_max_dist / self.ws
-            self.t_developed = math.ceil(t_inflow * self.burn_in_passthroughs)
-            self.time_max = math.ceil(t_inflow * self.n_passthrough)
-
-            if self.n_turb == 1:
-                self.time_max = math.ceil((self.D * self.n_passthrough) / self.ws)
-
-            self.time_max = max(1, self.time_max)
+            # PyWake backend: calculate times but don't need turbulence fields
+            turb_pos = np.stack([self.x_pos, self.y_pos]).T
+            self.t_developed, self.time_max = (
+                self.turbulence_manager._calculate_time_parameters(
+                    turbine_positions=turb_pos,
+                    rotor_diameter=self.D,
+                    ws=self.ws,
+                    n_passthrough=self.n_passthrough,
+                    burn_in_passthroughs=self.burn_in_passthroughs,
+                )
+            )
 
             if self.HTC_path is not None:
                 raise NotImplementedError(
@@ -1710,15 +1617,6 @@ class WindFarmEnv(WindEnv):
 
         return frame
 
-    def _discover_turbulence_files(self, root: Union[str, Path]) -> list[str]:
-        p = Path(root)
-        if p.is_file() and p.name.startswith("TF_") and p.suffix == ".nc":
-            return [str(p)]
-        if p.is_dir():
-            files = sorted(str(f) for f in p.glob("TF_*.nc"))
-            if files:
-                return files
-        raise FileNotFoundError(f"No TF_*.nc files found at: {root}")
 
     def close(self):
         plt.close()
