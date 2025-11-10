@@ -59,7 +59,7 @@ class TurbulenceManager:
         self.turbulence_files = []
         if turbulence_type == "MannLoad":
             if not turbulence_box_path:
-                raise ValueError("turbulence_box_path required for MannLoad type")
+                raise FileNotFoundError("Provide 'TurbBox' for turbtype='MannLoad'.")
             self.turbulence_files = self._discover_turbulence_files(turbulence_box_path)
 
     def create_sites(
