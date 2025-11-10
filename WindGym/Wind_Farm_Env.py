@@ -783,20 +783,21 @@ class WindFarmEnv(WindEnv):
         # Set random generator for turbulence manager
         self.turbulence_manager.np_random = self.np_random
 
+        # First need to calculate time parameters using turbulence manager
+        turb_pos = np.stack([self.x_pos, self.y_pos]).T
+        self.t_developed, self.time_max = (
+            self.turbulence_manager._calculate_time_parameters(
+                turbine_positions=turb_pos,
+                rotor_diameter=self.D,
+                ws=self.ws,
+                n_passthrough=self.n_passthrough,
+                burn_in_passthroughs=self.burn_in_passthroughs,
+            )
+        )
+
         if self.backend == "dynamiks":
             # --- ORIGINAL dynamic backend ---
             # Generate wind direction list for the episode
-            # First need to calculate time parameters using turbulence manager
-            turb_pos = np.stack([self.x_pos, self.y_pos]).T
-            self.t_developed, self.time_max = (
-                self.turbulence_manager._calculate_time_parameters(
-                    turbine_positions=turb_pos,
-                    rotor_diameter=self.D,
-                    ws=self.ws,
-                    n_passthrough=self.n_passthrough,
-                    burn_in_passthroughs=self.burn_in_passthroughs,
-                )
-            )
 
             # Generate wind direction list
             wd_list = self.wind_manager.make_wind_direction_list(
@@ -842,18 +843,7 @@ class WindFarmEnv(WindEnv):
                 addedTurbulenceModel=self.addedTurbulenceModel,
             )
         else:
-            # PyWake backend: calculate times but don't need turbulence fields
-            turb_pos = np.stack([self.x_pos, self.y_pos]).T
-            self.t_developed, self.time_max = (
-                self.turbulence_manager._calculate_time_parameters(
-                    turbine_positions=turb_pos,
-                    rotor_diameter=self.D,
-                    ws=self.ws,
-                    n_passthrough=self.n_passthrough,
-                    burn_in_passthroughs=self.burn_in_passthroughs,
-                )
-            )
-
+            # --- STEADY pywake_steady backend ---
             if self.HTC_path is not None:
                 raise NotImplementedError(
                     "pywake_steady backend does not support HAWC2WindTurbines."
