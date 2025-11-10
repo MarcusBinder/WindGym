@@ -24,12 +24,11 @@ from IPython import display
 # WindGym imports
 from .WindEnv import WindEnv
 from .MesClass import farm_mes
-from .BasicControllers import local_yaw_controller, global_yaw_controller
-from .Agents import PyWakeAgent
 from .core.reward_calculator import RewardCalculator
 from .core.wind_manager import WindManager
 from .core.turbulence_manager import TurbulenceManager
 from .core.renderer import WindFarmRenderer
+from .core.baseline_manager import BaselineManager
 
 from py_wake.wind_turbines import WindTurbines as WindTurbinesPW
 from collections import deque, defaultdict
@@ -270,6 +269,22 @@ class WindFarmEnv(WindEnv):
         else:
             self.Baseline_comp = False
 
+        # Initialize the baseline manager
+        self.baseline_manager = None
+        if self.Baseline_comp:
+            self.baseline_manager = BaselineManager(
+                baseline_controller_type=self.BaseController,
+                x_pos=self.x_pos,
+                y_pos=self.y_pos,
+                turbine=turbine,
+                yaw_max=self.yaw_max,
+                yaw_min=self.yaw_min,
+                yaw_step_env=self.yaw_step_env,
+                yaw_step_sim=self.yaw_step_sim,
+                htc_path=HTC_path,
+                name_string=name_string,
+            )
+
         # #Initializing the measurements class with the specified values.
         self._init_farm_mes()
 
@@ -359,149 +374,13 @@ class WindFarmEnv(WindEnv):
                 y=self.y_pos,  # x and y position of two wind turbines
                 windTurbine=self.turbine,
             )
-        # Setting up the baseline controller if we need it
-        if self.Baseline_comp:
-            # If we compare to some baseline performance, then we also need a controller for that
-            base = (self.BaseController or "").strip()
-            kind = base.split("_", 1)[0]
 
-            if kind == "Local":
-                self._base_controller = local_yaw_controller
-            elif kind == "Global":
-                self._base_controller = global_yaw_controller
-            elif kind == "PyWake":
-                mode = base.split("_", 1)[1] if "_" in base else "oracle"
-                if mode not in {"oracle", "local"}:
-                    raise ValueError("PyWake mode must be 'oracle' or 'local'.")
-                self.py_agent_mode = mode
+        # Initialize baseline turbines if needed
+        if self.Baseline_comp and self.baseline_manager is not None:
+            self.wts_baseline = self.baseline_manager.initialize_baseline_turbines()
+        else:
+            self.wts_baseline = None
 
-                # lookup_mode is true if self.py_agent_mode == "local", else it's false
-                lookup_mode = self.py_agent_mode == "local"
-
-                # This is a workarround to make the PyWakeAgent work with the baseline farm. Better must exist.
-                class Fake_env:
-                    def __init__(
-                        self,
-                        action_method="wind",
-                        yaw_max=45,
-                        yaw_min=-45,
-                        yaw_step_env=1,
-                        wd=270,
-                    ):
-                        self.ActionMethod = action_method
-                        # Mocking the unwrapped attributes that PyWakeAgent expects
-                        self.unwrapped = self  # Or a separate mock object with just the needed attributes
-                        self.yaw_max = yaw_max
-                        self.yaw_min = yaw_min
-                        self.yaw_step_env = yaw_step_env
-                        self.wd = wd
-
-                # When creating temp_env:
-                temp_env = Fake_env(
-                    action_method="wind",
-                    yaw_max=self.yaw_max,
-                    yaw_min=self.yaw_min,
-                    yaw_step_env=self.yaw_step_env,
-                )
-
-                self.pywake_agent = PyWakeAgent(
-                    x_pos=self.x_pos,
-                    y_pos=self.y_pos,
-                    turbine=self.turbine,
-                    yaw_max=self.yaw_max,
-                    yaw_min=self.yaw_min,
-                    env=temp_env,
-                    look_up=lookup_mode,  #
-                )
-                self._base_controller = self.PyWakeAgentWrapper
-            else:
-                raise ValueError(
-                    "BaseController must be one of: 'Local', 'Global', 'PyWake[_oracle|_local]'."
-                )
-
-            # Definde the turbines
-            if self.HTC_path is not None:  # pragma: no cover
-                # If we have a high fidelity turbine model, then we need to load it in
-                self.wts_baseline = HAWC2WindTurbines(
-                    x=self.x_pos,
-                    y=self.y_pos,
-                    htc_lst=[self.HTC_path],
-                    case_name=name_string
-                    + "_baseline",  # subfolder name in the htc, res and log folders
-                    suppress_output=True,  # don't show hawc2 output in console
-                )
-                # Add the yaw sensor, but because the only keyword does not work with h2lib, we add another layer that then only returns the first values of them.
-                self.wts_baseline.add_sensor(
-                    name="yaw_getter",
-                    getter="constraint bearing2 yaw_rot 1 only 1;",  #
-                    expose=False,
-                    ext_lst=["angle", "speed"],
-                )
-                self.wts_baseline.add_sensor(
-                    "yaw",
-                    getter=lambda wt: np.rad2deg(wt.sensors.yaw_getter[:, 0]),
-                    setter=lambda wt, value: wt.h2.set_variable_sensor_value(
-                        1, np.deg2rad(value).tolist()
-                    ),
-                    expose=True,
-                )
-            else:  # If we have no HTC path, use the pywake turbine
-                self.wts_baseline = PyWakeWindTurbines(
-                    x=self.x_pos,
-                    y=self.y_pos,  # x and y position of two wind turbines
-                    windTurbine=self.turbine,
-                )
-
-    def PyWakeAgentWrapper(self, fs, yaw_step=1):
-        """
-        This function wraps the PyWakeAgent, so that it can be used as a controller for the baseline farm.
-        This is done to make sure that the agent can be used in the same way as the other controllers.
-        fs: Flow simulation object. For the BASELINE
-        """
-        # This is mostly the _adjust_yaws method. Just slightly formatted to work with the baseline now.
-
-        # We can run this method in two different ways. Either in oracle mode or in local mode
-        # oracle mode just uses the global wind conditions, while local mode uses the local wind conditions at the turbines.
-        if self.py_agent_mode == "local":
-            #  This is a bit crude, and can be improved, but we just use the front most turbine for this.
-            front_tb = np.argmin(fs.windTurbines.positions_xyz[0, :])
-            ws_front = fs.windTurbines.get_rotor_avg_windspeed(include_wakes=True)[
-                :, front_tb
-            ]
-            ws_use = np.linalg.norm(ws_front)
-            wd_use = np.rad2deg(np.arctan2(ws_front[1], ws_front[0])) + self.wd
-
-            # Make the wd and ws update somewhat slowly, using polyak averaging
-            tau = 0.05
-
-            self.pywake_wd = (1 - tau) * self.pywake_wd + tau * wd_use
-            self.pywake_ws = (1 - tau) * self.pywake_ws + tau * ws_use
-
-            self.pywake_agent.update_wind(
-                wind_speed=self.pywake_ws,
-                wind_direction=self.pywake_wd,
-                TI=self.ti,
-            )
-
-        # This assumes we are using the "wind" based actions.
-        action = self.pywake_agent.predict()[0]
-
-        # This unscales the actions.
-        new_yaws = (action + 1.0) / 2.0 * (self.yaw_max - self.yaw_min) + self.yaw_min
-
-        # So for the baseline controller, we also need to adjust the yaws based on the wind direction error.
-        # This is done internally inside the pywakeAgent but not when used as a baseline controller.
-        pywake_error = self.pywake_agent.wdir - self.wd
-        actual_yaws = new_yaws - pywake_error
-
-        yaw_max = fs.windTurbines.yaw + self.yaw_step_sim
-        yaw_min = fs.windTurbines.yaw - self.yaw_step_sim
-
-        new_yaws = np.clip(
-            np.clip(actual_yaws, yaw_min, yaw_max), self.yaw_min, self.yaw_max
-        )
-
-        return new_yaws
 
     def _normalize_config_input(self, config):
         """
@@ -1051,14 +930,11 @@ class WindFarmEnv(WindEnv):
             if self.Baseline_comp:
                 self.fs_baseline.run(0)
 
-        if self.Baseline_comp:
-            # If baseline is PyWake, prime its wind estimate
-            if (self.BaseController or "").split("_")[0] == "PyWake":
-                self.pywake_agent.update_wind(
-                    wind_speed=self.ws, wind_direction=self.wd, TI=self.ti
-                )
-                self.pywake_ws = self.ws
-                self.pywake_wd = self.wd
+        if self.Baseline_comp and self.baseline_manager is not None:
+            # Update baseline manager wind conditions
+            self.baseline_manager.update_wind_conditions(
+                ws=self.ws, wd=self.wd, ti=self.ti
+            )
 
         # 4) Fill measurement history window (and power deques)
         #    Uses the unified inner loop; no action applied during reset.
@@ -1157,7 +1033,7 @@ class WindFarmEnv(WindEnv):
             # 3) Baseline, only if requested
             if include_baseline:
                 if apply_agent_action:
-                    new_baseline_yaws = self._base_controller(
+                    new_baseline_yaws = self.baseline_manager.compute_baseline_action(
                         fs=self.fs_baseline, yaw_step=self.yaw_step_sim
                     )
                     self.fs_baseline.windTurbines.yaw = new_baseline_yaws
