@@ -22,7 +22,7 @@ from dynamiks.views import XYView
 from IPython import display
 
 # WindGym imports
-from .wind_env import WindEnv
+from . import utils
 from .core.mes_class import FarmMes
 from .core.reward_calculator import RewardCalculator
 from .core.wind_manager import WindManager
@@ -56,7 +56,7 @@ For now it only supports the PyWakeWindTurbines, but it should be easy to expand
 # TODO for now I have just hardcoded this scaling value (1 and 25 for the wind_speed min and max). This is beacuse the wind speed is chosen from the normal distribution, but becasue of the wakes and the turbulence, we canhave cases where we go above or below these values.
 
 
-class WindFarmEnv(WindEnv):
+class WindFarmEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"]}
 
     def __init__(
@@ -216,18 +216,26 @@ class WindFarmEnv(WindEnv):
         if yaw_init is not None:
             # We only ever have this, IF we have set the value from
             if yaw_init == "Random":
-                self._yaw_init = self._randoms_uniform
+                self._yaw_init = lambda **kwargs: utils.randoms_uniform(
+                    self.np_random, kwargs["min_val"], kwargs["max_val"], kwargs["n"]
+                )
             elif yaw_init == "Defined":
-                self._yaw_init = self._defined_yaw
+                self._yaw_init = lambda **kwargs: utils.defined_yaw(
+                    kwargs["yaws"], self.n_turb
+                )
             else:
-                self._yaw_init = self._return_zeros
+                self._yaw_init = lambda **kwargs: utils.return_zeros(kwargs["n"])
         else:
             if self.yaw_init == "Random":
-                self._yaw_init = self._randoms_uniform
+                self._yaw_init = lambda **kwargs: utils.randoms_uniform(
+                    self.np_random, kwargs["min_val"], kwargs["max_val"], kwargs["n"]
+                )
             elif self.yaw_init == "Defined":
-                self._yaw_init = self._defined_yaw
+                self._yaw_init = lambda **kwargs: utils.defined_yaw(
+                    kwargs["yaws"], self.n_turb
+                )
             else:
-                self._yaw_init = self._return_zeros
+                self._yaw_init = lambda **kwargs: utils.return_zeros(kwargs["n"])
 
         # Initialize the reward calculator
 

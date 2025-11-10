@@ -4,7 +4,7 @@ from typing import Callable
 import itertools
 import numpy as np
 from numpy.typing import NDArray
-from ..wind_env import WindEnv
+from .. import utils
 
 """
 This file contains the classes for the measurements of the wind farm.
@@ -400,7 +400,7 @@ class TurbMes:
         return np.concatenate(measurements)
 
 
-class FarmMes(WindEnv):
+class FarmMes:
     """
     Class for the measurements of the farm.
     The farm stores measurements from each turbine for wind speed, wind direction, yaw angle, power
@@ -661,7 +661,7 @@ class FarmMes(WindEnv):
         # get the ws measurements
         if scaled:
             # Scale the measurements
-            return self._scale_val(self.farm_mes.get_ws(), self.ws_min, self.ws_max)
+            return utils.scale_val(self.farm_mes.get_ws(), self.ws_min, self.ws_max)
         else:
             return self.farm_mes.get_ws()
 
@@ -675,7 +675,7 @@ class FarmMes(WindEnv):
         # get the power measurements
         if scaled:
             # Scale the measurements
-            return self._scale_val(
+            return utils.scale_val(
                 self.farm_mes.get_power(), 0, self.power_max * self.n_turbines
             )  # Min power is 0, max is the sum of all the turbines
         else:
@@ -690,7 +690,7 @@ class FarmMes(WindEnv):
     def get_wd_farm(self, scaled: bool = False) -> NDArray[np.float32]:
         # get the wd measurements
         if scaled:
-            return self._scale_val(self.farm_mes.get_wd(), self.wd_min, self.wd_max)
+            return utils.scale_val(self.farm_mes.get_wd(), self.wd_min, self.wd_max)
         else:
             return self.farm_mes.get_wd()
 
