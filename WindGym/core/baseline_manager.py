@@ -300,10 +300,16 @@ class BaselineManager:
         self.wd = wd
         self.ti = ti
 
-        # Initialize PyWake agent wind conditions if in oracle mode
-        if self.pywake_agent is not None and self.py_agent_mode == "oracle":
-            self.pywake_agent.update_wind(
-                wind_speed=ws, wind_direction=wd, TI=ti
-            )
-            self.pywake_ws = ws
-            self.pywake_wd = wd
+        # Initialize PyWake agent wind conditions
+        if self.pywake_agent is not None:
+            if self.py_agent_mode == "oracle":
+                # Oracle mode: always update with global wind conditions
+                self.pywake_agent.update_wind(
+                    wind_speed=ws, wind_direction=wd, TI=ti
+                )
+                self.pywake_ws = ws
+                self.pywake_wd = wd
+            elif self.pywake_ws is None or self.pywake_wd is None:
+                # Local mode: initialize once (updated via Polyak averaging later)
+                self.pywake_ws = ws
+                self.pywake_wd = wd
