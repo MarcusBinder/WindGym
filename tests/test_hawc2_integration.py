@@ -200,7 +200,7 @@ def mock_hawc2_wind_turbines():
 
     # Patch both locations where HAWC2WindTurbines is used
     with patch(
-        "WindGym.Wind_Farm_Env.HAWC2WindTurbines", side_effect=mock_factory
+        "WindGym.wind_farm_env.HAWC2WindTurbines", side_effect=mock_factory
     ) as mock_class_env, patch(
         "WindGym.core.baseline_manager.HAWC2WindTurbines", side_effect=mock_factory
     ) as mock_class_baseline:
