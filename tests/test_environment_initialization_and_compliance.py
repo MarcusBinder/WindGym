@@ -592,7 +592,7 @@ class TestSpecificFeatures:
         )
 
         with pytest.raises(
-            NotImplementedError, match="The Track_power is not implemented yet"
+            NotImplementedError, match="Power tracking reward is not yet implemented."
         ):
             WindFarmEnv(
                 turbine=V80(),
