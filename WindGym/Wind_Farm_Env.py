@@ -23,7 +23,7 @@ from IPython import display
 
 # WindGym imports
 from .WindEnv import WindEnv
-from .MesClass import farm_mes
+from .MesClass import FarmMes
 from .core.reward_calculator import RewardCalculator
 from .core.wind_manager import WindManager
 from .core.turbulence_manager import TurbulenceManager
@@ -481,7 +481,7 @@ class WindFarmEnv(WindEnv):
         # Set n_probes_per_turb now that probe_manager is initialized
         self.n_probes_per_turb = self.probe_manager.count_probes_per_turbine()
 
-    def _init_farm_mes(self):
+    def _init_farm_mes(self) -> None:
         """
         This function initializes the farm measurements class.
         This id done partly due to modularity, but also because we can delete it from memory later, as I suspect this might be the source of the memory leak
@@ -489,7 +489,7 @@ class WindFarmEnv(WindEnv):
         # Initializing the measurements class with the specified values.
         # TODO if history_length is 1, then we dont need to save the history, and we can just use the current values.
         # TODO is history_N is 1 or larger, then it is kinda implied that the rolling_mean is true.. Therefore we can change the if self.rolling_mean: check in the Mes() class, to be a if self.history_N >= 1 check... or something like that
-        self.farm_measurements = farm_mes(
+        self.farm_measurements = FarmMes(
             n_turbines=self.n_turb,
             n_probes_per_turb=self.n_probes_per_turb,
             turb_ws=self.mes_level["turb_ws"],
@@ -561,7 +561,7 @@ class WindFarmEnv(WindEnv):
         """Initialize rendering - delegates to renderer."""
         self.renderer.init_render(self.fs, self.turbine)
 
-    def _take_measurements(self):
+    def _take_measurements(self) -> None:
         """
         Does the measurement and saves it to the self.
         """
@@ -578,7 +578,7 @@ class WindFarmEnv(WindEnv):
         self.current_yaw = self.fs.windTurbines.yaw
         self.current_powers = self.fs.windTurbines.power()  # The Power pr turbine
 
-    def _update_measurements(self):
+    def _update_measurements(self) -> None:
         """
         This function adds the current observations to the farm_measurements class
         """
@@ -594,7 +594,7 @@ class WindFarmEnv(WindEnv):
             self.current_ws, self.current_wd, self.current_yaw, self.powers
         )
 
-    def _get_obs(self):
+    def _get_obs(self) -> np.ndarray:
         """
         Gets the sensordata from the farm_measurements class, and scales it to be between -1 and 1
         If you want to implement your own handling of the observations, then you can do that here by overwriting this function
@@ -603,7 +603,7 @@ class WindFarmEnv(WindEnv):
         values = self.farm_measurements.get_measurements(scaled=True)
         return np.clip(values, -1.0, 1.0).astype(np.float32)
 
-    def _get_info(self):
+    def _get_info(self) -> dict[str, Any]:
         """
         Return info dictionary.
         If we have a baseline comparison, then we also return the baseline values.
@@ -641,7 +641,7 @@ class WindFarmEnv(WindEnv):
         return return_dict
 
 
-    def _set_windconditions(self):
+    def _set_windconditions(self) -> None:
         """
         Sets the global windconditions for the environment
         """
