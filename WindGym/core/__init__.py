@@ -8,5 +8,12 @@ of the wind farm environment, promoting separation of concerns and maintainabili
 from .reward_calculator import RewardCalculator
 from .wind_manager import WindManager, WindConditions
 from .turbulence_manager import TurbulenceManager
+from .renderer import WindFarmRenderer
 
-__all__ = ["RewardCalculator", "WindManager", "WindConditions", "TurbulenceManager"]
+__all__ = [
+    "RewardCalculator",
+    "WindManager",
+    "WindConditions",
+    "TurbulenceManager",
+    "WindFarmRenderer",
+]

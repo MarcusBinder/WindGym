@@ -29,6 +29,7 @@ from .Agents import PyWakeAgent
 from .core.reward_calculator import RewardCalculator
 from .core.wind_manager import WindManager
 from .core.turbulence_manager import TurbulenceManager
+from .core.renderer import WindFarmRenderer
 
 from py_wake.wind_turbines import WindTurbines as WindTurbinesPW
 from collections import deque, defaultdict
@@ -259,6 +260,9 @@ class WindFarmEnv(WindEnv):
             max_turb_move=max_turb_move,
         )
 
+        # Initialize the renderer
+        self.renderer = WindFarmRenderer(render_mode=render_mode)
+
         # If we need to have a "baseline" farm, then we need to set up the baseline controller
         # This could be moved to the Power_reward check, but I have a feeling this will be expanded in the future, when we include damage.
         if self.power_reward == "Baseline" or Baseline_comp:
@@ -305,7 +309,7 @@ class WindFarmEnv(WindEnv):
 
         # Asserting that the render_mode is valid.
         assert render_mode is None or render_mode in self.metadata["render_modes"]
-        self.render_mode = render_mode
+        self.render_mode = render_mode  # Keep for compatibility
 
     def _init_wts(self):
         """
@@ -782,18 +786,8 @@ class WindFarmEnv(WindEnv):
         )
 
     def init_render(self):
-        plt.ion()
-        x_turb, y_turb = self.fs.windTurbines.positions_xyz[:2]
-
-        self.figure, self.ax = plt.subplots(figsize=(10, 4))
-        self.a = np.linspace(-200 + min(x_turb), 1000 + max(x_turb), 250)
-        self.b = np.linspace(-200 + min(y_turb), 200 + max(y_turb), 250)
-
-        self.view = XYView(
-            z=self.turbine.hub_height(), x=self.a, y=self.b, ax=self.ax, adaptive=False
-        )
-
-        plt.close()
+        """Initialize rendering - delegates to renderer."""
+        self.renderer.init_render(self.fs, self.turbine)
 
     def _take_measurements(self):
         """
@@ -1094,7 +1088,7 @@ class WindFarmEnv(WindEnv):
 
         # Init render can now be called as fs needs to be created first
         if self.render_mode == "human":
-            self.init_render()
+            self.renderer.init_render(self.fs, self.turbine)
 
         return observation, info
 
@@ -1434,192 +1428,31 @@ class WindFarmEnv(WindEnv):
             shutil.rmtree(htc_folder_baseline)
 
     def render(self):
-        """Render method required by PettingZoo API."""
-        if self.render_mode == "rgb_array":
-            # Return the RGB frame (for recording, saving, etc.)
-            return self._render_frame()
-        elif self.render_mode == "human":
-            if not hasattr(self, "view"):
-                self.init_render()
-            # Show the frame in a window
-            frame = self._render_frame_for_human()
-            plt.imshow(frame)
-            plt.axis("off")
-            plt.title("Wind Farm Environment - Render")
-            plt.show(block=False)
-            plt.pause(0.001)  # Pause to allow window to update
+        """Render method required by Gymnasium API - delegates to renderer."""
+        fs_baseline = self.fs_baseline if self.Baseline_comp else None
+        probes = self.probes if hasattr(self, "probes") else None
+        return self.renderer.render(self.fs, fs_baseline, probes)
 
     def _render_frame_for_human(self, baseline=False):
-        """Render the environment and return an RGB frame as a numpy array."""
-        plt.ioff()  # Non-interactive mode
-        fig, ax1 = plt.subplots(figsize=(18, 6))  # Create new figure for rendering
-
-        if baseline:
-            fs_use = self.fs_baseline
-        else:
-            fs_use = self.fs
-
-        uvw = fs_use.get_windspeed(self.view, include_wakes=True, xarray=True)
-
-        wt = fs_use.windTurbines
-        x_turb, y_turb = fs_use.windTurbines.positions_xyz[:2]
-        yaw, tilt = wt.yaw_tilt()
-
-        mesh = ax1.pcolormesh(
-            uvw.x.values, uvw.y.values, uvw[0].T, shading="nearest", cmap="viridis"
+        """Render the environment and return an RGB frame - delegates to renderer."""
+        fs_baseline = self.fs_baseline if self.Baseline_comp else None
+        probes = self.probes if hasattr(self, "probes") else None
+        return self.renderer._render_frame_for_human(
+            self.fs, fs_baseline, probes, baseline, self.turbine, self.ws
         )
-        plt.colorbar(mesh, ax=ax1, label="Wind Speed (m/s)")
-
-        # ax1.pcolormesh(uvw.x.values, uvw.y.values, uvw[0].T, shading="nearest")
-        WindTurbinesPW.plot_xy(
-            fs_use.windTurbines,
-            x_turb,
-            y_turb,
-            types=fs_use.windTurbines.types,
-            wd=fs_use.wind_direction,
-            ax=ax1,
-            yaw=yaw,
-            tilt=tilt,
-        )
-        # --- Always set equal aspect ratio for consistent scale ---
-        ax1.set_aspect("equal", adjustable="datalim")
-
-        # Plot probes with color depending on probe type
-        if hasattr(self, "probes"):
-            for probe in self.probes:
-                x, y, _ = probe.position  # assuming probe.position = (x, y, z)
-                probe_type = probe.probe_type.upper()
-
-                # Determine color and label
-                if probe_type == "WS":
-                    color = "red"
-                    label = "WS Probe"
-                    value = float(probe.read())
-                    text = f"{value:.2f} m/s"
-                elif probe_type == "TI":
-                    color = "blue"
-                    label = "TI Probe"
-                    value = float(probe.read())  # scalar
-                    text = f"{value:.2f} TI"
-                else:
-                    color = "gray"
-                    label = "Unknown"
-                    text = "N/A"
-
-                ax1.scatter(x, y, color=color, s=25, marker="o", label=label)
-                ax1.text(
-                    x + 5,
-                    y + 5,
-                    text,
-                    color="black",
-                    fontsize=8,
-                    bbox=dict(facecolor="none", alpha=0.6, edgecolor="none"),
-                )
-
-                speed = float(probe.read())
-                arrow_length = speed * 5
-                # --- Draw inflow direction arrow ---
-                inflow_angle = probe.get_inflow_angle_to_turbine()  # radians
-                dx = arrow_length * np.cos(inflow_angle)
-                dy = arrow_length * np.sin(inflow_angle)
-
-                ax1.arrow(
-                    x,
-                    y,
-                    dx,
-                    dy,
-                    width=1.5,  # makes the shaft thicker
-                    head_width=5.0,  # width of the arrow head
-                    head_length=7.0,  # length of the arrow head
-                    fc=color,
-                    ec=color,
-                    alpha=0.8,
-                    length_includes_head=True,  # ensures arrow length includes head
-                )
-
-                ax1.set_title(f"Flow field at {fs_use.time} s")
-                # ax1.axis('off')  # Hide axes for better visuals
-                # ax1.set_aspect('equal', adjustable='datalim')
-
-        # Avoid duplicate legend entries for multiple probes
-        handles, labels = ax1.get_legend_handles_labels()
-        if labels.count("Probe") > 1:
-            # Remove duplicate labels
-            unique = dict(zip(labels, handles))
-            ax1.legend(unique.values(), unique.keys())
-
-        canvas = FigureCanvas(fig)
-        canvas.draw()
-        buf = canvas.buffer_rgba()
-        frame = np.asarray(buf)[:, :, :3]  # Get RGB only
-
-        plt.close(fig)  # Avoid memory leaks
-        return frame
 
     def _render_frame(self, baseline=False):
-        """
-        Renders the current environment state and returns the frame as an RGB array.
-        """
-        # Ensure render objects like self.view are initialized
-        if not hasattr(self, "view"):
-            self.init_render()
-
-        # Use the figure and axis created during initialization
-        fig = self.figure
-        ax = self.ax
-        ax.cla()  # Clear the axis for the new frame
-
-        fs_use = self.fs_baseline if baseline else self.fs
-
-        # Define a temporary view for this frame's plot
-        temp_view = XYView(
-            z=self.turbine.hub_height(), x=self.a, y=self.b, ax=ax, adaptive=False
+        """Renders the current environment state and returns the frame - delegates to renderer."""
+        fs_baseline = self.fs_baseline if self.Baseline_comp else None
+        probes = self.probes if hasattr(self, "probes") else None
+        return self.renderer._render_frame(
+            self.fs, fs_baseline, probes, baseline, self.turbine, self.ws
         )
-        uvw = fs_use.get_windspeed(temp_view, include_wakes=True, xarray=True)
-
-        # Plot the wind speed heatmap
-        ax.pcolormesh(
-            uvw.x.values,
-            uvw.y.values,
-            uvw[0].T,
-            shading="auto",
-            cmap="viridis",
-            vmin=3,
-            vmax=self.ws + 2,
-        )
-
-        # Get turbine coordinates correctly from .positions_xyz
-        x_turb, y_turb, _ = fs_use.windTurbines.positions_xyz
-
-        # Plot the turbines using the robust method from py_wake
-        WindTurbinesPW.plot_xy(
-            fs_use.windTurbines,
-            x_turb,
-            y_turb,
-            wd=fs_use.wind_direction,
-            yaw=fs_use.windTurbines.yaw,
-            ax=ax,
-        )
-
-        ax.set_title(f"Flow Field at Time: {fs_use.time:.1f} s")
-        ax.set_xlabel("x [m]")
-        ax.set_ylabel("y [m]")
-        ax.set_aspect("equal", adjustable="box")
-        fig.tight_layout()
-
-        # *** FIX: Use the modern method to capture the canvas to a NumPy array ***
-        canvas = FigureCanvas(fig)
-        canvas.draw()
-        buf = canvas.buffer_rgba()
-        frame = np.asarray(buf)[
-            :, :, :3
-        ]  # Convert buffer to array and keep only RGB channels
-
-        return frame
 
 
     def close(self):
-        plt.close()
+        """Close the environment and clean up resources."""
+        self.renderer.close()
         if self.Baseline_comp:
             self.fs_baseline = None
             self.site_base = None
@@ -1629,52 +1462,19 @@ class WindFarmEnv(WindEnv):
         gc.collect()
 
     def plot_farm(self, baseline=False):
-        """
-        This is the old plot_frame function, which plots the entire farm layout
-        """
-        self.init_render()
-        self._render_farm(baseline=baseline)
+        """Plot the entire farm layout - delegates to renderer."""
+        fs_baseline = self.fs_baseline if self.Baseline_comp else None
+        self.renderer.plot_farm(self.fs, fs_baseline, self.turbine, baseline)
 
-    def _render_farm(self, baseline=False):  # pragma: no cover
-        """
-        ):
-        """
-        plt.ion()
-        ax1 = plt.gca()
-
-        if baseline:
-            fs_use = self.fs_baseline
-        else:
-            fs_use = self.fs
-
-        uvw = fs_use.get_windspeed(self.view, include_wakes=True, xarray=True)
-
-        wt = fs_use.windTurbines
-        x_turb, y_turb = fs_use.windTurbines.positions_xyz[:2]
-        yaw, tilt = wt.yaw_tilt()
-
-        plt.pcolormesh(uvw.x.values, uvw.y.values, uvw[0].T, shading="nearest")
-        WindTurbinesPW.plot_xy(
-            fs_use.windTurbines,
-            x_turb,
-            y_turb,
-            # types=fs_use.windTurbines.types,
-            wd=fs_use.wind_direction,
-            ax=ax1,
-            yaw=yaw,
-            tilt=tilt,
-        )
-        ax1.set_title("Flow field at {} s".format(fs_use.time))
-        ax1.set_aspect("equal", adjustable="box")
-        display.display(plt.gcf())
-        display.clear_output(wait=True)
+    def _render_farm(self, baseline=False):
+        """Internal farm rendering - delegates to renderer."""
+        fs_baseline = self.fs_baseline if self.Baseline_comp else None
+        self.renderer._render_farm(self.fs, fs_baseline, baseline)
 
     def plot_frame(self, baseline=False):
-        """
-        Plots a single frame of the flow field and the wind turbines
-        """
-        self.init_render()
-        self._render_frame(baseline=baseline)
+        """Plot a single frame - delegates to renderer."""
+        fs_baseline = self.fs_baseline if self.Baseline_comp else None
+        self.renderer.plot_frame(self.fs, fs_baseline, self.turbine, baseline)
 
     def _get_num_raw_features(self):
         """Calculate based on YAML config - no hardcoding!"""
