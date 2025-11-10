@@ -29,6 +29,7 @@ from .core.wind_manager import WindManager
 from .core.turbulence_manager import TurbulenceManager
 from .core.renderer import WindFarmRenderer
 from .core.baseline_manager import BaselineManager
+from .core.probe_manager import ProbeManager
 
 from py_wake.wind_turbines import WindTurbines as WindTurbinesPW
 from collections import deque, defaultdict
@@ -208,7 +209,8 @@ class WindFarmEnv(WindEnv):
 
         self.n_turb = len(x_pos)  # The number of turbines
 
-        self.n_probes_per_turb = self._count_probes_from_config()
+        # Will be set later after probe_manager is initialized
+        self.n_probes_per_turb = None
 
         # Sets the yaw init method. If Random, then the yaw angles will be random. Else they will be zeros
         # If yaw_init is defined (it will be if we initialize from EnvEval) then set it like this. Else just use the value from the yaml
@@ -469,9 +471,17 @@ class WindFarmEnv(WindEnv):
         self.power_avg = self.power_def.get("Power_avg")
         self.power_reward = self.power_def.get("Power_reward")
 
-        # Unpack the wind speed probe parameters
-        self.probes_config = config.get("probes", [])
-        self.turbine_probes = {}
+        # Initialize probe manager
+        probes_config = config.get("probes", [])
+        self.probe_manager = ProbeManager(probes_config=probes_config)
+
+        # Keep references for backward compatibility
+        self.probes_config = probes_config
+        self.probes = self.probe_manager.probes
+        self.turbine_probes = self.probe_manager.turbine_probes
+
+        # Set n_probes_per_turb now that probe_manager is initialized
+        self.n_probes_per_turb = self.probe_manager.count_probes_per_turbine()
 
     def _init_farm_mes(self):
         """
@@ -536,126 +546,6 @@ class WindFarmEnv(WindEnv):
             tm.n_probes = len(probes)
             tm.probe_min = self.ws_scaling_min
             tm.probe_max = self.ws_scaling_max
-
-    def _init_probes_free_placement(self):
-        # Initialize wind speed probes
-        self.probes = []
-        for i, p in enumerate(self.probes_config):
-            probe = WindProbe(
-                env=self,
-                position=tuple(p["position"]),
-                include_wakes=p.get("include_wakes", True),
-                exclude_wake_from=p.get("exclude_wake_from", []),
-                time=p.get("time", None),
-            )
-            probe.name = p.get("name", f"probe_{i}")
-            self.probes.append(probe)
-
-    def _count_probes_from_config(self):
-        """
-        Count how many probes are assigned to each turbine index based on probes_config,
-        without needing to fully initialize the probes.
-        """
-        counts = defaultdict(int)
-        for p in self.probes_config:
-            tid = p.get("turbine_index")
-            if tid is not None:
-                counts[tid] += 1
-        return dict(counts)
-
-    def _init_probes(self, yaw_angles):
-        self.probes = []
-
-        yaw_angles = (
-            np.full(len(self.fs.windTurbines.positions_xyz[0]), yaw_angles)
-            if np.isscalar(yaw_angles)
-            else np.array(yaw_angles)
-        )
-        yaw_angles = np.radians(yaw_angles)
-
-        for i, p in enumerate(self.probes_config):
-            if "turbine_index" in p and "relative_position" in p:
-                tid = p["turbine_index"]
-                rel = p["relative_position"]
-                yaw = yaw_angles[tid]
-
-                rel_x, rel_y = rel[0], rel[1]
-                rel_z = rel[2] if len(rel) > 2 else 0.0
-
-                # Rotate relative position by turbine yaw
-                rel_x_rot = rel_x * math.cos(yaw) - rel_y * math.sin(yaw)
-                rel_y_rot = rel_x * math.sin(yaw) + rel_y * math.cos(yaw)
-
-                # Turbine absolute position
-                tp_x = self.fs.windTurbines.rotor_positions_xyz[0][tid]
-                tp_y = self.fs.windTurbines.rotor_positions_xyz[1][tid]
-                tp_z = self.fs.windTurbines.rotor_positions_xyz[2][tid]
-
-                position = (tp_x + rel_x_rot, tp_y + rel_y_rot, tp_z + rel_z)
-            else:
-                yaw = 0
-                position = tuple(p["position"])
-                tp_x, tp_y, tp_z = p.get("turbine_position", (0, 0, 0))
-
-            probe = WindProbe(
-                fs=self.fs,
-                position=position,
-                include_wakes=p.get("include_wakes", True),
-                exclude_wake_from=p.get("exclude_wake_from", []),
-                time=p.get("time", None),
-                probe_type=p.get("probe_type"),
-                yaw_angle=yaw,
-                turbine_position=(tp_x, tp_y, tp_z),
-            )
-
-            # Enforce name and turbine index for lookup
-            probe.name = p.get("name", f"probe_{i}")
-            probe.turbine_index = p.get("turbine_index", None)
-
-            self.probes.append(probe)
-
-        # Group probes per turbine for easy access later
-        from collections import defaultdict
-
-        self.turbine_probes = defaultdict(list)
-        for probe in self.probes:
-            if probe.turbine_index is not None:
-                self.turbine_probes[probe.turbine_index].append(probe)
-
-    def _yaw_probes(self, yaw_angles):
-        # Ensure yaw_angles is numpy array in radians
-
-        yaw_angles = np.radians(yaw_angles)
-
-        for probe in self.probes:
-            # Only update if probe has turbine_index and relative_position info
-            if hasattr(probe, "turbine_index") and probe.turbine_index is not None:
-                tid = probe.turbine_index
-                # Find relative position from config (you might store this in probe on init to avoid lookup)
-                rel = None
-                for pconf in self.probes_config:
-                    if pconf.get("name") == probe.name:
-                        rel = pconf.get("relative_position")
-                        break
-
-                if rel is None:
-                    continue  # Can't rotate without relative position
-
-                yaw = yaw_angles[tid]
-
-                rel_x, rel_y = rel[0], rel[1]
-                rel_z = rel[2] if len(rel) > 2 else 0.0
-
-                rel_x_rot = rel_x * np.cos(yaw) - rel_y * np.sin(yaw)
-                rel_y_rot = rel_x * np.sin(yaw) + rel_y * np.cos(yaw)
-
-                tp_x = self.fs.windTurbines.rotor_positions_xyz[0][tid]
-                tp_y = self.fs.windTurbines.rotor_positions_xyz[1][tid]
-                tp_z = self.fs.windTurbines.rotor_positions_xyz[2][tid]
-
-                new_position = (tp_x + rel_x_rot, tp_y + rel_y_rot, tp_z + rel_z)
-                probe.yaw_angle = yaw
-                probe.position = new_position
 
     def _init_spaces(self):
         """
@@ -876,7 +766,10 @@ class WindFarmEnv(WindEnv):
         )
 
         # Must init probes after fs
-        self._init_probes(self.fs.windTurbines.yaw)
+        self.probe_manager.initialize_probes(self.fs, self.fs.windTurbines.yaw)
+        # Update references to point to probe_manager's collections
+        self.probes = self.probe_manager.probes
+        self.turbine_probes = self.probe_manager.turbine_probes
 
         # 3b) Baseline flow sim (optional)
         if self.Baseline_comp:
@@ -1056,7 +949,7 @@ class WindFarmEnv(WindEnv):
             powers[j] = self.current_powers
             time_array[j] = self.fs.time
 
-            self._yaw_probes(yaws[j])
+            self.probe_manager.update_probe_positions(self.fs, yaws[j])
 
             if include_baseline:
                 baseline_powers[j] = self.fs_baseline.windTurbines.power(

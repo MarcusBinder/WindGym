@@ -10,6 +10,7 @@ from .wind_manager import WindManager, WindConditions
 from .turbulence_manager import TurbulenceManager
 from .renderer import WindFarmRenderer
 from .baseline_manager import BaselineManager
+from .probe_manager import ProbeManager
 
 __all__ = [
     "RewardCalculator",
@@ -18,4 +19,5 @@ __all__ = [
     "TurbulenceManager",
     "WindFarmRenderer",
     "BaselineManager",
+    "ProbeManager",
 ]
