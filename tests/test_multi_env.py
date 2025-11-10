@@ -8,15 +8,16 @@ from gymnasium.spaces import Box
 from pettingzoo.test import parallel_api_test  # Good for comprehensive API compliance
 
 # Import the class under test
-from WindGym.WindEnvMulti import WindFarmEnvMulti
+from WindGym.wind_env_multi import WindFarmEnvMulti
 
 # Import necessary components that WindFarmEnvMulti uses internally
-from WindGym.Wind_Farm_Env import WindFarmEnv
-from WindGym.MesClass import (
-    turb_mes,
-    farm_mes,
+from WindGym.wind_farm_env import WindFarmEnv
+from WindGym.core.mes_class import (
+    TurbMes,
+    FarmMes,
     Mes,
 )  # Explicitly import if their methods are called
+from WindGym import utils  # Import utils module for utility functions
 from py_wake.examples.data.hornsrev1 import V80  # <--- Import V80 here for use
 
 
@@ -543,7 +544,7 @@ class TestWindFarmEnvMultiCoverage:
     # for now as they pass when the WindFarmEnvMulti is correctly initialized.
 
     def test_yaw_init_defined_error(self, basic_env_config):
-        """Test error handling in WindEnv._defined_yaw method with wrong length."""
+        """Test error handling in utils.defined_yaw function with wrong length."""
         temp_config = basic_env_config.copy()
         temp_config["yaw_init"] = "Defined"
         temp_config["reset_init"] = (
@@ -553,18 +554,18 @@ class TestWindFarmEnvMultiCoverage:
         env = WindFarmEnvMulti(**temp_config)
         print(f"\n--- DEBUG: {self.test_yaw_init_defined_error.__name__} ---")
         print(f"Env n_turb: {env.n_turb}")
-        # Manually call _defined_yaw with an invalid yaw_initial array.
+        # Manually call defined_yaw with an invalid yaw_initial array.
         # env.n_turb is 2 (from x_pos)
         invalid_yaw_vals = [0.0, 10.0, 20.0]  # 3 values for a 2-turbine env
 
         with pytest.raises(
             ValueError, match="The specified yaw values are not the right length."
         ):
-            env._defined_yaw(yaws=invalid_yaw_vals, n=env.n_turb)
+            utils.defined_yaw(yaws=np.array(invalid_yaw_vals), n_turb=env.n_turb)
         env.close()
 
     def test_yaw_init_defined_single_value(self, basic_env_config):
-        """Test WindEnv._defined_yaw with a single value for all turbines."""
+        """Test utils.defined_yaw with a single value for all turbines."""
         temp_config = basic_env_config.copy()
         temp_config["yaw_init"] = "Defined"
         temp_config["reset_init"] = False
@@ -573,7 +574,7 @@ class TestWindFarmEnvMultiCoverage:
         print(f"\n--- DEBUG: {self.test_yaw_init_defined_single_value.__name__} ---")
 
         single_yaw_val = [5.0]
-        result = env._defined_yaw(yaws=single_yaw_val, n=env.n_turb)
+        result = utils.defined_yaw(yaws=np.array(single_yaw_val), n_turb=env.n_turb)
 
         print(f"Single yaw init result: {result}")
         assert len(result) == env.n_turb
@@ -581,7 +582,7 @@ class TestWindFarmEnvMultiCoverage:
         env.close()
 
     def test_yaw_init_defined_correct_length(self, basic_env_config):
-        """Test WindEnv._defined_yaw with correct length array."""
+        """Test utils.defined_yaw with correct length array."""
         temp_config = basic_env_config.copy()
         temp_config["yaw_init"] = "Defined"
         temp_config["reset_init"] = False
@@ -590,7 +591,7 @@ class TestWindFarmEnvMultiCoverage:
         print(f"\n--- DEBUG: {self.test_yaw_init_defined_correct_length.__name__} ---")
 
         correct_yaw_vals = [10.0, -5.0]  # For 2 turbines
-        result = env._defined_yaw(yaws=correct_yaw_vals, n=env.n_turb)
+        result = utils.defined_yaw(yaws=np.array(correct_yaw_vals), n_turb=env.n_turb)
 
         print(f"Correct length yaw init result: {result}")
         assert len(result) == env.n_turb
@@ -598,7 +599,7 @@ class TestWindFarmEnvMultiCoverage:
         env.close()
 
     def test_yaw_init_zeros(self, basic_env_config):
-        """Test WindEnv._yaw_init correctly returns zeros when yaw_init is "Zeros"."""
+        """Test utils.return_zeros correctly returns zeros when yaw_init is "Zeros"."""
         temp_config = basic_env_config.copy()
         temp_config["yaw_init"] = "Zeros"
         temp_config["reset_init"] = False
@@ -606,9 +607,7 @@ class TestWindFarmEnvMultiCoverage:
         env = WindFarmEnvMulti(**temp_config)
         print(f"\n--- DEBUG: {self.test_yaw_init_zeros.__name__} ---")
 
-        result = env._return_zeros(
-            n=env.n_turb
-        )  # _return_zeros is bound to yaw_init="Zeros"
+        result = utils.return_zeros(n=env.n_turb)
 
         print(f"Zeros init result: {result}")
         assert len(result) == env.n_turb
@@ -616,7 +615,7 @@ class TestWindFarmEnvMultiCoverage:
         env.close()
 
     def test_yaw_init_random(self, basic_env_config):
-        """Test WindEnv._yaw_init correctly returns random values when yaw_init is "Random"."""
+        """Test utils.randoms_uniform correctly returns random values when yaw_init is "Random"."""
         temp_config = basic_env_config.copy()
         temp_config["yaw_init"] = "Random"
         temp_config["reset_init"] = False
@@ -628,8 +627,12 @@ class TestWindFarmEnvMultiCoverage:
         # We need to ensure np_random is initialized for determinism.
         env.np_random = np.random.default_rng(seed=123)
 
-        random_yaws_1 = env._randoms_uniform(min_val=-10, max_val=10, n=env.n_turb)
-        random_yaws_2 = env._randoms_uniform(min_val=-10, max_val=10, n=env.n_turb)
+        random_yaws_1 = utils.randoms_uniform(
+            np_random=env.np_random, min_val=-10, max_val=10, n=env.n_turb
+        )
+        random_yaws_2 = utils.randoms_uniform(
+            np_random=env.np_random, min_val=-10, max_val=10, n=env.n_turb
+        )
 
         print(f"Random yaws 1: {random_yaws_1}")
         print(f"Random yaws 2: {random_yaws_2}")
