@@ -100,8 +100,7 @@ class BaselineManager:
             self._setup_pywake_baseline(base)
         else:
             raise ValueError(
-                f"BaseController must be one of: 'Local', 'Global', 'PyWake_oracle', "
-                f"'PyWake_local'. Got '{base}'"
+                "BaseController must be one of: 'Local', 'Global', 'PyWake[_oracle|_local]'."
             )
 
     def _setup_pywake_baseline(self, base: str):
