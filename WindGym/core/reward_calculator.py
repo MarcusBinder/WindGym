@@ -69,7 +69,7 @@ class RewardCalculator:
                 )
             if self._power_window_size < 40:
                 raise ValueError(
-                    "power_window_size must be at least 40 for Power_diff reward. "
+                    f"power_window_size must be at least 40 for Power_diff reward. You used {self._power_window_size} "
                     "Consider using a much larger value for better results."
                 )
 
@@ -196,7 +196,7 @@ class RewardCalculator:
             list(
                 itertools.islice(
                     farm_power_deque,
-                    power_len - self._power_window_size,
+                    power_len - (self._power_window_size // 10),
                     power_len,
                 )
             )
@@ -204,7 +204,7 @@ class RewardCalculator:
 
         # Get the oldest window of power values
         power_oldest = np.mean(
-            list(itertools.islice(farm_power_deque, 0, self._power_window_size))
+            list(itertools.islice(farm_power_deque, 0, (self._power_window_size // 10)))
         )
 
         return (power_latest - power_oldest) / n_turbines
