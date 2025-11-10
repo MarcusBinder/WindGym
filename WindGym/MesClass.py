@@ -287,7 +287,11 @@ class turb_mes:
         obs_var += self.power.current + self.power.rolling_mean * self.power.history_N
 
         # Number of probes per turbine
-        if hasattr(self, "n_probes_per_turb") and 0 in self.n_probes_per_turb:
+        if (
+            hasattr(self, "n_probes_per_turb")
+            and self.n_probes_per_turb is not None
+            and 0 in self.n_probes_per_turb
+        ):
             obs_var += self.n_probes_per_turb[0]
 
         return obs_var

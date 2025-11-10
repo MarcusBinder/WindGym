@@ -198,10 +198,13 @@ def mock_hawc2_wind_turbines():
 
         return collection_mock
 
+    # Patch both locations where HAWC2WindTurbines is used
     with patch(
         "WindGym.Wind_Farm_Env.HAWC2WindTurbines", side_effect=mock_factory
-    ) as mock_class:
-        yield mock_class
+    ) as mock_class_env, patch(
+        "WindGym.core.baseline_manager.HAWC2WindTurbines", side_effect=mock_factory
+    ) as mock_class_baseline:
+        yield mock_class_env
 
 
 @patch("shutil.rmtree")
