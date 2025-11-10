@@ -11,17 +11,18 @@ This guide covers how to run simulations in WindGym, from basic environment setu
 The simplest way to create a WindGym environment:
 
 ```python
-from WindGym.Wind_Farm_Env import WindFarmEnv
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
 
 # Create a basic 3-turbine wind farm
 env = WindFarmEnv(
-    n_wt=3,          # Number of turbines
-    ws=10.0,         # Wind speed (m/s)
-    wd=270.0,        # Wind direction (degrees)
-    TI=0.06,         # Turbulence intensity
+    turbine=V80(),           # PyWake turbine model (REQUIRED)
+    x_pos=[0, 500, 1000],    # Turbine x positions in meters (REQUIRED)
+    y_pos=[0, 0, 0],         # Turbine y positions in meters (REQUIRED)
+    config="EnvConfigs/Env1.yaml",  # Configuration file with wind conditions
 )
 
-# Reset the environment
+# Reset the environment (samples wind conditions from config)
 obs, info = env.reset()
 print(f"Observation shape: {obs.shape}")
 print(f"Action space: {env.action_space}")
@@ -57,17 +58,31 @@ env.close()
 
 ### Wind Conditions
 
-WindGym supports various ways to configure wind conditions:
+WindGym configures wind conditions through the YAML configuration file:
 
 #### Fixed Wind Conditions
 
 ```python
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
+
 env = WindFarmEnv(
-    n_wt=3,
-    ws=10.0,        # Fixed wind speed
-    wd=270.0,       # Fixed wind direction (270° = from West)
-    TI=0.06,        # Turbulence intensity
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",  # Defines wind conditions
 )
+```
+
+**In your `EnvConfigs/Env1.yaml`**:
+```yaml
+wind:
+  ws_min: 10.0      # Fixed wind speed (when min == max)
+  ws_max: 10.0
+  wd_min: 270.0     # Fixed wind direction (270° = from West)
+  wd_max: 270.0
+  TI_min: 0.06      # Fixed turbulence intensity
+  TI_max: 0.06
 ```
 
 #### Sampled Wind Conditions
@@ -75,8 +90,9 @@ env = WindFarmEnv(
 Use PyWake's Site object to sample realistic wind distributions:
 
 ```python
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
 from py_wake.site import UniformSite
-from py_wake.wind_turbines import WindTurbine
 
 # Create a site with wind resource distribution
 site = UniformSite(
@@ -87,16 +103,21 @@ site = UniformSite(
 )
 
 env = WindFarmEnv(
-    n_wt=3,
-    sample_site=site,  # Sample wind conditions from site
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",
+    sample_site=site,  # Sample wind conditions from site distribution
 )
 ```
 
 ### Turbine Layout
 
-Configure the wind farm layout:
+Configure the wind farm layout by specifying turbine positions:
 
 ```python
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
 import numpy as np
 
 # Create a 3x2 grid layout
@@ -104,11 +125,10 @@ x_positions = np.array([0, 500, 1000, 0, 500, 1000])  # meters
 y_positions = np.array([0, 0, 0, 500, 500, 500])      # meters
 
 env = WindFarmEnv(
-    n_wt=6,
-    x_pos=x_positions,
-    y_pos=y_positions,
-    ws=10.0,
-    wd=270.0,
+    turbine=V80(),
+    x_pos=x_positions,    # Turbine x coordinates
+    y_pos=y_positions,    # Turbine y coordinates
+    config="EnvConfigs/Env1.yaml",  # Wind conditions in config
 )
 ```
 
@@ -117,10 +137,14 @@ env = WindFarmEnv(
 Control the simulation granularity:
 
 ```python
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
+
 env = WindFarmEnv(
-    n_wt=3,
-    ws=10.0,
-    wd=270.0,
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",
     dt_sim=0.1,       # Internal simulation timestep (seconds)
     dt_env=1.0,       # Agent decision timestep (seconds)
 )
@@ -133,10 +157,14 @@ env = WindFarmEnv(
 Configure episode duration using flow passthroughs:
 
 ```python
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
+
 env = WindFarmEnv(
-    n_wt=3,
-    ws=10.0,
-    wd=270.0,
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",
     n_passthrough=3,           # Number of times flow passes through farm
     burn_in_passthroughs=1,    # Initial stabilization period
 )
@@ -151,13 +179,16 @@ env = WindFarmEnv(
 Use high-fidelity Mann turbulence boxes:
 
 ```python
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
+
 env = WindFarmEnv(
-    n_wt=3,
-    ws=10.0,
-    wd=270.0,
-    TI=0.06,
-    turbtype='mann',          # Use Mann turbulence model
-    TurbBox='path/to/turbulence/box.hdf5',  # Optional: pre-generated box
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",  # TI defined in config
+    turbtype='MannGenerate',        # Use Mann turbulence model
+    TurbBox='path/to/turbulence/box.nc',  # Optional: pre-generated box
 )
 ```
 
@@ -166,12 +197,15 @@ env = WindFarmEnv(
 For faster simulations, use simpler turbulence:
 
 ```python
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
+
 env = WindFarmEnv(
-    n_wt=3,
-    ws=10.0,
-    wd=270.0,
-    TI=0.06,
-    turbtype='random',  # Simple random turbulence
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",  # TI defined in config
+    turbtype='Random',  # Simple random turbulence
 )
 ```
 
@@ -182,11 +216,14 @@ env = WindFarmEnv(
 Customize what the agent observes using YAML configuration:
 
 ```python
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
+
 env = WindFarmEnv(
-    n_wt=3,
-    ws=10.0,
-    wd=270.0,
-    yaml_path='path/to/config.yaml',  # Custom observation config
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config='path/to/config.yaml',  # Custom observation and wind config
 )
 ```
 
@@ -276,12 +313,13 @@ For detailed evaluation, use the `FarmEval` wrapper:
 
 ```python
 from WindGym.FarmEval import FarmEval
+from py_wake.examples.data.hornsrev1 import V80
 
 env = FarmEval(
-    n_wt=3,
-    ws=10.0,
-    wd=270.0,
-    TI=0.06,
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",
     Baseline_comp=True,  # Run parallel baseline simulation
 )
 
@@ -295,7 +333,7 @@ for _ in range(100):
 
 # Get detailed results
 results = env.get_results()
-print(f"Power improvement: {results['power_improvement'].mean():.2%}")
+print(f"Average power: {results['power'].mean():.2f} W")
 ```
 
 ---
@@ -305,13 +343,14 @@ print(f"Power improvement: {results['power_improvement'].mean():.2%}")
 For cooperative or competitive scenarios:
 
 ```python
-from WindGym.WindEnvMulti import WindEnvMulti
+from WindGym import WindFarmEnvMulti
+from py_wake.examples.data.hornsrev1 import V80
 
-env = WindEnvMulti(
-    n_wt=6,
-    n_agents=2,  # Number of agents
-    ws=10.0,
-    wd=270.0,
+env = WindFarmEnvMulti(
+    turbine=V80(),
+    x_pos=[0, 500, 1000, 0, 500, 1000],
+    y_pos=[0, 0, 0, 500, 500, 500],
+    config="EnvConfigs/Env1.yaml",
 )
 
 # Each agent controls a subset of turbines
@@ -354,25 +393,28 @@ create_animation(
 Putting it all together:
 
 ```python
-from WindGym.Wind_Farm_Env import WindFarmEnv
-from WindGym.Agents.PyWakeAgent import PyWakeAgent
+from WindGym import WindFarmEnv
+from WindGym.Agents import PyWakeAgent
+from py_wake.examples.data.hornsrev1 import V80
 import numpy as np
+
+# Turbine positions
+x_pos = np.array([0, 500, 1000])
+y_pos = np.array([0, 0, 0])
 
 # Configure environment
 env = WindFarmEnv(
-    n_wt=3,
-    x_pos=np.array([0, 500, 1000]),
-    y_pos=np.array([0, 0, 0]),
-    ws=10.0,
-    wd=270.0,
-    TI=0.06,
+    turbine=V80(),
+    x_pos=x_pos,
+    y_pos=y_pos,
+    config="EnvConfigs/Env1.yaml",
     dt_env=1.0,
     n_passthrough=3,
-    turbtype='mann',
+    turbtype='MannGenerate',
 )
 
 # Create agent
-agent = PyWakeAgent(env)
+agent = PyWakeAgent(x_pos=x_pos, y_pos=y_pos, turbine=V80())
 
 # Run episode
 obs, info = env.reset()

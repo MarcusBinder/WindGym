@@ -63,12 +63,20 @@ This page covers common issues and frequently asked questions about WindGym.
 
 ---
 
-### Platform Not Supported
+### Pixi Platform Not Supported
 
-**Problem**: `Platform win-64 is not supported`
+**Problem**: `Platform win-64 is not supported` when using pixi
 
-**Solution**: WindGym currently supports Linux (64-bit) and macOS (ARM64/Intel) only. Windows support via WSL2:
+**Solution**: The pixi configuration currently only includes Linux and macOS platforms. However, **WindGym itself is OS-independent** and can run on Windows. You have two options:
 
+**Option 1 - Use pip directly on Windows:**
+```bash
+git clone https://gitlab.windenergy.dtu.dk/sys/windgym.git
+cd windgym
+pip install -e .
+```
+
+**Option 2 - Use WSL2 on Windows:**
 ```bash
 # In WSL2
 git clone https://gitlab.windenergy.dtu.dk/sys/windgym.git

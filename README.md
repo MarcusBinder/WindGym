@@ -63,14 +63,17 @@ For detailed installation instructions, see the [Installation Guide](https://sys
 ### Basic Usage
 
 ```python
-from WindGym.Wind_Farm_Env import WindFarmEnv
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
 
 # Create a wind farm environment
 env = WindFarmEnv(
-    n_wt=3,  # Number of turbines
-    ws=10.0,  # Wind speed (m/s)
-    wd=270.0,  # Wind direction (degrees)
-    TI=0.06,  # Turbulence intensity
+    turbine=V80(),           # PyWake turbine model
+    x_pos=[0, 500, 1000],    # Turbine x positions (m)
+    y_pos=[0, 0, 0],         # Turbine y positions (m)
+    config="EnvConfigs/Env1.yaml",  # Configuration file
+    n_passthrough=10,        # Number of flow passthroughs
+    turbtype="Random",       # Turbulence type
 )
 
 # Run a simple episode
@@ -87,14 +90,25 @@ env.close()
 ### Evaluate a Baseline Agent
 
 ```python
-from WindGym.Agents.PyWakeAgent import PyWakeAgent
+from WindGym.Agents import PyWakeAgent
 from WindGym.FarmEval import FarmEval
+from py_wake.examples.data.hornsrev1 import V80
+
+# Turbine positions
+x_pos = [0, 500, 1000]
+y_pos = [0, 0, 0]
 
 # Create environment with evaluation wrapper
-env = FarmEval(n_wt=3, ws=10.0, wd=270.0, TI=0.06)
+env = FarmEval(
+    turbine=V80(),
+    x_pos=x_pos,
+    y_pos=y_pos,
+    config="EnvConfigs/Env1.yaml",
+    Baseline_comp=True,  # Enable baseline comparison
+)
 
 # Use PyWake optimization as baseline
-agent = PyWakeAgent(env)
+agent = PyWakeAgent(x_pos=x_pos, y_pos=y_pos, turbine=V80())
 
 # Run evaluation
 obs, info = env.reset()
@@ -141,10 +155,12 @@ See the [examples directory](examples/) for complete demonstrations:
 
 ## System Requirements
 
-- **OS**: Linux (64-bit) or macOS (ARM64/Intel)
+- **OS**: Linux, macOS, or Windows (OS-independent, but Pixi package manager currently supports Linux/macOS only)
 - **Python**: 3.7 - 3.11
 - **RAM**: 8 GB minimum (16 GB recommended)
 - **Disk**: 5 GB free space
+
+**Note**: On Windows, use `pip install -e .` directly instead of Pixi, or use WSL2 for Pixi support.
 
 ---
 

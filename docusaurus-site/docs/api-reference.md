@@ -11,25 +11,31 @@ This page provides a reference for the main classes and functions in WindGym.
 The base wind farm environment class.
 
 ```python
-from WindGym.Wind_Farm_Env import WindFarmEnv
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
 
 env = WindFarmEnv(
-    n_wt=3,                  # Number of wind turbines
-    ws=10.0,                 # Wind speed (m/s)
-    wd=270.0,                # Wind direction (degrees)
-    TI=0.06,                 # Turbulence intensity
-    x_pos=None,              # Turbine x positions (meters)
-    y_pos=None,              # Turbine y positions (meters)
-    dt_sim=0.1,              # Simulation timestep (seconds)
-    dt_env=1.0,              # Environment timestep (seconds)
-    n_passthrough=3,         # Number of flow passthroughs
-    burn_in_passthroughs=1,  # Burn-in passthroughs
-    turbtype='mann',         # Turbulence type ('mann' or 'random')
-    TurbBox=None,            # Path to turbulence box file
+    turbine=V80(),           # PyWake turbine model (REQUIRED)
+    x_pos=[0, 500, 1000],    # Turbine x positions in meters (REQUIRED)
+    y_pos=[0, 0, 0],         # Turbine y positions in meters (REQUIRED)
+    config="path/to/config.yaml",  # Path to YAML configuration file
+    n_passthrough=5,         # Number of flow passthroughs (default: 5)
+    dt_sim=1,                # Simulation timestep in seconds (default: 1)
+    dt_env=1,                # Environment timestep in seconds (default: 1)
+    burn_in_passthroughs=2,  # Burn-in passthroughs (default: 2)
+    turbtype="Random",       # Turbulence type: "Random" or "MannGenerate" (default: "Random")
+    TurbBox="Default",       # Path to turbulence box file (default: "Default")
     sample_site=None,        # PyWake Site for sampling wind conditions
-    yaml_path=None,          # Path to configuration YAML
+    Baseline_comp=False,     # Enable baseline comparison
+    seed=None,               # Random seed for reproducibility
+    yaw_step_sim=1,          # Max yaw change per sim step (degrees)
+    yaw_step_env=None,       # Max yaw change per env step (degrees)
+    backend="dynamiks",      # Simulation backend (default: "dynamiks")
+    render_mode=None,        # Render mode: None, "human", or "rgb_array"
 )
 ```
+
+**Note**: Wind conditions (wind speed, direction, turbulence intensity) are sampled at each `reset()` based on the `config` YAML file settings, NOT specified as constructor parameters.
 
 **Key Methods:**
 
@@ -72,19 +78,21 @@ env = FarmEval(
 
 ---
 
-### `WindEnvMulti`
+### `WindFarmEnvMulti`
 
-Multi-agent wind farm environment.
+Multi-agent wind farm environment (PettingZoo compatible).
 
 ```python
-from WindGym.WindEnvMulti import WindEnvMulti
+from WindGym import WindFarmEnvMulti
+from py_wake.examples.data.hornsrev1 import V80
 
-env = WindEnvMulti(
-    n_wt=6,
-    n_agents=2,  # Number of agents
-    ws=10.0,
-    wd=270.0,
-    TI=0.06,
+env = WindFarmEnvMulti(
+    turbine=V80(),
+    x_pos=[0, 500, 1000, 0, 500, 1000],
+    y_pos=[0, 0, 0, 500, 500, 500],
+    config="path/to/config.yaml",
+    n_passthrough=5,
+    # ... other WindFarmEnv parameters
 )
 ```
 
@@ -103,10 +111,10 @@ env = WindEnvMulti(
 Wrapper that adds measurement noise to observations.
 
 ```python
-from WindGym.wrappers.NoisyWindFarmEnv import NoisyWindFarmEnv
-from WindGym.noise.measurement_manager import MeasurementManager
+from WindGym.core import NoisyWindFarmEnv, MeasurementManager, WhiteNoiseModel
 
 manager = MeasurementManager(base_env)
+manager.set_noise_model('wd', WhiteNoiseModel({MeasurementType.WIND_DIRECTION: 2.0}))
 noisy_env = NoisyWindFarmEnv(base_env, manager)
 ```
 
@@ -184,9 +192,21 @@ class MyAgent(BaseAgent):
 Optimal static yaw control using PyWake optimization.
 
 ```python
-from WindGym.Agents.PyWakeAgent import PyWakeAgent
+from WindGym.Agents import PyWakeAgent
+from py_wake.examples.data.hornsrev1 import V80
 
-agent = PyWakeAgent(env)
+agent = PyWakeAgent(
+    x_pos=[0, 500, 1000],    # Turbine x positions (REQUIRED)
+    y_pos=[0, 0, 0],         # Turbine y positions (REQUIRED)
+    turbine=V80(),           # PyWake turbine model (default: V80())
+    wind_speed=8,            # Default wind speed for optimization (default: 8)
+    wind_dir=270,            # Default wind direction (default: 270)
+    TI=0.07,                 # Turbulence intensity (default: 0.07)
+    yaw_max=45,              # Max yaw angle (default: 45)
+    yaw_min=-45,             # Min yaw angle (default: -45)
+    env=None,                # Optional environment reference
+)
+
 action, _ = agent.predict(obs)
 ```
 
@@ -202,9 +222,16 @@ action, _ = agent.predict(obs)
 Robust variant of PyWakeAgent for noisy observations.
 
 ```python
-from WindGym.Agents.NoisyPyWakeAgent import NoisyPyWakeAgent
+from WindGym.Agents import NoisyPyWakeAgent
+from py_wake.examples.data.hornsrev1 import V80
 
-agent = NoisyPyWakeAgent(noisy_env)
+agent = NoisyPyWakeAgent(
+    x_pos=[0, 500, 1000],    # Turbine x positions (REQUIRED)
+    y_pos=[0, 0, 0],         # Turbine y positions (REQUIRED)
+    turbine=V80(),           # PyWake turbine model
+    # ... other PyWakeAgent parameters
+)
+
 action, _ = agent.predict(obs)
 ```
 
@@ -265,9 +292,12 @@ action, _ = agent.predict(obs)
 Adds independent Gaussian noise at each timestep.
 
 ```python
-from WindGym.noise.noise_models import WhiteNoiseModel
+from WindGym.core import WhiteNoiseModel, MeasurementType
 
-noise_model = WhiteNoiseModel(std=2.0)  # Standard deviation in physical units
+noise_model = WhiteNoiseModel({
+    MeasurementType.WIND_DIRECTION: 2.0,  # 2 degrees std dev
+    MeasurementType.WIND_SPEED: 0.5,      # 0.5 m/s std dev
+})
 ```
 
 ---
@@ -277,9 +307,11 @@ noise_model = WhiteNoiseModel(std=2.0)  # Standard deviation in physical units
 Adds consistent bias throughout an episode.
 
 ```python
-from WindGym.noise.noise_models import EpisodicBiasNoiseModel
+from WindGym.core import EpisodicBiasNoiseModel, MeasurementType
 
-noise_model = EpisodicBiasNoiseModel(bias_std=5.0)  # Bias distribution std
+noise_model = EpisodicBiasNoiseModel({
+    MeasurementType.WIND_DIRECTION: 5.0  # 5 degrees bias std dev
+})
 ```
 
 ---
@@ -289,11 +321,11 @@ noise_model = EpisodicBiasNoiseModel(bias_std=5.0)  # Bias distribution std
 Combines white noise and episodic bias.
 
 ```python
-from WindGym.noise.noise_models import HybridNoiseModel
+from WindGym.core import HybridNoiseModel, MeasurementType
 
 noise_model = HybridNoiseModel(
-    white_noise_std=2.0,
-    episodic_bias_std=5.0
+    white_noise_std={MeasurementType.WIND_DIRECTION: 2.0},
+    episodic_bias_std={MeasurementType.WIND_DIRECTION: 5.0}
 )
 ```
 
@@ -304,11 +336,16 @@ noise_model = HybridNoiseModel(
 Manages noise application to observations.
 
 ```python
-from WindGym.noise.measurement_manager import MeasurementManager
+from WindGym.core import MeasurementManager, WhiteNoiseModel, MeasurementType
 
 manager = MeasurementManager(env)
-manager.set_noise_model('wd', WhiteNoiseModel(std=2.0))
-manager.set_noise_model('ws', WhiteNoiseModel(std=0.5))
+
+# Configure noise for specific measurement types
+wd_noise = WhiteNoiseModel({MeasurementType.WIND_DIRECTION: 2.0})
+ws_noise = WhiteNoiseModel({MeasurementType.WIND_SPEED: 0.5})
+
+manager.set_noise_model(MeasurementType.WIND_DIRECTION, wd_noise)
+manager.set_noise_model(MeasurementType.WIND_SPEED, ws_noise)
 ```
 
 **Methods:**

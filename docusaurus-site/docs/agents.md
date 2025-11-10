@@ -98,10 +98,16 @@ class MyCustomAgent(BaseAgent):
 ### Using Your Custom Agent
 
 ```python
-from WindGym.Wind_Farm_Env import WindFarmEnv
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
 
 # Create environment
-env = WindFarmEnv(n_wt=3, ws=10.0, wd=270.0, TI=0.06)
+env = WindFarmEnv(
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",
+)
 
 # Initialize your agent
 agent = MyCustomAgent(env, target_yaw=5.0)
@@ -126,14 +132,25 @@ env.close()
 Optimal static yaw control using PyWake optimization:
 
 ```python
-from WindGym.Agents.PyWakeAgent import PyWakeAgent
+from WindGym.Agents import PyWakeAgent
 from WindGym.FarmEval import FarmEval
+from py_wake.examples.data.hornsrev1 import V80
+
+# Turbine positions
+x_pos = [0, 500, 1000]
+y_pos = [0, 0, 0]
 
 # Create environment
-env = FarmEval(n_wt=3, ws=10.0, wd=270.0, TI=0.06)
+env = FarmEval(
+    turbine=V80(),
+    x_pos=x_pos,
+    y_pos=y_pos,
+    config="EnvConfigs/Env1.yaml",
+    Baseline_comp=True,
+)
 
 # PyWake agent automatically optimizes yaw angles
-agent = PyWakeAgent(env)
+agent = PyWakeAgent(x_pos=x_pos, y_pos=y_pos, turbine=V80())
 
 # Run evaluation
 obs, info = env.reset()
@@ -154,9 +171,16 @@ print(f"PyWake agent total reward: {total_reward:.2f}")
 Simple alignment with wind direction:
 
 ```python
+from WindGym import WindFarmEnv
 from WindGym.Agents.GreedyAgent import GreedyAgent
+from py_wake.examples.data.hornsrev1 import V80
 
-env = WindFarmEnv(n_wt=3, ws=10.0, wd=270.0, TI=0.06)
+env = WindFarmEnv(
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",
+)
 
 # Agent tries to align with wind
 agent = GreedyAgent(env, use_global_wind=True)
@@ -174,9 +198,16 @@ for _ in range(100):
 For baseline comparison:
 
 ```python
+from WindGym import WindFarmEnv
 from WindGym.Agents.RandomAgent import RandomAgent
+from py_wake.examples.data.hornsrev1 import V80
 
-env = WindFarmEnv(n_wt=3, ws=10.0, wd=270.0, TI=0.06)
+env = WindFarmEnv(
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",
+)
 agent = RandomAgent(env)
 
 obs, info = env.reset()
@@ -192,10 +223,17 @@ for _ in range(100):
 Fixed yaw angles:
 
 ```python
+from WindGym import WindFarmEnv
 from WindGym.Agents.ConstantAgent import ConstantAgent
+from py_wake.examples.data.hornsrev1 import V80
 import numpy as np
 
-env = WindFarmEnv(n_wt=3, ws=10.0, wd=270.0, TI=0.06)
+env = WindFarmEnv(
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",
+)
 
 # Set specific yaw angles for each turbine
 yaw_angles = np.array([0.0, 5.0, -5.0])  # degrees
@@ -289,14 +327,15 @@ Train a PPO agent:
 
 ```python
 from stable_baselines3 import PPO
-from WindGym.Wind_Farm_Env import WindFarmEnv
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
 
 # Create training environment
 env = WindFarmEnv(
-    n_wt=3,
-    ws=10.0,
-    wd=270.0,
-    TI=0.06,
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",
     n_passthrough=2
 )
 
@@ -330,12 +369,19 @@ env.close()
 
 ```python
 from stable_baselines3 import PPO
+from WindGym import WindFarmEnv
+from py_wake.examples.data.hornsrev1 import V80
 
 # Load pre-trained model
 model = PPO.load("ppo_windfarm_agent")
 
 # Use in environment
-env = WindFarmEnv(n_wt=3, ws=10.0, wd=270.0, TI=0.06)
+env = WindFarmEnv(
+    turbine=V80(),
+    x_pos=[0, 500, 1000],
+    y_pos=[0, 0, 0],
+    config="EnvConfigs/Env1.yaml",
+)
 obs, info = env.reset()
 
 for _ in range(100):

@@ -83,21 +83,25 @@ By leveraging the `Coliseum` framework, you can rigorously test and validate you
 
 ```python
 from WindGym.FarmEval import FarmEval
-from WindGym.Agents.PyWakeAgent import PyWakeAgent
-from WindGym.Agents.GreedyAgent import GreedyAgent
+from WindGym.Agents import PyWakeAgent
+from py_wake.examples.data.hornsrev1 import V80
 import numpy as np
+
+# Turbine positions
+x_pos = [0, 500, 1000]
+y_pos = [0, 0, 0]
 
 # Create evaluation environment
 env = FarmEval(
-    n_wt=3,
-    ws=10.0,
-    wd=270.0,
-    TI=0.06,
+    turbine=V80(),
+    x_pos=x_pos,
+    y_pos=y_pos,
+    config="EnvConfigs/Env1.yaml",
     Baseline_comp=True  # Compare against baseline
 )
 
 # Test PyWake agent
-pywake_agent = PyWakeAgent(env)
+pywake_agent = PyWakeAgent(x_pos=x_pos, y_pos=y_pos, turbine=V80())
 
 obs, info = env.reset()
 rewards = []
@@ -114,8 +118,7 @@ for step in range(100):
 results = env.get_results()
 
 print(f"Average reward: {np.mean(rewards):.3f}")
-print(f"Total power: {results['total_power'].mean():.2f} W")
-print(f"Power improvement: {results['power_improvement'].mean():.2%}")
+print(f"Total power: {results['power'].mean():.2f} W")
 ```
 
 ---
@@ -126,6 +129,7 @@ print(f"Power improvement: {results['power_improvement'].mean():.2%}")
 
 ```python
 from WindGym.FarmEval import FarmEval
+from py_wake.examples.data.hornsrev1 import V80
 from py_wake.site import UniformSite
 
 def create_env():
@@ -139,7 +143,10 @@ def create_env():
     )
 
     return FarmEval(
-        n_wt=3,
+        turbine=V80(),
+        x_pos=[0, 500, 1000],
+        y_pos=[0, 0, 0],
+        config="EnvConfigs/Env1.yaml",
         sample_site=site,  # Sample from site distribution
         n_passthrough=3,
         Baseline_comp=True
@@ -149,17 +156,22 @@ def create_env():
 #### Step 2: Initialize Agents
 
 ```python
-from WindGym.Agents.PyWakeAgent import PyWakeAgent
+from WindGym.Agents import PyWakeAgent
 from WindGym.Agents.GreedyAgent import GreedyAgent
 from WindGym.Agents.RandomAgent import RandomAgent
+from py_wake.examples.data.hornsrev1 import V80
 from stable_baselines3 import PPO
+
+# Turbine positions
+x_pos = [0, 500, 1000]
+y_pos = [0, 0, 0]
 
 # Create temporary environment for agent initialization
 temp_env = create_env()
 
 # Initialize agents
 agents = {
-    'PyWake': PyWakeAgent(temp_env),
+    'PyWake': PyWakeAgent(x_pos=x_pos, y_pos=y_pos, turbine=V80()),
     'Greedy': GreedyAgent(temp_env, use_global_wind=True),
     'Random': RandomAgent(temp_env),
 }
@@ -229,8 +241,12 @@ turbulence_intensities = [0.06, 0.10]
 
 # Environment factory for grid evaluation
 def grid_env_factory():
+    from py_wake.examples.data.hornsrev1 import V80
     return FarmEval(
-        n_wt=3,
+        turbine=V80(),
+        x_pos=[0, 500, 1000],
+        y_pos=[0, 0, 0],
+        config="EnvConfigs/Env1.yaml",
         n_passthrough=2,
         Baseline_comp=True
     )
@@ -350,8 +366,18 @@ def evaluate_agent_custom(agent, env, n_episodes=10):
     return metrics
 
 # Use custom evaluation
-env = FarmEval(n_wt=3, ws=10.0, wd=270.0, TI=0.06)
-agent = PyWakeAgent(env)
+from py_wake.examples.data.hornsrev1 import V80
+
+x_pos = [0, 500, 1000]
+y_pos = [0, 0, 0]
+
+env = FarmEval(
+    turbine=V80(),
+    x_pos=x_pos,
+    y_pos=y_pos,
+    config="EnvConfigs/Env1.yaml",
+)
+agent = PyWakeAgent(x_pos=x_pos, y_pos=y_pos, turbine=V80())
 
 metrics = evaluate_agent_custom(agent, env, n_episodes=20)
 
@@ -388,18 +414,23 @@ print(loaded_ts.head())
 
 ```python
 from WindGym.FarmEval import FarmEval
-from WindGym.Agents.PyWakeAgent import PyWakeAgent
+from WindGym.Agents import PyWakeAgent
+from py_wake.examples.data.hornsrev1 import V80
+
+# Turbine positions
+x_pos = [0, 500, 1000]
+y_pos = [0, 0, 0]
 
 # Environment with baseline comparison enabled
 env = FarmEval(
-    n_wt=3,
-    ws=10.0,
-    wd=270.0,
-    TI=0.06,
+    turbine=V80(),
+    x_pos=x_pos,
+    y_pos=y_pos,
+    config="EnvConfigs/Env1.yaml",
     Baseline_comp=True  # Run parallel baseline simulation
 )
 
-agent = PyWakeAgent(env)
+agent = PyWakeAgent(x_pos=x_pos, y_pos=y_pos, turbine=V80())
 
 obs, info = env.reset()
 for _ in range(100):
@@ -412,7 +443,7 @@ for _ in range(100):
 results = env.get_results()
 
 # Calculate performance metrics
-agent_power = results['agent_power'].mean()
+agent_power = results['power'].mean()
 baseline_power = results['baseline_power'].mean()
 improvement = (agent_power - baseline_power) / baseline_power * 100
 
@@ -492,7 +523,17 @@ def evaluate_with_timing(agent, env, n_episodes=10):
     }
 
 # Compare computational efficiency
-env = FarmEval(n_wt=3, ws=10.0, wd=270.0, TI=0.06)
+from py_wake.examples.data.hornsrev1 import V80
+
+x_pos = [0, 500, 1000]
+y_pos = [0, 0, 0]
+
+env = FarmEval(
+    turbine=V80(),
+    x_pos=x_pos,
+    y_pos=y_pos,
+    config="EnvConfigs/Env1.yaml",
+)
 
 for agent_name, agent in agents.items():
     results = evaluate_with_timing(agent, env, n_episodes=5)
@@ -528,8 +569,12 @@ ts_results = coliseum.run_time_series_evaluation(n_episodes=100)
 ```python
 # Shorter episodes
 def fast_env_factory():
+    from py_wake.examples.data.hornsrev1 import V80
     return FarmEval(
-        n_wt=3,
+        turbine=V80(),
+        x_pos=[0, 500, 1000],
+        y_pos=[0, 0, 0],
+        config="EnvConfigs/Env1.yaml",
         n_passthrough=1,  # Shorter episodes
         dt_env=2.0,        # Larger timesteps
     )
