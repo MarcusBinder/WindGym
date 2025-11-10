@@ -381,7 +381,7 @@ class TestWindFarmEnvMultiCoverage:
             env.reset(seed=42)  # Must call reset before rendering
 
             with patch(
-                "WindGym.Wind_Farm_Env.WindFarmEnv.render", return_value="mock_frame"
+                "WindGym.wind_farm_env.WindFarmEnv.render", return_value="mock_frame"
             ) as mock_parent_render:
                 # Dynamically set the return value of the mock based on render_mode_val
                 mock_parent_render.return_value = (
@@ -454,7 +454,7 @@ class TestWindFarmEnvMultiCoverage:
         captured_action_from_parent_step = None
 
         # Mock the parent WindFarmEnv.step method to capture the action passed to it
-        with patch("WindGym.Wind_Farm_Env.WindFarmEnv.step") as mock_parent_step:
+        with patch("WindGym.wind_farm_env.WindFarmEnv.step") as mock_parent_step:
 
             def side_effect_func(self_env_inner, action_arg):
                 nonlocal captured_action_from_parent_step
