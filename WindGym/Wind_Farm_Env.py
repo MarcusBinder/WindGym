@@ -1282,3 +1282,10 @@ class WindFarmEnv(WindEnv):
         if self.baseline_manager is not None:
             return self.baseline_manager.py_agent_mode
         return None
+
+    @property
+    def _base_controller(self):
+        """Expose _base_controller from baseline_manager for backward compatibility."""
+        if self.baseline_manager is not None:
+            return self.baseline_manager._base_controller
+        return None
