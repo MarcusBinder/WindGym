@@ -36,10 +36,10 @@ from .wind_env import WindEnv
 from .mes_class import farm_mes
 from .BasicControllers import local_yaw_controller, global_yaw_controller
 from .Agents import PyWakeAgent
+from .reward_calculator import RewardCalculator
 
 from py_wake.wind_turbines import WindTurbines as WindTurbinesPW
 from collections import deque, defaultdict
-import itertools
 import yaml
 from dynamiks.wind_turbines.hawc2_windturbine import HAWC2WindTurbines
 from dynamiks.dwm.particle_motion_models import CutOffFrq
@@ -238,11 +238,14 @@ class WindFarmEnv(WindEnv):
             else:
                 self._yaw_init = self._return_zeros
 
+        # Initialize reward calculator
+        self.reward_calculator = RewardCalculator(self)
+
         # Define the power tracking reward function
         # TODO: Implement power tracking reward - requires power_setpoint as observable parameter
         if self.Track_power:
             self.power_setpoint = 42  # Placeholder value
-            self._track_rew = self.track_rew_avg
+            self._track_rew = self.reward_calculator.track_reward_avg
             raise NotImplementedError(
                 "Track_power feature is not yet implemented. "
                 "This feature would allow reward calculation based on tracking a power setpoint. "
@@ -251,20 +254,26 @@ class WindFarmEnv(WindEnv):
                 "(3) track_rew_avg() reward function implementation."
             )
         else:
-            self._track_rew = self.track_rew_none
+            self._track_rew = self.reward_calculator.track_reward_none
 
         # Define the power production reward function
         if self.power_reward == "Baseline":
             self._power_rew = (
-                self.power_rew_baseline
+                self.reward_calculator.power_reward_baseline
             )  # The baseline power reward function
         elif self.power_reward == "Power_avg":
-            self._power_rew = self.power_rew_avg  # The power_avg reward function
+            self._power_rew = (
+                self.reward_calculator.power_reward_avg
+            )  # The power_avg reward function
         elif self.power_reward == "None":
-            self._power_rew = self.power_rew_none  # The no power reward function
+            self._power_rew = (
+                self.reward_calculator.power_reward_none
+            )  # The no power reward function
         elif self.power_reward == "Power_diff":
             # TODO rethink this way of doing it.
-            self._power_rew = self.power_rew_diff  # The power_diff reward function
+            self._power_rew = (
+                self.reward_calculator.power_reward_diff
+            )  # The power_diff reward function
             # We set this to POWER_WINDOW_DIVISOR, to have some space in the middle.
             self._power_wSize = self.power_avg // self.POWER_WINDOW_DIVISOR
             if self.power_avg < self.MIN_POWER_AVG_THRESHOLD:
@@ -1321,26 +1330,6 @@ class WindFarmEnv(WindEnv):
 
         return observation, info
 
-    def _action_penalty(self):
-        """
-        This function calculates a penalty for the actions. This is used to penalize the agent for taking actions, and try and make it more stable
-        """
-        if (
-            self.action_penalty < 0.001
-        ):  # If the penalty is very small, then we dont need to calculate it
-            return 0.0
-
-        t = (self.action_penalty_type or "").lower()
-        if t == "change":
-            pen_val = float(np.mean(np.abs(self.old_yaws - self.fs.windTurbines.yaw)))
-        elif t == "total":
-            pen_val = float(
-                np.mean(np.abs(self.fs.windTurbines.yaw)) / max(1e-6, self.yaw_max)
-            )
-        else:
-            pen_val = 0.0
-        return float(self.action_penalty) * pen_val
-
     def _advance_and_measure(
         self,
         n_sim_steps: int,
@@ -1532,60 +1521,6 @@ class WindFarmEnv(WindEnv):
         else:
             raise ValueError("The ActionMethod must be yaw, wind or absolute")
 
-    def track_rew_none(self):
-        """If we are not using power tracking, then just return 0"""
-        return 0.0
-
-    def track_rew_avg(self):
-        """
-        The reward is the negative difference between the power output and the power setpoint squared
-        The reward is: - (power_agent - power_setpoint)^2
-        """
-        power_agent = np.mean(self.farm_pow_deq)
-        return -((power_agent - self.power_setpoint) ** 2)
-
-    def power_rew_baseline(self):
-        """Calculate reward based on baseline farm comparison using available history"""
-
-        # Use whatever history we have so far for averaging
-        power_agent_avg = np.mean(self.farm_pow_deq)
-        power_baseline_avg = np.mean(self.base_pow_deq)
-
-        if power_baseline_avg == 0:
-            print("The baseline power is zero. This is probably not good")
-            print("self.farm_pow_deq: ", self.farm_pow_deq)
-            print("self.base_pow_deq: ", self.base_pow_deq)
-            0 / 0  # This will raise an error
-
-        reward = power_agent_avg / power_baseline_avg - 1
-        return reward
-
-    def power_rew_avg(self):
-        """Calculate power reward based on available history"""
-        power_agent = np.mean(self.farm_pow_deq)
-        reward = power_agent / self.n_turb / self.rated_power
-        return reward
-
-    def power_rew_none(self):
-        """Return zero for the power reward"""
-        return 0.0
-
-    def power_rew_diff(self):
-        """Calculate reward based on power difference over time"""
-        power_latest = np.mean(
-            list(
-                itertools.islice(
-                    self.farm_pow_deq,
-                    self.power_len - self._power_wSize,
-                    self.power_len,
-                )
-            )
-        )
-        power_oldest = np.mean(
-            list(itertools.islice(self.farm_pow_deq, 0, self._power_wSize))
-        )
-        return (power_latest - power_oldest) / self.n_turb
-
     def step(
         self, action: npt.NDArray[np.float64]
     ) -> Tuple[npt.NDArray[np.float32], float, bool, bool, Dict[str, Any]]:
@@ -1667,7 +1602,7 @@ class WindFarmEnv(WindEnv):
         # track_rew = self._track_rew()  #The power tracking reward. This is just a placeholder so far.
         track_rew = 0.0
 
-        action_penalty = self._action_penalty()  # The penalty for the actions
+        action_penalty = self.reward_calculator.action_penalty()  # The penalty for the actions
 
         # The reward is: power reward - action penalty. This makes it possible to add a reward for power tracking, and/or damage, easily.
         reward = power_rew + track_rew - action_penalty
