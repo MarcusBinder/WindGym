@@ -285,7 +285,6 @@ class WindFarmEnv(WindEnv):
                 yaw_step_env=self.yaw_step_env,
                 yaw_step_sim=self.yaw_step_sim,
                 htc_path=HTC_path,
-                name_string=name_string,
             )
 
         # #Initializing the measurements class with the specified values.
@@ -379,7 +378,11 @@ class WindFarmEnv(WindEnv):
 
         # Initialize baseline turbines if needed
         if self.Baseline_comp and self.baseline_manager is not None:
-            self.wts_baseline = self.baseline_manager.initialize_baseline_turbines()
+            # Pass name_string if we have it (only created for HAWC2 turbines)
+            baseline_name = name_string if self.HTC_path is not None else None
+            self.wts_baseline = self.baseline_manager.initialize_baseline_turbines(
+                name_string=baseline_name
+            )
         else:
             self.wts_baseline = None
 

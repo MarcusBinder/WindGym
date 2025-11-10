@@ -37,7 +37,6 @@ class BaselineManager:
         yaw_step_env: float,
         yaw_step_sim: float,
         htc_path: Optional[str] = None,
-        name_string: Optional[str] = None,
     ):
         """
         Initialize the baseline manager.
@@ -53,7 +52,6 @@ class BaselineManager:
             yaw_step_env: Yaw step per environment step (degrees)
             yaw_step_sim: Yaw step per simulation step (degrees)
             htc_path: Optional path to HAWC2 HTC file
-            name_string: Optional name string for HAWC2 case
         """
         self.baseline_controller_type = baseline_controller_type
         self.x_pos = x_pos
@@ -64,7 +62,6 @@ class BaselineManager:
         self.yaw_step_env = yaw_step_env
         self.yaw_step_sim = yaw_step_sim
         self.htc_path = htc_path
-        self.name_string = name_string or "WindFarmEnv"
 
         # Controller function
         self._base_controller: Optional[Callable] = None
@@ -162,20 +159,27 @@ class BaselineManager:
         )
         self._base_controller = self._pywake_agent_wrapper
 
-    def initialize_baseline_turbines(self):
+    def initialize_baseline_turbines(self, name_string: Optional[str] = None):
         """
         Initialize baseline turbines (HAWC2 or PyWake).
+
+        Args:
+            name_string: Optional name string for HAWC2 case (required if htc_path is set)
 
         Returns:
             Baseline turbine object
         """
         if self.htc_path is not None:
+            if name_string is None:
+                raise ValueError(
+                    "name_string is required when initializing HAWC2 baseline turbines"
+                )
             # HAWC2 high-fidelity turbines
             self.wts_baseline = HAWC2WindTurbines(
                 x=self.x_pos,
                 y=self.y_pos,
                 htc_lst=[self.htc_path],
-                case_name=self.name_string + "_baseline",
+                case_name=name_string + "_baseline",
                 suppress_output=True,
             )
             # Add yaw sensor
