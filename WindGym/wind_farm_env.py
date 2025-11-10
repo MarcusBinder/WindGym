@@ -1330,6 +1330,65 @@ class WindFarmEnv(WindEnv):
 
         return observation, info
 
+    def _update_measurements(self, simulation_output: dict) -> None:
+        """
+        Update measurement buffers with simulation output.
+
+        Args:
+            simulation_output: Dictionary from _advance_and_measure containing
+                             mean measurements and baseline data
+        """
+        self.farm_measurements.add_measurements(
+            simulation_output["mean_windspeed"],
+            simulation_output["mean_winddir"],
+            simulation_output["mean_yaw"],
+            simulation_output["mean_power"],
+        )
+        self.farm_pow_deq.append(simulation_output["mean_power"].sum())
+        if self.Baseline_comp:
+            self.base_pow_deq.append(simulation_output["baseline_power_mean"].sum())
+
+    def _validate_measurements(self, simulation_output: dict) -> None:
+        """
+        Validate measurements for NaN values and raise descriptive error.
+
+        Args:
+            simulation_output: Dictionary from _advance_and_measure
+
+        Raises:
+            ValueError: If NaN values detected in power calculations
+        """
+        if np.any(np.isnan(self.farm_pow_deq)):
+            nan_turbines = np.where(np.isnan(simulation_output["mean_power"]))[0]
+            raise ValueError(
+                f"NaN detected in power calculations. Turbines with NaN power: {nan_turbines.tolist()}. "
+                f"This may be caused by invalid simulation parameters, extreme yaw angles, or numerical instability. "
+                f"Current yaw angles: {self.current_yaw}, Wind speed: {self.ws}, Wind direction: {self.wd}"
+            )
+
+    def _build_step_info(self, simulation_output: dict) -> Dict[str, Any]:
+        """
+        Build info dictionary with simulation data and diagnostics.
+
+        Args:
+            simulation_output: Dictionary from _advance_and_measure
+
+        Returns:
+            Info dictionary with environment diagnostics and time series
+        """
+        info = self._get_info()
+        info["time_array"] = simulation_output["time_array"]
+        info["windspeeds"] = simulation_output["windspeeds"]
+        info["yaws"] = simulation_output["yaws"]
+        info["powers"] = simulation_output["powers"]
+
+        if self.Baseline_comp:
+            info["baseline_powers"] = simulation_output["baseline_powers"]
+            info["yaws_baseline"] = simulation_output["yaws_baseline"]
+            info["windspeeds_baseline"] = simulation_output["windspeeds_baseline"]
+
+        return info
+
     def _advance_and_measure(
         self,
         n_sim_steps: int,
@@ -1564,36 +1623,13 @@ class WindFarmEnv(WindEnv):
             include_baseline=self.Baseline_comp,
         )
 
-        # add to measurements/history
-        self.farm_measurements.add_measurements(
-            out["mean_windspeed"],
-            out["mean_winddir"],
-            out["mean_yaw"],
-            out["mean_power"],
-        )
-        self.farm_pow_deq.append(out["mean_power"].sum())
-        if self.Baseline_comp:
-            self.base_pow_deq.append(out["baseline_power_mean"].sum())
+        # Update measurement buffers and validate
+        self._update_measurements(out)
+        self._validate_measurements(out)
 
-        if np.any(np.isnan(self.farm_pow_deq)):
-            nan_turbines = np.where(np.isnan(out["mean_power"]))[0]
-            raise ValueError(
-                f"NaN detected in power calculations. Turbines with NaN power: {nan_turbines.tolist()}. "
-                f"This may be caused by invalid simulation parameters, extreme yaw angles, or numerical instability. "
-                f"Current yaw angles: {self.current_yaw}, Wind speed: {self.ws}, Wind direction: {self.wd}"
-            )
-
-        # Build observation / info
+        # Build observation and info
         observation = self._get_obs()
-        info = self._get_info()
-        info["time_array"] = out["time_array"]
-        info["windspeeds"] = out["windspeeds"]
-        info["yaws"] = out["yaws"]
-        info["powers"] = out["powers"]
-        if self.Baseline_comp:
-            info["baseline_powers"] = out["baseline_powers"]
-            info["yaws_baseline"] = out["yaws_baseline"]
-            info["windspeeds_baseline"] = out["windspeeds_baseline"]
+        info = self._build_step_info(out)
 
         # self.fs_time = self.fs.time  # Save the flow simulation timestep.
         # Calculate the reward
