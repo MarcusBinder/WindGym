@@ -209,8 +209,7 @@ class TestInvalidConfigurations:
                 },
                 "expected_exception_info": (
                     ValueError,
-                    f"power_window_size must be at least 40 for Power_diff reward. You used {10} "
-                    "Consider using a much larger value for better results."
+                    f"The Power_avg must be larger then 40 for the Power_diff reward",
                 ),
             },
             id="InvalidPowerDiffAvgTooSmall",

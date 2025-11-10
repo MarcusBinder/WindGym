@@ -324,6 +324,8 @@ class WindFarmEnv(WindEnv):
         # Asserting that the render_mode is valid.
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode  # Keep for compatibility
+        if self.render_mode is not None:
+            self.init_render()
 
     def _init_wts(self):
         """

@@ -296,6 +296,7 @@ class TestSpecificFeatures:
 
         try:
             # Test render call after reset
+            env.init_render()
             frame = env.render()
             if render_mode_val is None:
                 assert frame is None, "None render mode should return None"
