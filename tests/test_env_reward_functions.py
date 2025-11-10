@@ -275,7 +275,7 @@ def test_power_reward_power_diff(temp_yaml_file_factory, mock_turbulence_env_set
     x_pos, y_pos = generate_square_grid(turbine=V80(), nx=2, ny=1, xDist=5, yDist=3)
     with pytest.raises(
         ValueError,
-        match=f"power_window_size must be at least 40 for Power_diff reward. You used 10 Consider using a much larger value for better results.",
+        match=f"The Power_avg must be larger then 40 for the Power_diff reward",
     ):
         WindFarmEnv(
             turbine=V80(),
