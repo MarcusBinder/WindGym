@@ -208,7 +208,7 @@ def mock_hawc2_wind_turbines():
 
 
 @patch("shutil.rmtree")
-@patch("WindGym.AgentEval.gtsdf.load")
+@patch("WindGym.agent_eval.gtsdf.load")
 def test_agent_eval_fast_with_hawc2(
     mock_gtsdf_load,
     mock_rmtree,
