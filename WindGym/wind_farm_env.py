@@ -212,30 +212,9 @@ class WindFarmEnv(gym.Env):
         self.n_probes_per_turb = None
 
         # Sets the yaw init method. If Random, then the yaw angles will be random. Else they will be zeros
-        # If yaw_init is defined (it will be if we initialize from EnvEval) then set it like this. Else just use the value from the yaml
-        if yaw_init is not None:
-            # We only ever have this, IF we have set the value from
-            if yaw_init == "Random":
-                self._yaw_init = lambda **kwargs: utils.randoms_uniform(
-                    self.np_random, kwargs["min_val"], kwargs["max_val"], kwargs["n"]
-                )
-            elif yaw_init == "Defined":
-                self._yaw_init = lambda **kwargs: utils.defined_yaw(
-                    kwargs["yaws"], self.n_turb
-                )
-            else:
-                self._yaw_init = lambda **kwargs: utils.return_zeros(kwargs["n"])
-        else:
-            if self.yaw_init == "Random":
-                self._yaw_init = lambda **kwargs: utils.randoms_uniform(
-                    self.np_random, kwargs["min_val"], kwargs["max_val"], kwargs["n"]
-                )
-            elif self.yaw_init == "Defined":
-                self._yaw_init = lambda **kwargs: utils.defined_yaw(
-                    kwargs["yaws"], self.n_turb
-                )
-            else:
-                self._yaw_init = lambda **kwargs: utils.return_zeros(kwargs["n"])
+        # Use yaw_init parameter if provided, otherwise use value from config
+        yaw_init_method = yaw_init if yaw_init is not None else self.yaw_init
+        self._yaw_init = self._create_yaw_initializer(yaw_init_method)
 
         # Initialize the reward calculator
 
@@ -334,6 +313,25 @@ class WindFarmEnv(gym.Env):
         self.render_mode = render_mode  # Keep for compatibility
         if self.render_mode is not None:
             self.init_render()
+
+    def _create_yaw_initializer(self, method: str):
+        """
+        Factory method for creating yaw initialization functions.
+
+        Args:
+            method: Initialization method ("Random", "Defined", or default to zeros)
+
+        Returns:
+            Callable that initializes yaw angles
+        """
+        if method == "Random":
+            return lambda **kwargs: utils.randoms_uniform(
+                self.np_random, kwargs["min_val"], kwargs["max_val"], kwargs["n"]
+            )
+        elif method == "Defined":
+            return lambda **kwargs: utils.defined_yaw(kwargs["yaws"], self.n_turb)
+        else:
+            return lambda **kwargs: utils.return_zeros(kwargs["n"])
 
     def _init_wts(self):
         """
