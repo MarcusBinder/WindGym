@@ -11,10 +11,10 @@ from pettingzoo.test import parallel_api_test  # Good for comprehensive API comp
 from WindGym.wind_env_multi import WindFarmEnvMulti
 
 # Import necessary components that WindFarmEnvMulti uses internally
-from WindGym.Wind_Farm_Env import WindFarmEnv
-from WindGym.MesClass import (
-    turb_mes,
-    farm_mes,
+from WindGym.wind_farm_env import WindFarmEnv
+from WindGym.core.mes_class import (
+    TurbMes,
+    FarmMes,
     Mes,
 )  # Explicitly import if their methods are called
 from py_wake.examples.data.hornsrev1 import V80  # <--- Import V80 here for use

@@ -23,7 +23,7 @@ from IPython import display
 
 # WindGym imports
 from .wind_env import WindEnv
-from .mes_class import FarmMes
+from .core.mes_class import FarmMes
 from .core.reward_calculator import RewardCalculator
 from .core.wind_manager import WindManager
 from .core.turbulence_manager import TurbulenceManager
@@ -40,7 +40,7 @@ from dynamiks.dwm.particle_motion_models import CutOffFrq
 # For live plotting
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-from WindGym.utils.WindProbe import WindProbe
+from WindGym.core.wind_probe import WindProbe
 
 
 CutOffFrqLio2021 = CutOffFrq(4)

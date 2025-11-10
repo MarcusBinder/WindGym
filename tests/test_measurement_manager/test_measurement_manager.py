@@ -3,7 +3,7 @@ import numpy as np
 from WindGym.Agents.PyWakeAgent import PyWakeAgent, NoisyPyWakeAgent
 
 # Import real components needed for the tests
-from WindGym.measurement_manager import (
+from WindGym.core.measurement_manager import (
     MeasurementManager,
     MeasurementType,
     MeasurementSpec,  # FIX: Add missing import
