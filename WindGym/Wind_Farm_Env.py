@@ -158,6 +158,9 @@ class WindFarmEnv(WindEnv):
                 "When using pywake as backend, dt_env must be equal to dt_sim"
             )
 
+        self.x_pos = x_pos
+        self.y_pos = y_pos
+
         self.delay = dt_env  # The delay in seconds. By default just use the dt_env. We cant have smaller delays then this.
         self.sample_site = sample_site
         self.yaw_start = 15.0  # This is the limit for the initialization of the yaw angles. This is used to make sure that the yaw angles are not too large at the start, but still not zero
@@ -310,8 +313,7 @@ class WindFarmEnv(WindEnv):
 
         self.D = turbine.diameter()
 
-        self.x_pos = x_pos
-        self.y_pos = y_pos
+
 
         # Define the observation and action space
         self.obs_var = self.farm_measurements.observed_variables()
