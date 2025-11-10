@@ -856,7 +856,7 @@ class WindFarmEnv(WindEnv):
 
         # Init render can now be called as fs needs to be created first
         if self.render_mode in ["human", "rgb_array"]:
-            self.renderer.init_render(self.fs, self.turbine)
+            self.init_render()
 
         return observation, info
 
