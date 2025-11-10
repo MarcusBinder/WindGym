@@ -187,10 +187,7 @@ class TurbulenceManager:
             return self._generate_none(ws)
 
         else:
-            raise ValueError(
-                f"Invalid turbulence_type: {self.turbulence_type}. "
-                f"Must be one of: MannLoad, MannGenerate, MannFixed, Random, None"
-            )
+            raise ValueError("Invalid turbulence type specified")
 
     def _generate_mann_load(self, ws: float, ti: float) -> tuple:
         """Load Mann turbulence box from pre-generated files."""
@@ -328,4 +325,4 @@ class TurbulenceManager:
             if files:
                 return files
 
-        raise FileNotFoundError(f"No TF_*.nc turbulence files found at: {root}")
+        raise FileNotFoundError(f"No TF_*.nc files found at: {root}")
