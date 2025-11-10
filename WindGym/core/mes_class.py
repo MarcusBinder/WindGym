@@ -4,7 +4,7 @@ from typing import Callable
 import itertools
 import numpy as np
 from numpy.typing import NDArray
-from .wind_env import WindEnv
+from ..wind_env import WindEnv
 
 """
 This file contains the classes for the measurements of the wind farm.
