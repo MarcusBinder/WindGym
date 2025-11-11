@@ -30,6 +30,7 @@ from .core.turbulence_manager import TurbulenceManager
 from .core.renderer import WindFarmRenderer
 from .core.baseline_manager import BaselineManager
 from .core.probe_manager import ProbeManager
+from .config_schema import EnvConfig, SimulationConfig, ScalingConfig
 
 from py_wake.wind_turbines import WindTurbines as WindTurbinesPW
 from collections import deque, defaultdict
@@ -64,160 +65,246 @@ class WindFarmEnv(gym.Env):
         turbine,
         x_pos,
         y_pos,
-        n_passthrough=5,
-        ws_scaling_min: float = 0.0,
-        ws_scaling_max: float = 30.0,
-        wd_scaling_min: float = 0,
-        wd_scaling_max: float = 360,
-        ti_scaling_min: float = 0.0,
-        ti_scaling_max: float = 1.0,
-        yaw_scaling_min: float = -45,
-        yaw_scaling_max: float = 45,
+        config=None,
+        backend: str = "dynamiks",
+        sim_config: Optional[SimulationConfig] = None,
+        scaling_config: Optional[ScalingConfig] = None,
+        # Turbulence parameters
         TurbBox="Default",
         turbtype="Random",
-        backend: str = "dynamiks",
-        config=None,
+        # Optional overrides
         Baseline_comp=False,
         yaw_init=None,
+        # Simulation control
         render_mode=None,
         seed=None,
-        dt_sim=1,  # Simulation timestep in seconds
-        dt_env=1,  # Environment timestep in seconds
-        yaw_step_sim=1,  # How many degrees the yaw angles can change pr. simulation step
-        yaw_step_env=None,  # How many degrees the yaw angles can change pr. environment step
+        yaw_step_sim=1,
+        yaw_step_env=None,
         fill_window=True,
         sample_site=None,
         HTC_path=None,
         reset_init=True,
-        burn_in_passthroughs=2,  # number of passthroughs before episode starts
         cleanup_on_time_limit: bool = True,
-        wd_function=None,  # A function that takes in the timestep and returns the wind direction
-        max_turb_move=2,  # The maximum distance that the turbines can move in one timestep. This is used to avoid numerical issues with the DWM solver.
+        wd_function=None,
+        # Deprecated parameters for backward compatibility
+        n_passthrough=None,
+        ws_scaling_min=None,
+        ws_scaling_max=None,
+        wd_scaling_min=None,
+        wd_scaling_max=None,
+        ti_scaling_min=None,
+        ti_scaling_max=None,
+        yaw_scaling_min=None,
+        yaw_scaling_max=None,
+        dt_sim=None,
+        dt_env=None,
+        burn_in_passthroughs=None,
+        max_turb_move=None,
         **kwargs,
     ):
         """
-        This is a steadystate environment. The environment only ever changes wind conditions at reset. Then the windconditions are constatnt for the rest of the episode
-        Args:
-            turbine: PyWakeWindTurbine: The wind turbine that is used in the environment
-            n_passthrough: int: The number of times the flow passes through the farm. This is used to calculate the maximum simulation time.
-            TI_min_mes: float: The minimum value for the turbulence intensity measurements. Used for internal scaling
-            TI_max_mes: float: The maximum value for the turbulence intensity measurements. Used for internal scaling
-            TurbBox: str: The path to the turbulence box files. If Default, then it will use the default turbulence box files.
-            turbtype: str: The type of turbulence box that is used. Can be one of the following: MannLoad, MannGenerate, MannFixed, Random, None
-            config (str | Path | dict): The environment configuration.
-                - If dict: taken directly.
-                - If str/Path to an existing file: loaded from file.
-                - If str containing YAML (multi-line, not a file path): parsed as YAML.
-            Baseline_comp: bool: If true, then the environment will compare the performance of the agent with a baseline farm. This is only used in the EnvEval class.
-            yaw_init: str: The method for initializing the yaw angles of the turbines. If 'Random', then the yaw angles will be random. Else they will be zeros.
-            render_mode: str: The render mode of the environment. If None, then nothing will be rendered. If human, then the environment will be rendered in a window. If rgb_array, then the environment will be rendered as an array.
-            seed: int: The seed for the environment. If None, then the seed will be random.
-            dt_sim: float: The simulation timestep in seconds. Can be used to speed up the simulation, if the DWM solver can take larger steps
-            dt_env: float: The environment timestep in seconds. This is the timestep that the agent sees. The environment will run the simulation for dt_sim/dt_env steps pr. timestep.
-            yaw_step_sim: float: The step size for the yaw angles. How manny degress the yaw angles can change pr. step
-            fill_window: bool: If True, then the measurements will be filled up at reset.
-            sample_site: pywake site that includes information about the wind conditions. If None we sample uniformly from within the limits.
-            HTC_path: str: The path to the high fidelity turbine model. If this is Not none, then we assume you want to use that instead of pywake turbines. Note you still need a pywake version of your turbine.
-            reset_init: bool: If True, then the environment will be reset at initialization. This is used to save time for things that call the reset method anyways.
-            cleanup_on_time_limit: bool: If True, then the environment will clean up the HAWC2 files when the maximum time is reached. This is to avoid filling up the disk with files.
-        """
-        self.kwargs = locals()
-        del self.kwargs["self"]  # Remove 'self' from the dictionary
+        WindGym environment for wind farm control using reinforcement learning.
 
+        Args:
+            turbine: PyWake wind turbine model to use
+            x_pos: Array of turbine x-coordinates
+            y_pos: Array of turbine y-coordinates
+            config: Environment configuration (required). Can be:
+                - Path to YAML file
+                - YAML string
+                - Dictionary
+                - EnvConfig object
+            backend: Simulation backend ("dynamiks" or "pywake")
+            sim_config: Simulation configuration (dt_sim, dt_env, n_passthrough, etc.)
+                If None, uses defaults or values from deprecated parameters
+            scaling_config: Observation/action space scaling configuration
+                If None, uses defaults or values from deprecated parameters
+            TurbBox: Path to turbulence box files or "Default"
+            turbtype: Turbulence type ("Random", "MannLoad", "MannGenerate", etc.)
+            Baseline_comp: Whether to run baseline controller comparison
+            yaw_init: Override for yaw initialization method
+            render_mode: Rendering mode (None, "human", or "rgb_array")
+            seed: Random seed for reproducibility
+            yaw_step_sim: Degrees the yaw can change per simulation step
+            yaw_step_env: Degrees the yaw can change per environment step
+            fill_window: Whether to fill measurement history at reset
+            sample_site: PyWake site object for wind sampling
+            HTC_path: Path to HAWC2 high-fidelity turbine model
+            reset_init: Whether to call reset() during initialization
+            cleanup_on_time_limit: Whether to cleanup HAWC2 files on episode end
+            wd_function: Custom function for wind direction (takes timestep, returns WD)
+
+        Deprecated (use sim_config instead):
+            n_passthrough, dt_sim, dt_env, burn_in_passthroughs, max_turb_move
+
+        Deprecated (use scaling_config instead):
+            ws_scaling_min, ws_scaling_max, wd_scaling_min, wd_scaling_max,
+            ti_scaling_min, ti_scaling_max, yaw_scaling_min, yaw_scaling_max
+        """
+        # Store all initialization parameters for debugging
+        self.kwargs = locals()
+        del self.kwargs["self"]
+
+        # Validate backend
         self.backend = backend.lower().strip()
         if self.backend not in {"dynamiks", "pywake"}:
             raise ValueError("backend must be 'dynamiks' or 'pywake'")
-        # Check that x_pos and y_pos are the same length
+
+        # Validate positions
         if len(x_pos) != len(y_pos):
             raise ValueError("x_pos and y_pos must be the same length")
 
-        self.max_turb_move = max_turb_move
-        self.wd_function = wd_function
+        self.x_pos = x_pos
+        self.y_pos = y_pos
+        self.n_turb = len(x_pos)
+        self.turbine = turbine
 
-        # Predefined values
-        self.wts = None
-        self.wts_baseline = None
-        self.burn_in_passthroughs = burn_in_passthroughs
-        self.cleanup_on_time_limit = cleanup_on_time_limit
-        # The power setpoint for the farm. This is used if the Track_power is True. (Not used yet)
-        self.power_setpoint = 0.0
-        self.act_var = (
-            1  # number of actions pr. turbine. For now it is just the yaw angles
-        )
-        self.HTC_path = HTC_path
-        self.fill_window = fill_window
-        self.dt = dt_sim  # DWM simulation timestep
-        self.dt_sim = dt_sim
-        self.dt_env = dt_env  # Environment timestep
+        # --- Handle configuration objects ---
+        # Create simulation config from either sim_config or deprecated parameters
+        if sim_config is None:
+            sim_config = SimulationConfig(
+                dt_sim=dt_sim if dt_sim is not None else 1.0,
+                dt_env=dt_env if dt_env is not None else 1.0,
+                n_passthrough=n_passthrough if n_passthrough is not None else 5,
+                burn_in_passthroughs=(
+                    burn_in_passthroughs if burn_in_passthroughs is not None else 2
+                ),
+                max_turb_move=max_turb_move if max_turb_move is not None else 2.0,
+            )
+        self.sim_config = sim_config
+
+        # Create scaling config from either scaling_config or deprecated parameters
+        if scaling_config is None:
+            scaling_config = ScalingConfig(
+                ws_min=ws_scaling_min if ws_scaling_min is not None else 0.0,
+                ws_max=ws_scaling_max if ws_scaling_max is not None else 30.0,
+                wd_min=wd_scaling_min if wd_scaling_min is not None else 0.0,
+                wd_max=wd_scaling_max if wd_scaling_max is not None else 360.0,
+                ti_min=ti_scaling_min if ti_scaling_min is not None else 0.0,
+                ti_max=ti_scaling_max if ti_scaling_max is not None else 1.0,
+                yaw_min=yaw_scaling_min if yaw_scaling_min is not None else -45.0,
+                yaw_max=yaw_scaling_max if yaw_scaling_max is not None else 45.0,
+            )
+        self.scaling_config = scaling_config
+
+        # Extract commonly used values for backward compatibility
+        self.dt = self.sim_config.dt_sim
+        self.dt_sim = self.sim_config.dt_sim
+        self.dt_env = self.sim_config.dt_env
+        self.n_passthrough = self.sim_config.n_passthrough
+        self.burn_in_passthroughs = self.sim_config.burn_in_passthroughs
+        self.max_turb_move = self.sim_config.max_turb_move
         self.sim_steps_per_env_step = int(self.dt_env / self.dt_sim)
-        if self.dt_env % self.dt_sim != 0:
-            raise ValueError("dt_env must be a multiple of dt_sim")
 
-        # If we use pywake as backend, then we need to make sure that the dt_sim and dt_env are the same. This is because pywake is a steady state solver, and therefore does not have a timestep.
+        # Validate pywake backend constraint
         if self.backend == "pywake" and self.dt_env != self.dt_sim:
             raise ValueError(
                 "When using pywake as backend, dt_env must be equal to dt_sim"
             )
 
-        self.x_pos = x_pos
-        self.y_pos = y_pos
+        # Store scaling values for backward compatibility
+        self.ws_scaling_min = self.scaling_config.ws_min
+        self.ws_scaling_max = self.scaling_config.ws_max
+        self.wd_scaling_min = self.scaling_config.wd_min
+        self.wd_scaling_max = self.scaling_config.wd_max
+        self.ti_scaling_min = self.scaling_config.ti_min
+        self.ti_scaling_max = self.scaling_config.ti_max
+        self.yaw_scaling_min = self.scaling_config.yaw_min
+        self.yaw_scaling_max = self.scaling_config.yaw_max
 
-        self.delay = dt_env  # The delay in seconds. By default just use the dt_env. We cant have smaller delays then this.
+        # --- Load and validate environment configuration ---
+        self.env_config = self._normalize_config_input(config)
+        self._apply_config(self.env_config)
+
+        # --- Initialize other parameters ---
+        self.wd_function = wd_function
+        self.wts = None
+        self.wts_baseline = None
+        self.cleanup_on_time_limit = cleanup_on_time_limit
+        self.power_setpoint = 0.0
+        self.act_var = 1  # Number of actions per turbine (currently just yaw)
+        self.HTC_path = HTC_path
+        self.fill_window = fill_window
+        self.delay = self.dt_env
         self.sample_site = sample_site
-        self.yaw_start = 15.0  # This is the limit for the initialization of the yaw angles. This is used to make sure that the yaw angles are not too large at the start, but still not zero
-        # Max power pr turbine. Used in the measurement class
+        self.yaw_start = 15.0
         self.maxturbpower = max(turbine.power(np.arange(10, 25, 1)))
-        self.baseline_wakes = True  # A flag that decides if we include the wakes in the baseline farm. For now always true.
-        # The step size for the yaw angles. How manny degress the yaw angles can change pr. step
-        # The distance between the particles. This is used in the flow simulation.
+        self.baseline_wakes = True
         self.d_particle = 0.2
         self.n_particles = None
         self.temporal_filter = CutOffFrqLio2021
         self.turbtype = turbtype
-        self.yaw_step_sim = yaw_step_sim  # How many degrees the yaw angles can change pr. simulation step
+        self.yaw_step_sim = yaw_step_sim
+        self.seed = seed
+        self.TurbBox = TurbBox
+        self.time_max = 0
+        self.timestep = 0
+        self.yaw_initial = [0]
+        self.n_probes_per_turb = None
 
+        # Calculate yaw_step_env
         if yaw_step_env is None:
             self.yaw_step_env = yaw_step_sim * self.sim_steps_per_env_step
         else:
             self.yaw_step_env = yaw_step_env
 
-        # Saves to self
-        self.ws_scaling_min = ws_scaling_min
-        self.ws_scaling_max = ws_scaling_max
-        self.wd_scaling_min = wd_scaling_min
-        self.wd_scaling_max = wd_scaling_max
-        self.ti_scaling_min = ti_scaling_min
-        self.ti_scaling_max = ti_scaling_max
-        self.yaw_scaling_min = yaw_scaling_min
-        self.yaw_scaling_max = yaw_scaling_max
-        self.seed = seed
-        self.TurbBox = TurbBox
-        self.turbine = turbine
-        # The maximum time of the simulation. This is used to make sure that the simulation doesnt run forever.
-        self.time_max = 0
-        # The number of times the flow passes through the farm. This is used to calculate the maximum simulation time.
-        self.n_passthrough = n_passthrough
-        self.timestep = 0
-
-        # The initial yaw of the turbines. This is used if the yaw_init is "Defined"
-        self.yaw_initial = [0]
-
-        # --- Load config ---
-        cfg = self._normalize_config_input(config)
-        self._apply_config(cfg)
-
-        self.n_turb = len(x_pos)  # The number of turbines
-
-        # Will be set later after probe_manager is initialized
-        self.n_probes_per_turb = None
-
-        # Sets the yaw init method. If Random, then the yaw angles will be random. Else they will be zeros
-        # Use yaw_init parameter if provided, otherwise use value from config
+        # --- Initialize yaw initializer ---
         yaw_init_method = yaw_init if yaw_init is not None else self.yaw_init
         self._yaw_init = self._create_yaw_initializer(yaw_init_method)
 
-        # Initialize the reward calculator
+        # --- Initialize manager components ---
+        self._init_managers(turbine, sample_site, Baseline_comp, HTC_path, render_mode)
 
+        # --- Initialize measurements ---
+        self._init_farm_mes()
+
+        # Calculate history length
+        self.hist_max = max(self.power_avg, self.farm_measurements.max_hist())
+
+        # Determine steps on reset
+        if self.fill_window is True:
+            self.steps_on_reset = self.hist_max
+        elif isinstance(self.fill_window, int) and self.fill_window >= 1:
+            self.steps_on_reset = min(self.fill_window, self.hist_max)
+        elif self.fill_window is False:
+            self.steps_on_reset = 1
+        else:
+            raise ValueError("fill_window must be True, False, or a positive integer")
+
+        # --- Setup spaces ---
+        self.D = turbine.diameter()
+        self.obs_var = self.farm_measurements.observed_variables()
+        self._init_spaces()
+
+        # --- Initialize environment ---
+        if reset_init:
+            self.reset(seed=seed)
+
+        # --- Setup rendering ---
+        assert render_mode is None or render_mode in self.metadata["render_modes"]
+        self.render_mode = render_mode
+        if self.render_mode is not None:
+            self.init_render()
+
+    def _init_managers(
+        self,
+        turbine,
+        sample_site,
+        Baseline_comp: bool,
+        HTC_path: Optional[str],
+        render_mode: Optional[str],
+    ) -> None:
+        """
+        Initialize all manager components in a separate method for clarity.
+
+        Args:
+            turbine: Wind turbine model
+            sample_site: PyWake site for wind sampling
+            Baseline_comp: Whether to use baseline comparison
+            HTC_path: Path to HAWC2 high-fidelity model
+            render_mode: Rendering mode
+        """
+        # Initialize reward calculator
         self.reward_calculator = RewardCalculator(
             power_reward_type=self.power_reward,
             track_power=self.Track_power,
@@ -227,7 +314,7 @@ class WindFarmEnv(gym.Env):
             power_window_size=self.power_avg,
         )
 
-        # Initialize the wind manager
+        # Initialize wind manager
         self.wind_manager = WindManager(
             ws_min=self.ws_inflow_min,
             ws_max=self.ws_inflow_max,
@@ -238,26 +325,24 @@ class WindFarmEnv(gym.Env):
             sample_site=sample_site,
         )
 
-        # Initialize the turbulence manager
+        # Initialize turbulence manager
         self.turbulence_manager = TurbulenceManager(
-            turbulence_type=turbtype,
-            turbulence_box_path=TurbBox,
-            max_turb_move=max_turb_move,
+            turbulence_type=self.turbtype,
+            turbulence_box_path=self.TurbBox,
+            max_turb_move=self.max_turb_move,
         )
-        # Expose turbulence files list for compatibility
         self.TF_files = self.turbulence_manager.turbulence_files
 
-        # Initialize the renderer
+        # Initialize renderer
         self.renderer = WindFarmRenderer(render_mode=render_mode)
 
-        # If we need to have a "baseline" farm, then we need to set up the baseline controller
-        # This could be moved to the Power_reward check, but I have a feeling this will be expanded in the future, when we include damage.
+        # Determine if baseline is needed
         if self.power_reward == "Baseline" or Baseline_comp:
             self.Baseline_comp = True
         else:
             self.Baseline_comp = False
 
-        # Initialize the baseline manager
+        # Initialize baseline manager if needed
         self.baseline_manager = None
         if self.Baseline_comp:
             self.baseline_manager = BaselineManager(
@@ -271,48 +356,6 @@ class WindFarmEnv(gym.Env):
                 yaw_step_sim=self.yaw_step_sim,
                 htc_path=HTC_path,
             )
-
-        # #Initializing the measurements class with the specified values.
-        self._init_farm_mes()
-
-        # The maximum history length of the measurements
-        # self.hist_max = self.farm_measurements.max_hist()
-        self.hist_max = max(self.power_avg, self.farm_measurements.max_hist())
-
-        # Figure out the ammount of steps to do at the reset
-        if self.fill_window is True:
-            self.steps_on_reset = self.hist_max
-        elif isinstance(self.fill_window, int) and self.fill_window >= 1:
-            if self.fill_window > self.hist_max:
-                self.fill_window = (
-                    self.hist_max
-                )  # fill_window cannot be larger then the max history length
-            self.steps_on_reset = self.fill_window
-        elif self.fill_window is False:
-            self.steps_on_reset = 1
-        else:
-            raise ValueError("fill_window must be True or a non-negative integer")
-
-        # Setting up the turbines:
-
-        self.D = turbine.diameter()
-
-
-
-        # Define the observation and action space
-        self.obs_var = self.farm_measurements.observed_variables()
-
-        self._init_spaces()
-
-        if reset_init:
-            # We should have this here, to set the seeding correctly
-            self.reset(seed=seed)
-
-        # Asserting that the render_mode is valid.
-        assert render_mode is None or render_mode in self.metadata["render_modes"]
-        self.render_mode = render_mode  # Keep for compatibility
-        if self.render_mode is not None:
-            self.init_render()
 
     def _create_yaw_initializer(self, method: str):
         """
@@ -393,90 +436,170 @@ class WindFarmEnv(gym.Env):
             self.wts_baseline = None
 
 
-    def _normalize_config_input(self, config):
+    def _normalize_config_input(self, config) -> EnvConfig:
         """
-        Normalizes the config input to a dictionary.
+        Normalizes the config input to an EnvConfig object with validation.
+
+        Args:
+            config: Configuration input (dict, YAML string, file path, or EnvConfig)
+
+        Returns:
+            Validated EnvConfig object
+
+        Raises:
+            ValueError: If config is None or invalid
+            TypeError: If config is not a supported type
         """
         if config is None:
             raise ValueError(
                 "A configuration must be provided via the `config` argument."
             )
-        if isinstance(config, dict):  # If it is already a dict, then just return it
+
+        # If already an EnvConfig, return it
+        if isinstance(config, EnvConfig):
             self.yaml_path = None
             return config
-        if isinstance(config, (str, Path)):  #
-            p = Path(str(config))
+
+        # Load config dict from various sources
+        config_dict = None
+
+        if isinstance(config, dict):
+            self.yaml_path = None
+            config_dict = config
+        elif isinstance(config, (str, Path)):
             config_str = str(config)
-            if os.path.exists(config_str):  # treat as file
+            if os.path.exists(config_str):
+                # Load from file
                 with open(config_str, "r") as f:
-                    return yaml.safe_load(f) or {}
-                self.yaml_path = config_str
-            else:  # treat as string
+                    self.yaml_path = config_str
+                    config_dict = yaml.safe_load(f) or {}
+            else:
+                # Parse as YAML string
                 self.yaml_path = None
-                return yaml.safe_load(str(config)) or {}
-        raise TypeError("`config` must be a dict, YAML string, or path to a YAML file.")
+                config_dict = yaml.safe_load(str(config)) or {}
+        else:
+            raise TypeError(
+                f"`config` must be a dict, YAML string, path to YAML file, or EnvConfig object. "
+                f"Got {type(config)}"
+            )
 
-    def _apply_config(self, config: Dict[str, Any]) -> None:
+        # Parse dict into validated EnvConfig object
+        try:
+            return EnvConfig.from_dict(config_dict)
+        except (ValueError, TypeError, KeyError) as e:
+            raise ValueError(
+                f"Invalid configuration: {e}\n"
+                f"Please check your configuration file/dict against the schema requirements."
+            ) from e
+
+    def _apply_config(self, config: EnvConfig) -> None:
         """
-        Validates and maps the parsed config dictionary to instance attributes.
-        This is the only place that should set attributes from config.
+        Applies the validated EnvConfig to instance attributes.
+
+        Args:
+            config: Validated EnvConfig object
         """
+        # Top-level fields
+        self.yaw_init = config.yaw_init
+        self.BaseController = config.BaseController
+        self.ActionMethod = config.ActionMethod
+        self.Track_power = config.Track_power
 
-        # helpers for clearer errors on missing/invalid sections/keys
-        def require_section(name: str) -> Dict[str, Any]:
-            section = config.get(name)
-            if not isinstance(section, dict):
-                raise ValueError(
-                    f"Config section '{name}' is required and must be a mapping."
-                )
-            return section
+        # Farm configuration
+        self.yaw_min = config.farm.yaw_min
+        self.yaw_max = config.farm.yaw_max
 
-        def require_key(section: Dict[str, Any], key: str, section_name: str):
-            if key not in section:
-                raise ValueError(
-                    f"Key '{key}' is required in section '{section_name}'."
-                )
-            return section[key]
+        # Wind configuration
+        self.ws_inflow_min = config.wind.ws_min
+        self.ws_inflow_max = config.wind.ws_max
+        self.TI_inflow_min = config.wind.TI_min
+        self.TI_inflow_max = config.wind.TI_max
+        self.wd_inflow_min = config.wind.wd_min
+        self.wd_inflow_max = config.wind.wd_max
 
-        # Top-level fields (optional)
-        self.yaw_init = config.get("yaw_init")
-        self.BaseController = config.get("BaseController")
-        self.ActionMethod = config.get("ActionMethod")
-        self.Track_power = config.get("Track_power")
+        # Action penalty configuration
+        self.action_penalty = config.act_pen.action_penalty
+        self.action_penalty_type = config.act_pen.action_penalty_type
 
-        # Farm section (required keys)
-        farm = require_section("farm")
-        self.yaw_min = require_key(farm, "yaw_min", "farm")
-        self.yaw_max = require_key(farm, "yaw_max", "farm")
+        # Power reward configuration
+        self.Power_scaling = config.power_def.Power_scaling
+        self.power_avg = config.power_def.Power_avg
+        self.power_reward = config.power_def.Power_reward
 
-        # Wind section (required keys)
-        wind = require_section("wind")
-        self.ws_inflow_min = require_key(wind, "ws_min", "wind")
-        self.ws_inflow_max = require_key(wind, "ws_max", "wind")
-        self.TI_inflow_min = require_key(wind, "TI_min", "wind")
-        self.TI_inflow_max = require_key(wind, "TI_max", "wind")
-        self.wd_inflow_min = require_key(wind, "wd_min", "wind")
-        self.wd_inflow_max = require_key(wind, "wd_max", "wind")
+        # Measurement level configuration
+        self.ti_sample_count = config.mes_level.ti_sample_count
 
-        # Measurement & reward sections (optional but commonly expected)
-        self.act_pen = config.get("act_pen", {}) or {}
-        self.power_def = config.get("power_def", {}) or {}
-        self.mes_level = config.get("mes_level", {}) or {}
-        self.ws_mes = config.get("ws_mes")
-        self.wd_mes = config.get("wd_mes")
-        self.yaw_mes = config.get("yaw_mes")
-        self.power_mes = config.get("power_mes")
+        # Store measurement level dict for compatibility
+        self.mes_level = {
+            "turb_ws": config.mes_level.turb_ws,
+            "turb_wd": config.mes_level.turb_wd,
+            "turb_TI": config.mes_level.turb_TI,
+            "turb_power": config.mes_level.turb_power,
+            "farm_ws": config.mes_level.farm_ws,
+            "farm_wd": config.mes_level.farm_wd,
+            "farm_TI": config.mes_level.farm_TI,
+            "farm_power": config.mes_level.farm_power,
+            "ti_sample_count": config.mes_level.ti_sample_count,
+        }
 
-        # Derived / convenience attributes with sensible fallbacks
-        self.ti_sample_count = self.mes_level.get("ti_sample_count", 30)
-        self.action_penalty = self.act_pen.get("action_penalty")
-        self.action_penalty_type = self.act_pen.get("action_penalty_type")
-        self.Power_scaling = self.power_def.get("Power_scaling")
-        self.power_avg = self.power_def.get("Power_avg")
-        self.power_reward = self.power_def.get("Power_reward")
+        # Store measurement detail dicts for compatibility
+        self.ws_mes = {
+            "ws_current": config.ws_mes.current,
+            "ws_rolling_mean": config.ws_mes.rolling_mean,
+            "ws_history_N": config.ws_mes.history_N,
+            "ws_history_length": config.ws_mes.history_length,
+            "ws_window_length": config.ws_mes.window_length,
+        }
+
+        self.wd_mes = {
+            "wd_current": config.wd_mes.current,
+            "wd_rolling_mean": config.wd_mes.rolling_mean,
+            "wd_history_N": config.wd_mes.history_N,
+            "wd_history_length": config.wd_mes.history_length,
+            "wd_window_length": config.wd_mes.window_length,
+        }
+
+        self.yaw_mes = {
+            "yaw_current": config.yaw_mes.current,
+            "yaw_rolling_mean": config.yaw_mes.rolling_mean,
+            "yaw_history_N": config.yaw_mes.history_N,
+            "yaw_history_length": config.yaw_mes.history_length,
+            "yaw_window_length": config.yaw_mes.window_length,
+        }
+
+        self.power_mes = {
+            "power_current": config.power_mes.current,
+            "power_rolling_mean": config.power_mes.rolling_mean,
+            "power_history_N": config.power_mes.history_N,
+            "power_history_length": config.power_mes.history_length,
+            "power_window_length": config.power_mes.window_length,
+        }
+
+        # Store original config sections for compatibility
+        self.act_pen = {
+            "action_penalty": config.act_pen.action_penalty,
+            "action_penalty_type": config.act_pen.action_penalty_type,
+        }
+
+        self.power_def = {
+            "Power_reward": config.power_def.Power_reward,
+            "Power_avg": config.power_def.Power_avg,
+            "Power_scaling": config.power_def.Power_scaling,
+        }
+
+        # Convert probe configs to dicts for ProbeManager
+        probes_config = [
+            {
+                "name": p.name,
+                "turbine_index": p.turbine_index,
+                "relative_position": p.relative_position,
+                "include_wakes": p.include_wakes,
+                "probe_type": p.probe_type,
+            }
+            for p in config.probes
+        ]
 
         # Initialize probe manager
-        probes_config = config.get("probes", [])
         self.probe_manager = ProbeManager(probes_config=probes_config)
 
         # Keep references for backward compatibility
