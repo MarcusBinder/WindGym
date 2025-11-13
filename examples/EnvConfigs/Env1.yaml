@@ -7,11 +7,18 @@ BaseController: "Local"   #Can be "Local", "Global" or "PyWake"
 ActionMethod: "wind"      #Can be: "yaw", "wind", "absolute"
 Track_power: False       #If the farm should produce a specified power output
 
+# Action type configuration (NEW: for derating support)
+enable_yaw: True          #Enable yaw control (default: True for backward compatibility)
+enable_derate: False      #Enable derating control (default: False)
+DerateMethod: "wind"      #Derating method: "yaw" (incremental) or "wind" (setpoint). Default: "wind"
+
 
 #Farm parameters
 farm:
   yaw_min: -45
   yaw_max: 45
+  derate_min: 0.0       # Minimum derating (0.0 = no power, default: 0.0)
+  derate_max: 1.0       # Maximum derating (1.0 = full power, default: 1.0)
   xDist: 4
   yDist: 4
   nx: 2

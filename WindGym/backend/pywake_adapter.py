@@ -74,6 +74,7 @@ class _AdapterWindTurbines:
     def __post_init__(self):
         N = self.positions_east_north.shape[1]
         self.yaw = np.zeros(N, dtype=float)  # deg
+        self.derate = np.ones(N, dtype=float)  # power fraction (1.0 = full power)
         self._ws_eff = np.full(N, np.nan, dtype=float)
         self._power_eff = np.full(N, np.nan, dtype=float)
         self._ws_nowake = np.full(N, np.nan, dtype=float)
@@ -123,10 +124,12 @@ class _AdapterWindTurbines:
         return np.vstack([u, np.zeros_like(u), np.zeros_like(u)])
 
     def power(self, include_wakes=True):
-        return np.asarray(
+        base_power = np.asarray(
             self._power_eff if include_wakes else self.turbine.power(self._ws_nowake),
             float,
         )
+        # Apply derating (power fraction)
+        return base_power * self.derate
 
     # Convenience passthroughs
     def diameter(self, type=0):

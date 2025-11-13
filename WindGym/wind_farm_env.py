@@ -141,9 +141,9 @@ class WindFarmEnv(gym.Env):
         self.cleanup_on_time_limit = cleanup_on_time_limit
         # The power setpoint for the farm. This is used if the Track_power is True. (Not used yet)
         self.power_setpoint = 0.0
-        self.act_var = (
-            1  # number of actions pr. turbine. For now it is just the yaw angles
-        )
+        # Number of actions per turbine will be set after loading config
+        # based on enabled action types (yaw, derate, or both)
+        self.act_var = 1  # Default to 1 (yaw only) for backward compatibility
         self.HTC_path = HTC_path
         self.fill_window = fill_window
         self.dt = dt_sim  # DWM simulation timestep
@@ -444,10 +444,23 @@ class WindFarmEnv(gym.Env):
         self.ActionMethod = config.get("ActionMethod")
         self.Track_power = config.get("Track_power")
 
+        # Action type configuration (for yaw and/or derating control)
+        self.enable_yaw = config.get("enable_yaw", True)  # Default True for backward compatibility
+        self.enable_derate = config.get("enable_derate", False)  # Default False
+        self.DerateMethod = config.get("DerateMethod", "wind")  # Default to setpoint control like yaw
+
+        # Validate action configuration
+        if not self.enable_yaw and not self.enable_derate:
+            raise ValueError("At least one of enable_yaw or enable_derate must be True")
+
         # Farm section (required keys)
         farm = require_section("farm")
         self.yaw_min = require_key(farm, "yaw_min", "farm")
         self.yaw_max = require_key(farm, "yaw_max", "farm")
+
+        # Derating bounds (optional, with defaults)
+        self.derate_min = farm.get("derate_min", 0.0)  # 0.0 = no power
+        self.derate_max = farm.get("derate_max", 1.0)  # 1.0 = full power
 
         # Wind section (required keys)
         wind = require_section("wind")
@@ -486,6 +499,13 @@ class WindFarmEnv(gym.Env):
 
         # Set n_probes_per_turb now that probe_manager is initialized
         self.n_probes_per_turb = self.probe_manager.count_probes_per_turbine()
+
+        # Calculate number of actions per turbine based on enabled action types
+        self.act_var = 0
+        if self.enable_yaw:
+            self.act_var += 1
+        if self.enable_derate:
+            self.act_var += 1
 
     def _init_farm_mes(self) -> None:
         """
@@ -654,6 +674,22 @@ class WindFarmEnv(gym.Env):
         wind_cond = self.wind_manager.sample_conditions()
         self.ws, self.wd, self.ti = wind_cond.unpack()
 
+    def _wrap_power_method_with_derating(self, wind_turbines):
+        """
+        Wrap the power() method of wind_turbines to apply derating.
+        This is needed for Dynamiks backend where we don't control the power calculation directly.
+        """
+        # Store original power method
+        original_power = wind_turbines.power
+
+        def power_with_derating(*args, **kwargs):
+            """Wrapped power method that applies derating."""
+            base_power = original_power(*args, **kwargs)
+            return base_power * wind_turbines.derate
+
+        # Replace the power method
+        wind_turbines.power = power_with_derating
+
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
         """
         Reset the environment. This is called at the start of every episode.
@@ -777,6 +813,20 @@ class WindFarmEnv(gym.Env):
             yaws=self.yaw_initial,
         )
 
+        # Initialize derating (power fraction) - start at full power
+        if not hasattr(self.fs.windTurbines, 'derate'):
+            self.fs.windTurbines.derate = np.ones(self.n_turb, dtype=float)
+        else:
+            self.fs.windTurbines.derate[:] = 1.0  # Full power at start
+
+        # For Dynamiks backend, wrap power() method to apply derating
+        if self.backend == "dynamiks":
+            self._wrap_power_method_with_derating(self.fs.windTurbines)
+
+        # For incremental derating control, track remaining action budget
+        if self.enable_derate:
+            self.derate_action_remaining = np.zeros(self.n_turb, dtype=float)
+
         # Must init probes after fs
         self.probe_manager.initialize_probes(self.fs, self.fs.windTurbines.yaw)
         # Update references to point to probe_manager's collections
@@ -818,6 +868,16 @@ class WindFarmEnv(gym.Env):
 
             # Start baseline with same yaw as agent at reset
             self.fs_baseline.windTurbines.yaw = self.fs.windTurbines.yaw
+
+            # Initialize derating for baseline (always at full power)
+            if not hasattr(self.fs_baseline.windTurbines, 'derate'):
+                self.fs_baseline.windTurbines.derate = np.ones(self.n_turb, dtype=float)
+            else:
+                self.fs_baseline.windTurbines.derate[:] = 1.0
+
+            # Wrap baseline power method for Dynamiks
+            if self.backend == "dynamiks":
+                self._wrap_power_method_with_derating(self.fs_baseline.windTurbines)
 
         # 3c) Run the flow for the time it takes to develop
         if self.backend == "dynamiks":
@@ -913,14 +973,41 @@ class WindFarmEnv(gym.Env):
 
         # If in "yaw" mode, we have an action budget that spans the env step
         if apply_agent_action and self.ActionMethod == "yaw":
-            self.action_remaining = (
-                action * self.yaw_step_env
-            )  # total budget for this env step
+            # Parse action for yaw component
+            if self.enable_yaw and self.enable_derate:
+                yaw_action = action[:self.n_turb]
+            elif self.enable_yaw:
+                yaw_action = action
+            else:
+                yaw_action = None
+
+            if yaw_action is not None:
+                self.action_remaining = (
+                    yaw_action * self.yaw_step_env
+                )  # total budget for this env step
+
+        # If derating is enabled with incremental control ("yaw" mode)
+        if apply_agent_action and self.enable_derate and self.DerateMethod == "yaw":
+            # Parse action for derate component
+            if self.enable_yaw and self.enable_derate:
+                derate_action = action[self.n_turb:]
+            elif self.enable_derate:
+                derate_action = action
+            else:
+                derate_action = None
+
+            if derate_action is not None:
+                # Use derate_step_env if defined, else scale from yaw_step_env
+                derate_step_env = getattr(self, 'derate_step_env',
+                    self.yaw_step_env / (self.yaw_max - self.yaw_min) * (self.derate_max - self.derate_min))
+                self.derate_action_remaining = (
+                    derate_action * derate_step_env
+                )  # total budget for this env step
 
         for j in range(T):
-            # 1) Agent yaw update (if any)
+            # 1) Apply agent actions (yaw and/or derating, if any)
             if apply_agent_action:
-                self._adjust_yaws(action)
+                self._apply_actions(action)
 
             # 2) Step agent flow
             wd_old = self.fs.wind_direction
@@ -999,18 +1086,43 @@ class WindFarmEnv(gym.Env):
             )
         return result
 
-    def _adjust_yaws(self, action):
+    def _parse_action(self, action):
         """
+        Parse the concatenated action array into yaw and derating components.
+
+        Returns:
+            tuple: (yaw_action, derate_action) where each can be None if not enabled
+        """
+        yaw_action = None
+        derate_action = None
+
+        if self.enable_yaw and self.enable_derate:
+            # Both enabled: split action [yaw_t1, ..., yaw_tn, derate_t1, ..., derate_tn]
+            yaw_action = action[:self.n_turb]
+            derate_action = action[self.n_turb:]
+        elif self.enable_yaw:
+            # Only yaw enabled
+            yaw_action = action
+        elif self.enable_derate:
+            # Only derating enabled
+            derate_action = action
+
+        return yaw_action, derate_action
+
+    def _adjust_yaws(self, yaw_action):
+        """
+        Adjust the yaw angles of the turbines based on the given yaw action.
         Heavily inspired from https://github.com/AlgTUDelft/wind-farm-env
-        This function adjusts the yaw angles of the turbines, based on the actions given, but we now have differnt methods for the actions
+
+        Args:
+            yaw_action: Yaw actions for each turbine (can be None if yaw not enabled)
         """
+        if not self.enable_yaw or yaw_action is None:
+            return
 
         if self.ActionMethod == "yaw":
-            # The new yaw angles are the old yaw angles + the action, scaled with the yaw_step
-            # 0 action means no change
-            # the new yaw angles are the old yaw angles + the action, scaled with the yaw_step
-
-            # This is how much the yaw can change pr sim step
+            # Incremental control: 0 action means no change
+            # This is how much the yaw can change per sim step
             yaw_change = np.clip(
                 self.action_remaining,
                 -self.yaw_step_sim,
@@ -1019,7 +1131,7 @@ class WindFarmEnv(gym.Env):
             )
 
             self.fs.windTurbines.yaw += yaw_change
-            # clip the yaw angles to be between -30 and 30
+            # Clip the yaw angles to be between yaw_min and yaw_max
             self.fs.windTurbines.yaw = np.clip(
                 self.fs.windTurbines.yaw, self.yaw_min, self.yaw_max
             )
@@ -1027,26 +1139,25 @@ class WindFarmEnv(gym.Env):
             self.action_remaining -= yaw_change
 
         elif self.ActionMethod == "wind":
-            # The new yaw angles are the action, scaled to be between the min and max yaw angles
-            # 0 action means to move to 0 yaw angle, and 1 action means to move to the max yaw angle
-            new_yaws = (action + 1.0) / 2.0 * (
+            # Setpoint control: map action [-1, 1] to [yaw_min, yaw_max]
+            new_yaws = (yaw_action + 1.0) / 2.0 * (
                 self.yaw_max - self.yaw_min
             ) + self.yaw_min
 
             if (
                 self.HTC_path is None
-            ):  # This clip is only usefull for the pywake turbine model, as the hawc2 model has inertia anyways
-                # The bounds for the yaw angles are:
+            ):  # This clip is only useful for the pywake turbine model
+                # The bounds for the yaw angles with rate limiting:
                 yaw_max = self.fs.windTurbines.yaw + self.yaw_step_sim
                 yaw_min = self.fs.windTurbines.yaw - self.yaw_step_sim
 
-                # The new yaw angles are the new yaw angles, but clipped to be between the yaw_max and yaw_min
+                # Apply rate limiting and bounds
                 self.fs.windTurbines.yaw = np.clip(
                     np.clip(new_yaws, yaw_min, yaw_max), self.yaw_min, self.yaw_max
                 )
 
             else:
-                # The new yaw angles are the new yaw angles, but clipped to be between the yaw_min and yaw_max
+                # HAWC2 model has inertia, just apply bounds
                 self.fs.windTurbines.yaw = np.clip(new_yaws, self.yaw_min, self.yaw_max)
 
         elif self.ActionMethod == "absolute":
@@ -1054,6 +1165,81 @@ class WindFarmEnv(gym.Env):
 
         else:
             raise ValueError("The ActionMethod must be yaw, wind or absolute")
+
+    def _adjust_derating(self, derate_action):
+        """
+        Adjust the derating (power fraction) of the turbines based on the given action.
+
+        Args:
+            derate_action: Derating actions for each turbine (can be None if derating not enabled)
+        """
+        if not self.enable_derate or derate_action is None:
+            return
+
+        # Calculate derate_step_sim (use custom value if defined, else scale from yaw_step)
+        derate_step_sim = getattr(
+            self,
+            'derate_step_sim',
+            self.yaw_step_sim / (self.yaw_max - self.yaw_min) * (self.derate_max - self.derate_min)
+        )
+
+        if self.DerateMethod == "yaw":
+            # Incremental control: 0 action means no change
+            derate_change = np.clip(
+                self.derate_action_remaining,
+                -derate_step_sim,
+                derate_step_sim,
+                dtype=np.float32,
+            )
+
+            self.fs.windTurbines.derate += derate_change
+            # Clip derating to be between derate_min and derate_max
+            self.fs.windTurbines.derate = np.clip(
+                self.fs.windTurbines.derate, self.derate_min, self.derate_max
+            )
+
+            self.derate_action_remaining -= derate_change
+
+        elif self.DerateMethod == "wind":
+            # Setpoint control: map action [-1, 1] to [derate_min, derate_max]
+            # -1 -> derate_min (minimum power), +1 -> derate_max (maximum power)
+            new_derates = (derate_action + 1.0) / 2.0 * (
+                self.derate_max - self.derate_min
+            ) + self.derate_min
+
+            # Apply rate limiting (similar to yaw)
+            derate_max_limit = self.fs.windTurbines.derate + derate_step_sim
+            derate_min_limit = self.fs.windTurbines.derate - derate_step_sim
+
+            # Apply rate limiting and bounds
+            self.fs.windTurbines.derate = np.clip(
+                np.clip(new_derates, derate_min_limit, derate_max_limit),
+                self.derate_min,
+                self.derate_max,
+            )
+
+        elif self.DerateMethod == "absolute":
+            raise NotImplementedError("The absolute derating method is not implemented yet")
+
+        else:
+            raise ValueError("The DerateMethod must be yaw, wind or absolute")
+
+    def _apply_actions(self, action):
+        """
+        Action manager: Parse and apply both yaw and derating actions.
+        This wrapper provides a clean interface for applying all control actions.
+
+        Args:
+            action: Full action array (concatenated yaw and derate actions)
+        """
+        # Parse action into components
+        yaw_action, derate_action = self._parse_action(action)
+
+        # Apply yaw control (if enabled)
+        self._adjust_yaws(yaw_action)
+
+        # Apply derating control (if enabled)
+        self._adjust_derating(derate_action)
 
 
     def step(self, action):
