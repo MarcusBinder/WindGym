@@ -67,7 +67,7 @@ class WindFarmRenderer:
 
         plt.close()
 
-    def render(self, fs, fs_baseline=None, probes=None):
+    def render(self, fs, fs_baseline=None, probes=None, turbine=None):
         """
         Main render method - routes to appropriate rendering function.
 
@@ -75,20 +75,17 @@ class WindFarmRenderer:
             fs: Flow simulation object
             fs_baseline: Optional baseline flow simulation
             probes: Optional list of wind probes
+            turbine: Turbine object for lazy initialization
 
         Returns:
             RGB array if render_mode is "rgb_array", None otherwise
         """
         if self.render_mode == "rgb_array":
             # Return the RGB frame (for recording, saving, etc.)
-            return self._render_frame(fs, fs_baseline, probes)
+            return self._render_frame(fs, fs_baseline, probes, turbine=turbine)
         elif self.render_mode == "human":
-            if self.view is None:
-                raise RuntimeError(
-                    "Renderer not initialized. Call init_render() first."
-                )
-            # Show the frame in a window
-            frame = self._render_frame_for_human(fs, fs_baseline, probes)
+            # Show the frame in a window (will initialize lazily if needed)
+            frame = self._render_frame_for_human(fs, fs_baseline, probes, turbine=turbine)
             plt.imshow(frame)
             plt.axis("off")
             plt.title("Wind Farm Environment - Render")
