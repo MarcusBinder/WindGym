@@ -105,7 +105,6 @@ class WindFarmRenderer:
         probes=None,
         baseline: bool = False,
         turbine=None,
-        ws=None,
     ):
         """
         Render the environment for human viewing with full details.
@@ -118,7 +117,6 @@ class WindFarmRenderer:
             probes: Optional list of wind probes
             baseline: Whether to render baseline instead of agent
             turbine: Turbine object (for view if not initialized)
-            ws: Wind speed (for view if not initialized)
 
         Returns:
             np.ndarray: RGB frame

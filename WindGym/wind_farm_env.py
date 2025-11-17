@@ -1214,7 +1214,7 @@ class WindFarmEnv(gym.Env):
         fs_baseline = self.fs_baseline if self.Baseline_comp else None
         probes = self.probes if hasattr(self, "probes") else None
         return self.renderer._render_frame_for_human(
-            self.fs, fs_baseline, probes, baseline, self.turbine, self.ws
+            self.fs, fs_baseline, probes, baseline, self.turbine
         )
 
     def _render_frame(self, baseline=False):
