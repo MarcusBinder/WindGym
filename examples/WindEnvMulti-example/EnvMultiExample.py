@@ -1,4 +1,5 @@
 import numpy as np
+from pathlib import Path
 from WindGym.WindEnvMulti import WindFarmEnvMulti
 from py_wake.examples.data.hornsrev1 import V80
 
@@ -8,6 +9,10 @@ def main():
     x_pos = [100, 500, 900]  # Turbine x positions
     y_pos = [0, 0, 0]  # Turbine y positions
 
+    # Get the path to the config file relative to this script
+    script_dir = Path(__file__).parent
+    config_path = script_dir / "Env1_with_probes.yaml"
+
     # Create the wind farm environment
     env = WindFarmEnvMulti(
         turbine=V80(),  # The turbine type (py_wake Turbine object)
@@ -15,7 +20,7 @@ def main():
         y_pos=y_pos,
         n_passthrough=10,  # Number of times wind flows over the farm per episode
         turbtype="Random",  # Turbulence type
-        config="Env1_with_probes.yaml",  # Environment configuration file
+        config=str(config_path),  # Environment configuration file
         render_mode="human",  # Render mode ("human" or None)
     )
 

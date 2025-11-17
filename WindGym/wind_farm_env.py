@@ -407,11 +407,21 @@ class WindFarmEnv(gym.Env):
         if isinstance(config, (str, Path)):  #
             p = Path(str(config))
             config_str = str(config)
+            # Check if this looks like a file path (has .yaml/.yml extension or contains path separators)
+            looks_like_file = config_str.endswith(('.yaml', '.yml')) or '/' in config_str or '\\' in config_str
+
             if os.path.exists(config_str):  # treat as file
+                self.yaml_path = config_str
                 with open(config_str, "r") as f:
                     return yaml.safe_load(f) or {}
-                self.yaml_path = config_str
-            else:  # treat as string
+            elif looks_like_file:
+                # It looks like a file path but doesn't exist
+                raise FileNotFoundError(
+                    f"Config file not found: {config_str}\n"
+                    f"Current working directory: {os.getcwd()}\n"
+                    f"Make sure the path is correct or provide an absolute path."
+                )
+            else:  # treat as YAML string content
                 self.yaml_path = None
                 return yaml.safe_load(str(config)) or {}
         raise TypeError("`config` must be a dict, YAML string, or path to a YAML file.")
