@@ -311,8 +311,8 @@ class WindFarmEnv(gym.Env):
         # Asserting that the render_mode is valid.
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode  # Keep for compatibility
-        if self.render_mode is not None:
-            self.init_render()
+        # Note: init_render() is called lazily when render() is first invoked,
+        # after reset() has been called and self.fs exists
 
     def _create_yaw_initializer(self, method: str):
         """
@@ -1207,7 +1207,9 @@ class WindFarmEnv(gym.Env):
         """Render method required by Gymnasium API - delegates to renderer."""
         fs_baseline = self.fs_baseline if self.Baseline_comp else None
         probes = self.probes if hasattr(self, "probes") else None
-        return self.renderer.render(self.fs, fs_baseline, probes)
+        turbine = self.turbine if hasattr(self, "turbine") else None
+        ws = self.ws if hasattr(self, "ws") else None
+        return self.renderer.render(self.fs, fs_baseline, probes, turbine, ws)
 
     def _render_frame_for_human(self, baseline=False):
         """Render the environment and return an RGB frame - delegates to renderer."""
