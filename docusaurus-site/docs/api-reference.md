@@ -1,6 +1,6 @@
 # API Reference
 
-This page provides a reference for the main classes and functions in WindGym.
+This page provides an auto-generated reference for the main classes and functions in WindGym.
 
 ---
 
@@ -8,149 +8,218 @@ This page provides a reference for the main classes and functions in WindGym.
 
 ### `WindFarmEnv`
 
-The base wind farm environment class.
-
 ```python
 from WindGym import WindFarmEnv
-from py_wake.examples.data.hornsrev1 import V80
 
-env = WindFarmEnv(
-    turbine=V80(),           # PyWake turbine model (REQUIRED)
-    x_pos=[0, 500, 1000],    # Turbine x positions in meters (REQUIRED)
-    y_pos=[0, 0, 0],         # Turbine y positions in meters (REQUIRED)
-    config="path/to/config.yaml",  # Path to YAML configuration file
-    n_passthrough=5,         # Number of flow passthroughs (default: 5)
-    dt_sim=1,                # Simulation timestep in seconds (default: 1)
-    dt_env=1,                # Environment timestep in seconds (default: 1)
-    burn_in_passthroughs=2,  # Burn-in passthroughs (default: 2)
-    turbtype="Random",       # Turbulence type: "Random" or "MannGenerate" (default: "Random")
-    TurbBox="Default",       # Path to turbulence box file (default: "Default")
-    sample_site=None,        # PyWake Site for sampling wind conditions
-    Baseline_comp=False,     # Enable baseline comparison
-    seed=None,               # Random seed for reproducibility
-    yaw_step_sim=1,          # Max yaw change per sim step (degrees)
-    yaw_step_env=None,       # Max yaw change per env step (degrees)
-    backend="dynamiks",      # Simulation backend (default: "dynamiks")
-    render_mode=None,        # Render mode: None, "human", or "rgb_array"
+WindFarmEnv(
+    turbine,
+    x_pos,
+    y_pos,
+    n_passthrough,
+    ws_scaling_min: float,
+    ws_scaling_max: float,
+    wd_scaling_min: float,
+    wd_scaling_max: float,
+    ti_scaling_min: float,
+    ti_scaling_max: float,
+    yaw_scaling_min: float,
+    yaw_scaling_max: float,
+    TurbBox,
+    turbtype,
+    backend: str,
+    config,
+    Baseline_comp,
+    yaw_init,
+    render_mode,
+    seed,
+    dt_sim,
+    dt_env,
+    yaw_step_sim,
+    yaw_step_env,
+    fill_window,
+    sample_site,
+    HTC_path,
+    reset_init,
+    burn_in_passthroughs,
+    cleanup_on_time_limit: bool,
+    wd_function,
+    max_turb_move
 )
 ```
 
-**Note**: Wind conditions (wind speed, direction, turbulence intensity) are sampled at each `reset()` based on the `config` YAML file settings, NOT specified as constructor parameters.
-
 **Key Methods:**
 
-- `reset()`: Reset environment and return initial observation
-- `step(action)`: Execute action and return next state
-- `render()`: Visualize the environment (optional)
-- `close()`: Clean up resources
-
-**Attributes:**
-
-- `observation_space`: Gymnasium Space object defining observations
-- `action_space`: Gymnasium Space object defining actions
-- `n_wt`: Number of turbines
-- `dt_env`: Environment timestep
+- `init_render()`: Initialize rendering - delegates to renderer.
+- `reset(seed: Optional[int] = None, options: Optional[dict] = None)`: Reset the environment. This is called at the start of every episode. - The wind conditions are sampled, and the site is set. - The flow simulation is run for the time it takes for the flow to develop. - The measurements are filled up with the initial values.
+- `step(action)`: The step function 1. Adjust the yaw angles of the turbines 2. Take a step in the flow simulation 3. Update the measurements 4. Calculate the reward 5. Return the observation, reward, terminated, truncated and info
+- `render()`: Render method required by Gymnasium API - delegates to renderer.
+- `close()`: Close the environment and clean up resources.
+- `plot_farm(baseline = False, fix_turbines = False)`: Plot the entire farm layout - delegates to renderer.
+- `plot_frame(baseline = False)`: Plot a single frame - delegates to renderer.
+- `pywake_agent()`: Expose pywake_agent from baseline_manager for backward compatibility.
+- `py_agent_mode()`: Expose py_agent_mode from baseline_manager for backward compatibility.
 
 ---
 
 ### `FarmEval`
 
-Evaluation wrapper for detailed performance tracking.
-
 ```python
-from WindGym.FarmEval import FarmEval
+from WindGym import FarmEval
 
-env = FarmEval(
-    n_wt=3,
-    ws=10.0,
-    wd=270.0,
-    TI=0.06,
-    Baseline_comp=True,  # Enable baseline comparison
-    # ... other WindFarmEnv parameters
+FarmEval(
+    turbine,
+    x_pos,
+    y_pos,
+    finite_episode: bool,
+    ws_scaling_min: float,
+    ws_scaling_max: float,
+    wd_scaling_min: float,
+    wd_scaling_max: float,
+    ti_scaling_min: float,
+    ti_scaling_max: float,
+    yaw_scaling_min: float,
+    yaw_scaling_max: float,
+    yaw_init,
+    TurbBox,
+    config,
+    Baseline_comp,
+    render_mode,
+    turbtype,
+    seed,
+    dt_sim,
+    dt_env,
+    yaw_step_sim,
+    yaw_step_env,
+    n_passthrough,
+    HTC_path,
+    reset_init,
+    fill_window,
+    sample_site,
+    burn_in_passthroughs
 )
 ```
 
-**Additional Methods:**
+**Key Methods:**
 
-- `get_results()`: Return xarray.Dataset with episode results
-- `plot_flow_field(time_idx=-1, save_path=None)`: Visualize flow field
-- `get_power_time_series()`: Get power production over time
+- `reset(seed = None, options = None)`
+- `set_wind_vals(ws = None, ti = None, wd = None)`: Set the wind values to be used in the evaluation
+- `set_yaw_vals(yaw_vals)`: Set the yaw values to be used in the evaluation
+- `update_tf(path)`: Overwrite the _def_site method to set the turbulence field to the path given
 
 ---
 
 ### `WindFarmEnvMulti`
 
-Multi-agent wind farm environment (PettingZoo compatible).
-
 ```python
 from WindGym import WindFarmEnvMulti
-from py_wake.examples.data.hornsrev1 import V80
 
-env = WindFarmEnvMulti(
-    turbine=V80(),
-    x_pos=[0, 500, 1000, 0, 500, 1000],
-    y_pos=[0, 0, 0, 500, 500, 500],
-    config="path/to/config.yaml",
-    n_passthrough=5,
-    # ... other WindFarmEnv parameters
+WindFarmEnvMulti(
+    turbine,
+    x_pos,
+    y_pos,
+    n_passthrough,
+    ws_scaling_min: float,
+    ws_scaling_max: float,
+    wd_scaling_min: float,
+    wd_scaling_max: float,
+    ti_scaling_min: float,
+    ti_scaling_max: float,
+    yaw_scaling_min: float,
+    yaw_scaling_max: float,
+    TurbBox,
+    turbtype,
+    config,
+    Baseline_comp,
+    yaw_init,
+    render_mode,
+    seed,
+    dt_sim,
+    dt_env,
+    yaw_step_sim,
+    yaw_step_env,
+    fill_window,
+    sample_site,
+    HTC_path,
+    reset_init,
+    burn_in_passthroughs
 )
 ```
 
-**Key Differences:**
+**Key Methods:**
 
-- Returns dict of observations (one per agent)
-- Requires dict of actions (one per agent)
-- Compatible with PettingZoo interface
+- `render()`
+- `reset(seed = None, options = None)`
+- `step(actions)`: The step function. We unpack the actions, and call the step function of the parent class.
+- `observation_space(agent)`
+- `action_space(agent)`
 
 ---
 
 ## Wrappers
 
-### `NoisyWindFarmEnv`
+### `CurriculumWrapper`
 
-Wrapper that adds measurement noise to observations.
+Curriculum wrapper for the WindGym environment. This wrapper adds a curriculum-based similarity reward between the agent's yaw vector and a reference ("good") yaw vector produced by a PyWakeAgent. yaw_check options: - 'current': use the current yaw angles of the agent - 'goal': use the yaw angles that would have been used, with no yaw step limits (only for wind actions)  similarity_type options: - 'l2': negative L2 distance - 'l1': negative mean absolute error - 'mse': negative mean squared error - 'normalized_l2': 1 - (L2 distance / max_distance) - 'exponential': exp(-alpha * L2 distance) - 'cosine': cosine similarity - 'huber': negative Huber loss weight_function: function(step: int) -> float in [0,1], weighting env reward vs. similarity 1 = env reward, 0 = similarity
 
 ```python
-from WindGym.core import NoisyWindFarmEnv, MeasurementManager, WhiteNoiseModel
+from WindGym.wrappers import CurriculumWrapper
 
-manager = MeasurementManager(base_env)
-manager.set_noise_model('wd', WhiteNoiseModel({MeasurementType.WIND_DIRECTION: 2.0}))
-noisy_env = NoisyWindFarmEnv(base_env, manager)
+CurriculumWrapper(
+    env: gym.Env,
+    n_envs: int,
+    similarity_type: str,
+    yaw_check: str,
+    weight_function,
+    huber_kappa: float,
+    exp_alpha: float
+)
 ```
 
-**Info Dictionary Additions:**
+**Key Methods:**
 
-- `info['clean_obs']`: Clean (ground truth) observations
-- `info['noise_info']`: Dictionary of applied noise for each measurement
+- `reset(**kwargs)`: Reset the environment and the pywake agent.
+- `step(action)`: Take a step in the environment and calculate the reward based on the similarity between the yaw angles of the agent and the pywake agent.
 
 ---
 
 ### `RecordEpisodeVals`
 
-Records episode statistics.
+This wraps the RecordEpisodeStatistics Wrapper. It also adds a queue to store the mean power of the episodes. This is used for the logging during training. Could also be expanded upon to include more statistics if wanted.
 
 ```python
 from WindGym.wrappers import RecordEpisodeVals
 
-env = RecordEpisodeVals(base_env)
+RecordEpisodeVals(
+    env: VectorEnv,
+    buffer_length
+)
 ```
+
+**Key Methods:**
+
+- `reset(seed: int | list[int] | None = None, options: dict | None = None)`
+- `step(actions: ActType)`: Steps through the environment, recording the episode statistics.
 
 ---
 
-### `CurriculumWrapper`
+### `NoisyWindFarmEnv`
 
-Implements curriculum learning by gradually increasing difficulty.
+A Gym wrapper that applies measurement errors to a base WindFarm environment.
 
 ```python
-from WindGym.wrappers import CurriculumWrapper
+from WindGym.core import NoisyWindFarmEnv
 
-env = CurriculumWrapper(
-    base_env,
-    initial_difficulty=0.5,
-    max_difficulty=1.0,
-    increase_rate=0.01
+NoisyWindFarmEnv(
+    base_env_class,
+    measurement_manager: MeasurementManager
 )
 ```
+
+**Key Methods:**
+
+- `reset()`
+- `step(action: np.ndarray)`
+- `close()`
 
 ---
 
@@ -158,133 +227,126 @@ env = CurriculumWrapper(
 
 ### `BaseAgent`
 
-Base class for all agents.
-
 ```python
-from WindGym.Agents.BaseAgent import BaseAgent
+from WindGym.Agents import BaseAgent
 
-class MyAgent(BaseAgent):
-    def predict(self, obs):
-        """
-        Generate action from observation.
-
-        Args:
-            obs (np.ndarray): Current observation
-
-        Returns:
-            action (np.ndarray): Action to take
-            state: Optional agent state
-        """
-        # Your control logic here
-        action = ...
-        return action, None
+BaseAgent(
+    yaw_max,
+    yaw_min
+)
 ```
 
-**Helper Methods:**
+**Key Methods:**
 
-- `scale_yaw(yaw_angles)`: Scale yaw angles to [-1, 1] action space
-- `unscale_yaw(scaled_actions)`: Convert scaled actions back to degrees
+- `predict(*args, **kwargs)`
+- `scale_yaw(yaws)`: Scale the yaw angles to be between -1 and 1.
+- `unscale_yaw(action)`: Unscale the action to the yaw range.
 
 ---
 
 ### `PyWakeAgent`
 
-Optimal static yaw control using PyWake optimization.
-
 ```python
 from WindGym.Agents import PyWakeAgent
-from py_wake.examples.data.hornsrev1 import V80
 
-agent = PyWakeAgent(
-    x_pos=[0, 500, 1000],    # Turbine x positions (REQUIRED)
-    y_pos=[0, 0, 0],         # Turbine y positions (REQUIRED)
-    turbine=V80(),           # PyWake turbine model (default: V80())
-    wind_speed=8,            # Default wind speed for optimization (default: 8)
-    wind_dir=270,            # Default wind direction (default: 270)
-    TI=0.07,                 # Turbulence intensity (default: 0.07)
-    yaw_max=45,              # Max yaw angle (default: 45)
-    yaw_min=-45,             # Min yaw angle (default: -45)
-    env=None,                # Optional environment reference
+PyWakeAgent(
+    x_pos,
+    y_pos,
+    wind_speed,
+    wind_dir,
+    TI,
+    yaw_max,
+    yaw_min,
+    refine_pass_n,
+    yaw_n,
+    look_up,
+    turbine,
+    env
 )
-
-action, _ = agent.predict(obs)
 ```
 
-**Behavior:**
+**Key Methods:**
 
-- Computes optimal yaw angles for current wind conditions
-- Uses PyWake's internal optimization
-- Does not adapt to observation changes during episode
+- `update_wind(wind_speed, wind_direction, TI)`: Update the wind conditions for the agent.
+- `make_lookup()`: Create a lookup table for the yaw angles. This is done as we can save time by doing it once and then use it later.
+- `use_lookup()`: Use the lookup table to get the yaw angles for the current wind conditions.
+- `reset()`: Reset the wind things for the objective.
+- `optimize()`: Optimizes the yaw angles of the wind farm.
+- `predict(*args, **kwargs)`: This class pretends to be an agent, so we need to have a predict function. If we havent called the optimize function, we do that now, and return the action Note that we dont use the obs or the deterministic arguments. Note that the command yaw offset is __always__ defined relative to the incoming wind direction
+- `calc_power(yaws)`: Calculates the power of the farm, given the yaw angles. Inputs are the yaw angles in degrees. Returns the total power of the farm.
+- `plot_flow()`: Plot the flowfield of the wind farm.
 
 ---
 
 ### `NoisyPyWakeAgent`
 
-Robust variant of PyWakeAgent for noisy observations.
+A version of the PyWakeAgent that makes decisions based on noisy observations.  Unlike the base PyWakeAgent which gets perfect global wind conditions, this agent must estimate the wind conditions from the observation vector it receives at each step. It then re-runs its optimization based on this imperfect, noisy information.
 
 ```python
 from WindGym.Agents import NoisyPyWakeAgent
-from py_wake.examples.data.hornsrev1 import V80
 
-agent = NoisyPyWakeAgent(
-    x_pos=[0, 500, 1000],    # Turbine x positions (REQUIRED)
-    y_pos=[0, 0, 0],         # Turbine y positions (REQUIRED)
-    turbine=V80(),           # PyWake turbine model
-    # ... other PyWakeAgent parameters
+NoisyPyWakeAgent(
+    measurement_manager: MeasurementManager
 )
-
-action, _ = agent.predict(obs)
 ```
 
-**Behavior:**
+**Key Methods:**
 
-- Averages multiple wind measurements to estimate true conditions
-- More robust to measurement noise than standard PyWakeAgent
+- `predict(obs, deterministic = None)`: This method now uses the observation to make a decision.
 
 ---
 
 ### `GreedyAgent`
 
-Simple reactive agent that aligns turbines with wind.
-
 ```python
-from WindGym.Agents.GreedyAgent import GreedyAgent
+from WindGym.Agents import GreedyAgent
 
-agent = GreedyAgent(env, use_global_wind=True)
-action, _ = agent.predict(obs)
+GreedyAgent(
+    type,
+    yaw_max,
+    yaw_min,
+    yaw_step,
+    env
+)
 ```
 
-**Parameters:**
+**Key Methods:**
 
-- `use_global_wind` (bool): Use global wind direction vs local measurements
+- `predict(*args, **kwargs)`: This class pretends to be an agent, so we need to have a predict function. If we havent called the optimize function, we do that now, and return the action Note that we dont use the obs or the deterministic arguments.
 
 ---
 
 ### `RandomAgent`
 
-Takes random actions within action space.
-
 ```python
-from WindGym.Agents.RandomAgent import RandomAgent
+from WindGym.Agents import RandomAgent
 
-agent = RandomAgent(env)
-action, _ = agent.predict(obs)
+RandomAgent(
+    env
+)
 ```
+
+**Key Methods:**
+
+- `predict(*args, **kwargs)`: This class pretends to be an agent, so we need to have a predict function. If we havent called the optimize function, we do that now, and return the action Note that we dont use the obs or the deterministic arguments.
 
 ---
 
 ### `ConstantAgent`
 
-Maintains fixed yaw angles.
-
 ```python
-from WindGym.Agents.ConstantAgent import ConstantAgent
-import numpy as np
+from WindGym.Agents import ConstantAgent
 
-yaw_angles = np.array([0.0, 5.0, -5.0])  # degrees
-agent = ConstantAgent(env, yaw_angles=yaw_angles)
-action, _ = agent.predict(obs)
+ConstantAgent(
+    yaw_angles,
+    yaw_max,
+    yaw_min
+)
 ```
+
+**Key Methods:**
+
+- `predict(*args, **kwargs)`: This class pretends to be an agent, so we need to have a predict function. If we havent called the optimize function, we do that now, and return the action Note that we dont use the obs or the deterministic arguments.
 
 ---
 
@@ -292,70 +354,80 @@ action, _ = agent.predict(obs)
 
 ### `WhiteNoiseModel`
 
-Adds independent Gaussian noise at each timestep.
+Applies Gaussian white noise defined in physical units (e.g., m/s, degrees).
 
 ```python
-from WindGym.core import WhiteNoiseModel, MeasurementType
+from WindGym.core import WhiteNoiseModel
 
-noise_model = WhiteNoiseModel({
-    MeasurementType.WIND_DIRECTION: 2.0,  # 2 degrees std dev
-    MeasurementType.WIND_SPEED: 0.5,      # 0.5 m/s std dev
-})
+WhiteNoiseModel(
+    noise_std_devs: Dict[MeasurementType, float]
+)
 ```
+
+**Key Methods:**
+
+- `apply_noise(observations: np.ndarray, specs: List[MeasurementSpec], rng: np.random.Generator)`
+- `get_info()`
 
 ---
 
 ### `EpisodicBiasNoiseModel`
 
-Adds consistent bias throughout an episode.
+Applies a consistent bias for an entire episode, defined in physical units.
 
 ```python
-from WindGym.core import EpisodicBiasNoiseModel, MeasurementType
+from WindGym.core import EpisodicBiasNoiseModel
 
-noise_model = EpisodicBiasNoiseModel({
-    MeasurementType.WIND_DIRECTION: 5.0  # 5 degrees bias std dev
-})
+EpisodicBiasNoiseModel(
+    bias_ranges: Dict[MeasurementType, Tuple[float, float]]
+)
 ```
+
+**Key Methods:**
+
+- `reset_noise(specs: List[MeasurementSpec], rng: np.random.Generator)`
+- `apply_noise(observations: np.ndarray, specs: List[MeasurementSpec], rng: np.random.Generator)`: Applies the sampled episodic bias to the given observations.
+- `get_info()`
 
 ---
 
 ### `HybridNoiseModel`
 
-Combines white noise and episodic bias.
-
 ```python
-from WindGym.core import HybridNoiseModel, MeasurementType
+from WindGym.core import HybridNoiseModel
 
-noise_model = HybridNoiseModel(
-    white_noise_std={MeasurementType.WIND_DIRECTION: 2.0},
-    episodic_bias_std={MeasurementType.WIND_DIRECTION: 5.0}
+HybridNoiseModel(
+    models: List[NoiseModel]
 )
 ```
+
+**Key Methods:**
+
+- `reset_noise(specs: List[MeasurementSpec], rng: np.random.Generator)`
+- `apply_noise(observations: np.ndarray, specs: List[MeasurementSpec], rng: np.random.Generator)`
+- `get_info()`
 
 ---
 
 ### `MeasurementManager`
 
-Manages noise application to observations.
+Orchestrates measurement specifications and the application of noise.
 
 ```python
-from WindGym.core import MeasurementManager, WhiteNoiseModel, MeasurementType
+from WindGym.core import MeasurementManager
 
-manager = MeasurementManager(env)
-
-# Configure noise for specific measurement types
-wd_noise = WhiteNoiseModel({MeasurementType.WIND_DIRECTION: 2.0})
-ws_noise = WhiteNoiseModel({MeasurementType.WIND_SPEED: 0.5})
-
-manager.set_noise_model(MeasurementType.WIND_DIRECTION, wd_noise)
-manager.set_noise_model(MeasurementType.WIND_SPEED, ws_noise)
+MeasurementManager(
+    env,
+    seed
+)
 ```
 
-**Methods:**
+**Key Methods:**
 
-- `set_noise_model(measurement_type, noise_model)`: Configure noise for a measurement
-- `apply_noise(clean_obs, reset=False)`: Apply noise to clean observations
-- `get_measurement_spec()`: Get specification of all measurements
+- `seed(seed: Optional[int] = None)`: Reseeds the random number generator for the noise model.
+- `set_noise_model(noise_model: NoiseModel)`
+- `reset_noise()`
+- `apply_noise(clean_observations: np.ndarray)`
 
 ---
 
@@ -363,163 +435,37 @@ manager.set_noise_model(MeasurementType.WIND_SPEED, ws_noise)
 
 ### `Coliseum`
 
-Multi-agent evaluation framework.
+Enhanced evaluation framework to compare multiple agents in WindFarm environments.  Features: - Time series evaluation with detailed episode history - Wind condition grid evaluation with NetCDF export - Mean cumulative reward tracking - Flexible agent management with custom labels - Comprehensive plotting capabilities
 
 ```python
 from WindGym.utils.evaluate_PPO import Coliseum
 
-coliseum = Coliseum(
-    env_factory=create_env,  # Function that returns new environment
-    agents=agent_dict         # Dictionary of {name: agent}
+Coliseum(
+    env_factory: Callable,
+    agents: Union[Dict[str, object], List[object]],
+    agent_labels: Optional[List[str]],
+    n_passthrough: float,
+    burn_in_passthroughs: float
 )
 ```
 
-**Methods:**
+**Key Methods:**
 
-- `run_time_series_evaluation(n_episodes, save_histories=False)`: Stochastic evaluation
-- `run_wind_grid_evaluation(wind_speeds, wind_directions, turbulence_intensities)`: Grid evaluation
-- `plot_time_series_rewards(results, save_path=None)`: Plot time series
-- `plot_summary_bar_chart(results, metric='mean_reward')`: Compare agents
-
-**Returns:**
-
-- Time series: pandas.DataFrame with episode statistics
-- Grid: xarray.Dataset with results across wind conditions
+- `run_time_series_evaluation(num_episodes: int = 10, seed: int = 42, deterministic: bool = True, save_detailed_history: bool = True)`: Run time series evaluation with stochastic wind conditions using sample_site.  This method relies on the environment's sample_site for realistic wind sampling. Each episode will have different wind conditions sampled from the site's wind resource distributions (Weibull for wind speed, frequency for direction).
+- `run_wind_grid_evaluation(wd_step: int = 10, ws_step: int = 2, ti_points: int = 3, wd_min: Optional[float] = None, wd_max: Optional[float] = None, ws_min: Optional[float] = None, ws_max: Optional[float] = None, ti_min: Optional[float] = None, ti_max: Optional[float] = None, deterministic: bool = True, save_netcdf: Optional[str] = None)`: Run evaluation over a grid of wind conditions and return as xarray Dataset.
+- `plot_time_series_comparison(episodes_to_plot: Optional[List[int]] = None, save_path: str = 'time_series_comparison.png')`: Plot time series comparison of mean cumulative rewards.
+- `plot_summary_comparison(save_path: str = 'summary_comparison.png')`: Plot summary comparison showing average performance across all episodes.
+- `plot_wind_grid_results(dataset: xr.Dataset, agent_name: Optional[str] = None, save_path: str = 'wind_grid_results.png')`: Plot wind grid evaluation results as heatmaps.
+- `get_summary_statistics()`: Get summary statistics for all agents across all episodes.
+- `create_env_factory_with_site(env_class, site, **env_kwargs)`: Helper method to create an environment factory with sample_site configured.
 
 ---
 
 ## Utility Functions
 
-### `generate_layouts`
+### Layout Generation
 
 Generate wind farm turbine layouts.
-
-```python
-from WindGym.utils import generate_layouts
-
-# Generate grid layout
-x_pos, y_pos = generate_layouts.grid_layout(
-    n_rows=2,
-    n_cols=3,
-    spacing_x=500,  # meters
-    spacing_y=500
-)
-
-# Generate circular layout
-x_pos, y_pos = generate_layouts.circular_layout(
-    n_turbines=6,
-    radius=1000  # meters
-)
-```
-
----
-
-## Configuration
-
-### YAML Configuration File
-
-WindGym uses YAML files to configure observations, actions, and rewards.
-
-**Example `config.yaml`:**
-
-```yaml
-# Observation configuration
-observations:
-  turbine_level:
-    - ws
-    - wd
-    - yaw
-    - power
-  farm_level:
-    - ws_mean
-    - total_power
-  include_history: true
-  history_length: 10
-
-# Action configuration
-ActionMethod: "yaw" # or "wind"
-yaw_min: -30
-yaw_max: 30
-yaw_step_env: 3.0
-
-# Reward configuration
-power_reward: "Baseline" # or "Power_avg", "Power_diff", "None"
-Power_scaling: 1.0
-action_penalty: "Change" # or "Total", "None"
-penalty_scaling: 0.01
-```
-
----
-
-## Data Structures
-
-### Observation Space
-
-Observations are returned as flattened numpy arrays with values scaled to [-1, 1].
-
-**Structure depends on YAML configuration:**
-
-- Turbine-level measurements: repeated for each turbine
-- Farm-level measurements: single values
-- History: past N observations concatenated
-
-**Example:**
-
-```
-obs = [ws_t1, wd_t1, yaw_t1, power_t1, ws_t2, wd_t2, yaw_t2, power_t2, ..., ws_farm, total_power]
-```
-
----
-
-### Action Space
-
-Actions are numpy arrays of length `n_wt`, with values in [-1, 1] representing:
-
-- **"yaw" method**: Change in yaw angle (scaled)
-- **"wind" method**: Target yaw offset from wind direction (scaled)
-
----
-
-### Info Dictionary
-
-The `info` dict returned by `step()` contains:
-
-**Standard keys:**
-
-- `'episode'`: Episode statistics (if terminated)
-- `'TimeLimit.truncated'`: Whether episode was truncated by time limit
-
-**FarmEval additions:**
-
-- `'power'`: Current power output per turbine
-- `'yaw'`: Current yaw angles
-- `'ws'`, `'wd'`: Current wind conditions
-
-**NoisyWindFarmEnv additions:**
-
-- `'clean_obs'`: Ground truth observations
-- `'noise_info'`: Applied noise details
-
----
-
-## Type Definitions
-
-```python
-# Observation
-ObsType = np.ndarray  # Shape: (obs_dim,)
-
-# Action
-ActType = np.ndarray  # Shape: (n_wt,)
-
-# Info
-InfoDict = Dict[str, Any]
-
-# Step return
-StepReturn = Tuple[ObsType, float, bool, bool, InfoDict]
-
-# Reset return
-ResetReturn = Tuple[ObsType, InfoDict]
-```
 
 ---
 

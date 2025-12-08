@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+echo "[✓] Generating API reference documentation..."
+python ../scripts/generate_api_docs.py
+echo "[✓] Successfully generated API reference"
+
 echo "[✓] Converting simulations.ipynb to Markdown..."
 # Ensure the .ipynb file exists in docs/
 if [ -f "docs/simulations.ipynb" ]; then
