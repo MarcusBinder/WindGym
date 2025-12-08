@@ -145,12 +145,28 @@ def post_process_markdown(content):
     if content.startswith("WindGym API Reference\n"):
         content = content.replace("WindGym API Reference\n", "# API Reference\n", 1)
 
-    # Ensure there's a separator after the intro
-    if "# API Reference\n\nThis page provides" in content:
-        content = content.replace(
-            "# API Reference\n\nThis page provides",
-            "# API Reference\n\nThis page provides", 1
-        )
+    # Escape curly braces for MDX compatibility
+    # MDX treats { and } as JSX expression delimiters, so we need to escape them
+    # Split by code blocks to avoid escaping inside code
+    parts = []
+    in_code_block = False
+    lines = content.split('\n')
+
+    for line in lines:
+        # Check if we're entering/exiting a code block
+        if line.strip().startswith('```'):
+            in_code_block = not in_code_block
+            parts.append(line)
+        elif in_code_block:
+            # Don't escape inside code blocks
+            parts.append(line)
+        else:
+            # Escape curly braces outside code blocks
+            # Replace { with \{ and } with \}
+            line = line.replace('{', '\\{').replace('}', '\\}')
+            parts.append(line)
+
+    content = '\n'.join(parts)
 
     return content
 

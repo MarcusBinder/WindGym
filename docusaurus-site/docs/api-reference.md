@@ -8,7 +8,7 @@ This page provides an auto-generated reference for the main classes and function
 
 Bases: `Env`
 
-#### metadata *= {'render_modes': ['human', 'rgb_array']}*
+#### metadata *= \{'render_modes': ['human', 'rgb_array']\}*
 
 #### \_\_init_\_(turbine, x_pos, y_pos, n_passthrough=5, ws_scaling_min=0.0, ws_scaling_max=30.0, wd_scaling_min=0, wd_scaling_max=360, ti_scaling_min=0.0, ti_scaling_max=1.0, yaw_scaling_min=-45, yaw_scaling_max=45, TurbBox='Default', turbtype='Random', backend='dynamiks', config=None, Baseline_comp=False, yaw_init=None, render_mode=None, seed=None, dt_sim=1, dt_env=1, yaw_step_sim=1, yaw_step_env=None, fill_window=True, sample_site=None, HTC_path=None, reset_init=True, burn_in_passthroughs=2, cleanup_on_time_limit=True, wd_function=None, max_turb_move=2, \*\*kwargs)
 
@@ -99,7 +99,7 @@ Expose py_agent_mode from baseline_manager for backward compatibility.
 
 Bases: [`WindFarmEnv`](#WindGym.WindFarmEnv)
 
-#### metadata *= {'render_modes': ['human', 'rgb_array']}*
+#### metadata *= \{'render_modes': ['human', 'rgb_array']\}*
 
 #### \_\_init_\_(turbine, x_pos, y_pos, finite_episode=False, ws_scaling_min=0.0, ws_scaling_max=30.0, wd_scaling_min=0, wd_scaling_max=360, ti_scaling_min=0.0, ti_scaling_max=1.0, yaw_scaling_min=-45, yaw_scaling_max=45, yaw_init='Zeros', TurbBox='Default', config=None, Baseline_comp=False, render_mode=None, turbtype='MannGenerate', seed=None, dt_sim=1, dt_env=1, yaw_step_sim=1, yaw_step_env=None, n_passthrough=5, HTC_path=None, reset_init=True, fill_window=True, sample_site=None, burn_in_passthroughs=2)
 
@@ -161,7 +161,7 @@ Overwrite the \_def_site method to set the turbulence field to the path given
 
 Bases: `ParallelEnv`, [`WindFarmEnv`](#WindGym.WindFarmEnv)
 
-#### metadata *= {'name': 'MultiFarm_environment_v0', 'render_modes': ['human', 'rgb_array']}*
+#### metadata *= \{'name': 'MultiFarm_environment_v0', 'render_modes': ['human', 'rgb_array']\}*
 
 #### \_\_init_\_(turbine, x_pos, y_pos, n_passthrough=20, ws_scaling_min=0.0, ws_scaling_max=30.0, wd_scaling_min=0, wd_scaling_max=360, ti_scaling_min=0.0, ti_scaling_max=1.0, yaw_scaling_min=-45, yaw_scaling_max=45, TurbBox='Default', turbtype='MannGenerate', config=None, Baseline_comp=False, yaw_init=None, render_mode=None, seed=None, dt_sim=1, dt_env=1, yaw_step_sim=1, yaw_step_env=1, fill_window=True, sample_site=None, HTC_path=None, reset_init=False, burn_in_passthroughs=2)
 
@@ -584,7 +584,7 @@ Initialize the Coliseum evaluation framework.
 * **Parameters:**
   * **env_factory** (*Callable*) – Function that returns a new environment instance.
     Example: lambda: WindFarmEnv(…)
-  * **agents** (*Union* *[**Dict* *[**str* *,* *object* *]* *,* *List* *[**object* *]* *]*) – Either a dictionary {name: agent} or list of agent objects.
+  * **agents** (*Union* *[**Dict* *[**str* *,* *object* *]* *,* *List* *[**object* *]* *]*) – Either a dictionary \{name: agent\} or list of agent objects.
     All agents must have a .predict(obs, deterministic) method.
   * **agent_labels** (*Optional* *[**List* *[**str* *]* *]*) – Custom labels for agents when using list input.
     If None, defaults to “Agent_0”, “Agent_1”, etc.
