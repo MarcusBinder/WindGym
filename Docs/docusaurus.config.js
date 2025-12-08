@@ -28,7 +28,7 @@ const config = {
           routeBasePath: "/", // Serve docs from the root
           sidebarPath: require.resolve("./sidebars.js"),
           editUrl:
-            "https://gitlab.windenergy.dtu.dk/sys/windgym/dino_docs/-/edit/main/docusaurus-site",
+            "https://gitlab.windenergy.dtu.dk/sys/windgym/-/edit/main/Docs",
           // === TEMPORARILY REMOVE ALL remarkPlugins and rehypePlugins FOR TESTING ===
           // remarkPlugins: [], // No plugins for now
           // rehypePlugins: [], // No plugins for now
