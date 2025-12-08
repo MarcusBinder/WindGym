@@ -12,6 +12,10 @@ const config = {
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
   favicon: "img/favicon.ico",
+  // Use plain markdown format to avoid MDX parsing issues with auto-generated API docs
+  markdown: {
+    format: "md",
+  },
   // GitHub pages deployment config.
   organizationName: "DTU Wind Energy Systems",
   projectName: "WindGym",
