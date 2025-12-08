@@ -164,3 +164,8 @@ cython_debug/
 #.idea/
 .ruff_cache
 WindGym/version.py
+
+# Sphinx build outputs
+docs_sphinx/_build/
+docs_sphinx/_static/
+docs_sphinx/_templates/

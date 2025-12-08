@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-echo "[✓] Generating API reference documentation..."
-python ../scripts/generate_api_docs.py
+echo "[✓] Generating API reference documentation with Sphinx..."
+python ../scripts/generate_api_docs_sphinx.py
 echo "[✓] Successfully generated API reference"
 
 echo "[✓] Converting simulations.ipynb to Markdown..."

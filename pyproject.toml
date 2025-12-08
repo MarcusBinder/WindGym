@@ -37,6 +37,11 @@ dependencies = [
 
 [project.optional-dependencies]
 hawc2 = ["h2lib", "wetb"]
+docs = [
+  "sphinx>=7.0.0",
+  "myst-parser>=2.0.0",
+  "sphinx-markdown-builder>=0.6.0",
+]
 
 [tool.setuptools]
 packages = ["WindGym"]
