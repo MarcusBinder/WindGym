@@ -1,9 +1,3 @@
-# API Reference
-
-This page provides an auto-generated reference for the main classes and functions in WindGym.
-
----
-
 # WindGym API Reference
 
 This page provides an auto-generated reference for the main classes and functions in WindGym.
@@ -748,14 +742,6 @@ Create a staggered grid of turbines with column- or row-based offsets.
 ### WindGym.utils.generate_layouts.plot_farm(x, y, turbine=None, D=None)
 
 Plots the turbines in the farm layout, and their minimum distance to the closest turbine
-
-## Related Pages
-
-- [Core Concepts](concepts.md) - Detailed explanations of key concepts
-- [Agents](agents.md) - Agent development guide
-- [Simulations](simulations.md) - Running simulations
-- [Evaluations](evaluations.md) - Evaluation tools and methods
-
 
 ## Related Pages
 

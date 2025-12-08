@@ -138,22 +138,21 @@ def build_sphinx_docs():
 
 def post_process_markdown(content):
     """Post-process the generated markdown for Docusaurus compatibility."""
-    # Add header
-    md = "# API Reference\n\n"
-    md += "This page provides an auto-generated reference for the main classes and functions in WindGym.\n\n"
-    md += "---\n\n"
+    # Sphinx already includes the header and footer from index.rst,
+    # so we just need to clean up the markdown a bit
 
-    # For now, just add the content
-    md += content
+    # Replace the RST-style header with markdown
+    if content.startswith("WindGym API Reference\n"):
+        content = content.replace("WindGym API Reference\n", "# API Reference\n", 1)
 
-    # Add related pages footer
-    md += "\n\n## Related Pages\n\n"
-    md += "- [Core Concepts](concepts.md) - Detailed explanations of key concepts\n"
-    md += "- [Agents](agents.md) - Agent development guide\n"
-    md += "- [Simulations](simulations.md) - Running simulations\n"
-    md += "- [Evaluations](evaluations.md) - Evaluation tools and methods\n"
+    # Ensure there's a separator after the intro
+    if "# API Reference\n\nThis page provides" in content:
+        content = content.replace(
+            "# API Reference\n\nThis page provides",
+            "# API Reference\n\nThis page provides", 1
+        )
 
-    return md
+    return content
 
 
 def main():
