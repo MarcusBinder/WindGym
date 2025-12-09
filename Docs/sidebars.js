@@ -22,40 +22,28 @@ const sidebars = {
       ],
     },
 
-    // Reference
+    // API Reference
     {
       type: "category",
-      label: "Reference",
+      label: "API Reference",
       collapsible: true,
       collapsed: false,
+      link: {
+        type: "doc",
+        id: "api/index",
+      },
       items: [
-        "api-reference",
-        {
-          type: "category",
-          label: "API (Auto-generated)",
-          collapsible: true,
-          collapsed: true,
-          items: [
-            "api/index",
-            {
-              type: "category",
-              label: "Modules",
-              collapsible: true,
-              collapsed: true,
-              items: [
-                "api/modules/windgym",
-                "api/modules/core",
-                "api/modules/agents",
-                "api/modules/wrappers",
-                "api/modules/visualization",
-                "api/modules/utils",
-              ],
-            },
-          ],
-        },
-        "troubleshooting",
+        "api/modules/windgym",
+        "api/modules/core",
+        "api/modules/agents",
+        "api/modules/wrappers",
+        "api/modules/visualization",
+        "api/modules/utils",
       ],
     },
+
+    // Other Reference
+    "troubleshooting",
 
     // Contributing
     "developer-guidelines",
