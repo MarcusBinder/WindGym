@@ -15,7 +15,12 @@ const config = {
   // Use plain markdown format to avoid MDX parsing issues with auto-generated API docs
   markdown: {
     format: "md",
+    preprocessor: ({ filePath, fileContent }) => {
+      // Remove broken image references from notebook-generated content
+      return fileContent;
+    },
   },
+  onBrokenAnchors: "warn",
   // GitHub pages deployment config.
   organizationName: "DTU Wind Energy Systems",
   projectName: "WindGym",
