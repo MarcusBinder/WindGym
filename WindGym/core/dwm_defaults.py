@@ -16,6 +16,9 @@ particles automatically and side-by-side layouts still carry wakes.
 """
 from __future__ import annotations
 
+import inspect
+import warnings
+
 import numpy as np
 
 from dynamiks.dwm import DWMFlowSimulation
@@ -85,6 +88,38 @@ def make_wts(x, y, windTurbine) -> PyWakeWindTurbines:
         rotorAvgModel=CGIRotorAvg(ROTOR_AVG_N),
         turbulenceIntensityModel = TISensor(mean_method=MeanMethod.TURBULENCE_TRANSPORT_SPEED, T=600),
     )
+
+
+# Set once a dropped-kwargs warning has been emitted, so we only warn once per
+# process even though make_dwm() runs once per episode reset.
+_dwm_speed_kwargs_warned = False
+
+
+def _dwm_speed_kwargs(interpolation, lateral_cutoff) -> dict:
+    """Build the DWMFlowSimulation kwargs for the proj/fast speedups.
+
+    The installed `dynamiks` submodule may predate the `interpolation` /
+    `lateral_cutoff` speedups (they live on a separate `dynamiks` branch that
+    cannot currently be merged into the pinned one). Only pass kwargs that
+    `DWMFlowSimulation.__init__` actually accepts, so WindGym keeps working
+    against an older dynamiks; warn once per process about anything dropped.
+    """
+    global _dwm_speed_kwargs_warned
+
+    candidates = {"interpolation": interpolation, "lateral_cutoff": lateral_cutoff}
+    supported = inspect.signature(DWMFlowSimulation.__init__).parameters
+    kwargs = {name: value for name, value in candidates.items() if name in supported}
+    dropped = [name for name in candidates if name not in supported]
+
+    if dropped and not _dwm_speed_kwargs_warned:
+        _dwm_speed_kwargs_warned = True
+        warnings.warn(
+            f"The installed dynamiks predates the proj/fast DWM speedups; "
+            f"dropping unsupported DWMFlowSimulation kwarg(s): {', '.join(dropped)}.",
+            stacklevel=2,
+        )
+
+    return kwargs
 
 
 def make_dwm(
@@ -158,9 +193,9 @@ def make_dwm(
         # Speedups, not part of the LES calibration (which ran pchip / no
         # cutoff, the defaults here): linear centerline interpolation and the
         # lateral interaction cutoff. WindFarmEnv passes its own settings
-        # (default linear / 1.5, as in the Stage-6 sweeps).
-        interpolation=interpolation,
-        lateral_cutoff=lateral_cutoff,
+        # (default linear / 1.5, as in the Stage-6 sweeps). Only forwarded
+        # when the installed dynamiks accepts them; see _dwm_speed_kwargs.
+        **_dwm_speed_kwargs(interpolation, lateral_cutoff),
     )
 
 
