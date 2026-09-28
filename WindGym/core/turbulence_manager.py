@@ -8,18 +8,21 @@ for wind farm simulations. Supports multiple turbulence generation strategies.
 from typing import Union, Optional
 from pathlib import Path
 import numpy as np
-import math
 import copy
 import gc
+import os
+import warnings
 
 from dynamiks.sites.turbulence_fields import MannTurbulenceField, RandomTurbulence
-from dynamiks.sites._site import MetmastSite, TurbulenceFieldSite
-from dynamiks.sites.mean_wind import ConstantWindSpeedProfile
+from dynamiks.sites._site import MetmastSite
 from dynamiks.dwm.added_turbulence_models import (
     AutoScalingIsotropicMannTurbulence,
     BranlardScaling,
     SynchronizedAutoScalingIsotropicMannTurbulence,
 )
+
+from .episode_timing import episode_time_parameters, max_wd_step
+from .precursor_source import PrecursorSource
 
 import inspect
 
@@ -103,19 +106,40 @@ class TurbulenceManager:
 
         # Precursor sidecar: memmap + meta opened once, reused across resets.
         # The per-episode start-time window (seconds into the box) is sampled
-        # in create_sites; exposed here for logging/tests.
-        self.precursor_meta = None
-        self._precursor_uvw = None
-        self.window_offset_s = 0.0
+        # in create_sites; exposed via window_offset_s for logging/tests.
+        self._precursor = None
         if turbulence_type == "Precursor":
-            if not turbulence_box_path:
-                raise FileNotFoundError(
-                    "Provide 'TurbBox' (precursor .nc or sidecar .npy/.meta.npz "
-                    "path) for turbtype='Precursor'."
-                )
-            from dynamiks.sites.precursor import load_sidecar
+            self._precursor = PrecursorSource(turbulence_box_path)
 
-            self._precursor_uvw, self.precursor_meta = load_sidecar(turbulence_box_path)
+    # -- precursor state (delegating properties; None/0.0 without a precursor)
+    @property
+    def precursor_meta(self):
+        return self._precursor.meta if self._precursor is not None else None
+
+    @property
+    def window_offset_s(self) -> float:
+        return self._precursor.window_offset_s if self._precursor is not None else 0.0
+
+    @property
+    def _precursor_uvw(self):
+        return self._precursor.uvw if self._precursor is not None else None
+
+    def set_turbulence_files(self, files) -> None:
+        """Replace the MannLoad file list (e.g. to pin one box for an evaluation).
+
+        Only the ``MannLoad`` branch reads the list; under any other
+        turbulence type the call has no effect, so it warns instead of
+        raising (evaluators pass ``turbbox`` regardless of the env's type).
+        """
+        if isinstance(files, (str, os.PathLike)):
+            files = [files]
+        self.turbulence_files = list(files)
+        if self.turbulence_type != "MannLoad":
+            warnings.warn(
+                f"set_turbulence_files() has no effect under turbulence_type="
+                f"{self.turbulence_type!r}; only 'MannLoad' reads the file list.",
+                stacklevel=2,
+            )
 
     def create_sites(
         self,
@@ -199,14 +223,9 @@ class TurbulenceManager:
         )
 
         # Calculate wind direction change rate limit
-        turb_pos = turbine_positions
-        center = (turb_pos.max(0) + turb_pos.min(0)) / 2
-        distances = np.sqrt(np.sum((turb_pos - center) ** 2, axis=1))
-        max_dist = np.max(distances)
-        # If only 1 turbine, max_dist is half rotor diameter
-        max_dist = max(max_dist, rotor_diameter / 2)
-
-        d_theta_lim = self.max_turb_move * 360 / (2 * np.pi * max_dist)
+        d_theta_lim = max_wd_step(
+            turbine_positions, rotor_diameter, self.max_turb_move
+        )
 
         if self.turbulence_type == "Precursor":
             self._check_precursor_episode(
@@ -223,32 +242,7 @@ class TurbulenceManager:
 
         def _make_site(tf):
             if self.turbulence_type == "Precursor":
-                from dynamiks.sites.precursor import n_ramp_offset
-
-                meta = self.precursor_meta
-                U = float(meta["advection_speed"])
-                profile = ConstantWindSpeedProfile(
-                    wsTab=meta["wsTab"], zTab=meta["z"], Uadv=U
-                )
-                n_y = int(meta["Nxyz"][1])
-                dy = float(meta["dxyz"][1])
-                y_center = float(
-                    (turbine_positions[:, 1].max() + turbine_positions[:, 1].min()) / 2
-                )
-                # x: notebook offset convention + the sampled start-time window
-                # (advancing the offset by U*tau == having advected tau seconds).
-                # y: center the box on the farm.
-                offset = [
-                    n_ramp_offset(meta) + U * self.window_offset_s,
-                    y_center - (n_y - 1) * dy / 2.0,
-                    0.0,
-                ]
-                return TurbulenceFieldSite(
-                    ws=profile,
-                    turbulenceField=tf,
-                    turbulence_transport_speed=U,
-                    turbulence_offset=offset,
-                )
+                return self._precursor.site(tf, turbine_positions)
             # Veer (veer_rate != 0) is carried by MetmastSite itself: a pure
             # height-dependent rotation theta(z) = veer_rate*(z - ref) of the
             # mean wind (|U| = ws at every height, hub-height wd pinned to the
@@ -328,28 +322,21 @@ class TurbulenceManager:
                 "turbtype='MannGenerate'."
             )
 
-        if self.turbulence_type == "MannLoad":
-            return self._generate_mann_load(ws, ti)
-
-        elif self.turbulence_type == "MannGenerate":
-            return self._generate_mann_generate(
+        generators = {
+            "MannLoad": lambda: self._generate_mann_load(ws, ti),
+            "MannGenerate": lambda: self._generate_mann_generate(
                 ws, ti, rotor_diameter, mann_overrides=mann_overrides,
-            )
-
-        elif self.turbulence_type == "MannFixed":
-            return self._generate_mann_fixed(ws, ti)
-
-        elif self.turbulence_type == "Random":
-            return self._generate_random(ws, ti)
-
-        elif self.turbulence_type == "None":
-            return self._generate_none(ws)
-
-        elif self.turbulence_type == "Precursor":
-            return self._generate_precursor(ws)
-
-        else:
-            raise ValueError("Invalid turbulence type specified")
+            ),
+            "MannFixed": lambda: self._generate_mann_fixed(ws, ti),
+            "Random": lambda: self._generate_random(ws, ti),
+            "None": lambda: self._generate_none(ws),
+            "Precursor": lambda: self._generate_precursor(ws),
+        }
+        try:
+            generate = generators[self.turbulence_type]
+        except KeyError:
+            raise ValueError("Invalid turbulence type specified") from None
+        return generate()
 
     def _added_turb_model(self):
         """The LES calibration was run with BranlardScaling."""
@@ -467,36 +454,8 @@ class TurbulenceManager:
         return tf, added_turb_model
 
     def _generate_precursor(self, ws: float) -> tuple:
-        """Build a PrecursorField around the shared read-only memmap.
-
-        The field object itself is cheap (per-reset advection state around the
-        one memmap opened in __init__). Same added-turbulence model as the
-        Mann paths / MakeDWM_precursor.ipynb.
-        """
-        from hipersim import Bounds
-        from dynamiks.sites.precursor import PrecursorField
-
-        meta = self.precursor_meta
-        U = float(meta["advection_speed"])
-        if abs(ws - U) > 0.05:
-            raise ValueError(
-                f"ws={ws:.3f} but the precursor advection speed is {U:.3f}. "
-                "The env must pin ws from precursor_meta before create_sites "
-                "(WindFarmEnv.reset does this for turbtype='Precursor')."
-            )
-        n_x, n_y, n_z = (int(v) for v in meta["Nxyz"])
-        dx, dy, dz = (float(v) for v in meta["dxyz"])
-        tf = PrecursorField(
-            self._precursor_uvw,
-            Nxyz=(n_x, n_y, n_z),
-            dxyz=(dx, dy, dz),
-            bounds=Bounds.Warning,
-            ti_yz=meta["ti_yz"],
-        )
-        added_turb_model = SynchronizedAutoScalingIsotropicMannTurbulence(
-            scaling=BranlardScaling(), cache_field=False,
-        )
-        return tf, added_turb_model
+        """PrecursorField around the shared memmap; see ``PrecursorSource.field``."""
+        return self._precursor.field(ws)
 
     def _check_precursor_episode(
         self,
@@ -506,61 +465,15 @@ class TurbulenceManager:
         wd_list: list,
         episode_time_budget_s: float,
     ) -> None:
-        """Precursor-episode guards + random start-time window sampling.
-
-        The box holds t_data_s seconds of LES data. At window offset tau and
-        sim time T, the most-upstream probed point x_min runs off the back of
-        the data when U*(tau+T) > t_data*U + x_min, so the episode budget must
-        satisfy tau + budget <= t_data + x_min/U. (The prepended ramp covers
-        the farm at T=0 and buys no extra time; downstream x > Lx clamps to
-        the ramp/box edge under Bounds.Warning, same as the validated
-        notebook.) tau is drawn uniformly from the remaining slack with the
-        env-seeded rng, so agent and baseline share the episode's window and
-        seeds reproduce it.
-        """
-        meta = self.precursor_meta
-        if veer_rate:
-            raise ValueError(
-                "turbtype='Precursor' carries the LES shear/veer in the box "
-                "itself; set veer to 0."
-            )
-        if np.ptp(wd_list) > 0:
-            raise ValueError(
-                "turbtype='Precursor' uses a TurbulenceFieldSite, which cannot "
-                "express a time-varying wind direction series; use a constant "
-                "wd (the env pins wd=270 for Precursor)."
-            )
-        n_y = int(meta["Nxyz"][1])
-        dy = float(meta["dxyz"][1])
-        farm_width = float(np.ptp(turbine_positions[:, 1])) + rotor_diameter
-        box_width = (n_y - 1) * dy
-        if farm_width > box_width:
-            raise ValueError(
-                f"Farm y-width ~{farm_width:.0f} m exceeds the precursor box "
-                f"width {box_width:.0f} m."
-            )
-        U = float(meta["advection_speed"])
-        n_ramp = int(meta["n_ramp"])
-        dx = float(meta["dxyz"][0])
-        x_margin = 2.0 * rotor_diameter  # probes/rotor points around turbines
-        x_max = float(turbine_positions[:, 0].max()) + x_margin
-        if x_max > n_ramp * dx:
-            raise ValueError(
-                f"Farm extends to x~{x_max:.0f} m but the precursor ramp only "
-                f"covers [0, {n_ramp * dx:.0f}] m at episode start. Reconvert "
-                f"with a larger --Lx or shift the layout."
-            )
-        x_min = float(turbine_positions[:, 0].min()) - x_margin
-        t_usable = float(meta["t_data_s"]) + x_min / U
-        slack = t_usable - float(episode_time_budget_s)
-        if slack < 0:
-            raise ValueError(
-                f"Episode needs ~{episode_time_budget_s:.0f} s of inflow but the "
-                f"precursor provides only ~{t_usable:.0f} s (t_data="
-                f"{float(meta['t_data_s']):.0f} s, upstream margin "
-                f"{-x_min:.0f} m). Reduce max_time_steps / burn-in."
-            )
-        self.window_offset_s = float(self.np_random.uniform(0.0, slack))
+        """Precursor-episode guards + start-time window draw; see ``PrecursorSource.check_episode``."""
+        self._precursor.check_episode(
+            self.np_random,
+            turbine_positions=turbine_positions,
+            rotor_diameter=rotor_diameter,
+            veer_rate=veer_rate,
+            wd_list=wd_list,
+            episode_time_budget_s=episode_time_budget_s,
+        )
 
     def _calculate_time_parameters(
         self,
@@ -570,45 +483,10 @@ class TurbulenceManager:
         n_passthrough: int,
         burn_in_passthroughs: int,
     ) -> tuple:
-        """
-        Calculate t_developed and time_max based on farm geometry.
-
-        Args:
-            turbine_positions: Turbine positions array (n_turb, 2)
-            rotor_diameter: Rotor diameter (m)
-            ws: Wind speed (m/s)
-            n_passthrough: Number of passthroughs for episode
-            burn_in_passthroughs: Number of passthroughs for flow development
-
-        Returns:
-            tuple: (t_developed, time_max) in seconds
-        """
-        n_turb = turbine_positions.shape[0]
-
-        # Calculate maximum distance between any turbines
-
-        diff = (
-            turbine_positions[:, np.newaxis, :] - turbine_positions[np.newaxis, :, :]
-        )  # (NT, NT, 2)
-        distances = np.linalg.norm(diff, axis=-1)  # (NT, NT)
-        max_distance = distances.max()
-
-        t_inflow = max_distance / ws
-
-        # Time for flow to develop
-        t_developed = math.ceil(t_inflow * burn_in_passthroughs)
-
-        # Maximum episode time
-        time_max = math.ceil(t_inflow * n_passthrough)
-
-        # Special case: single turbine uses rotor diameter
-        if n_turb == 1:
-            time_max = math.ceil((rotor_diameter * n_passthrough) / ws)
-
-        # Ensure at least 1 second
-        time_max = max(1, time_max)
-
-        return t_developed, time_max
+        """(t_developed, time_max) in seconds; see ``episode_timing.episode_time_parameters``."""
+        return episode_time_parameters(
+            turbine_positions, rotor_diameter, ws, n_passthrough, burn_in_passthroughs
+        )
 
     def _discover_turbulence_files(self, root: Union[str, Path]) -> list[str]:
         """

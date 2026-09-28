@@ -12,6 +12,9 @@ no per-call-site scaling. A plain subclass (not a closure monkeypatched onto the
 handle) is pickling-safe under the spawn-based level-3 vector env.
 """
 
+import os
+import shutil
+
 import numpy as np
 from dynamiks.wind_turbines.hawc2_windturbine import HAWC2WindTurbines
 
@@ -88,3 +91,42 @@ class HubWindFreeWindCoupling(FreeWindCoupling):
     def step(self, flowSimulation):
         FreeWindCoupling.step(self, flowSimulation)
         self._set_hub_wind(flowSimulation, include_wakes=True)
+
+
+# ---------------------------------------------------------------------------
+# Teardown helpers (used by WindFarmEnv's cleanup paths)
+# ---------------------------------------------------------------------------
+
+
+def safe_close_h2(wt, owner_pid) -> None:
+    """Close a HAWC2 turbine's h2 connection defensively.
+
+    The MultiH2Lib children can only be polled/closed from the process that spawned
+    them, so closing from another process raises ``AssertionError: can only test a
+    child process``. Gate on the owning pid and never let teardown raise (HAWC2's own
+    ``atexit`` handler still closes the connection in the owning process).
+    """
+    if wt is None or not hasattr(wt, "h2"):
+        return
+    if os.getpid() != owner_pid:
+        return
+    try:
+        wt.h2.close()
+    except (AssertionError, OSError, EOFError):
+        # Proxy child already gone / pipe closed / non-owning poll — teardown must not raise.
+        pass
+
+
+def delete_case_folders(wts) -> None:
+    """Remove the res/, htc/ and log/ case subfolders for one set of HAWC2 turbines.
+
+    ``output.filename`` points at ``res/<case>/...``; the htc and log folders mirror
+    it with the leading ``res`` swapped. ``ignore_errors=True`` so an already-deleted
+    folder does not raise during teardown.
+    """
+    modelpath = wts.htc_lst[0].modelpath
+    res_rel = os.path.split(wts.htc_lst[0].output.filename.values[0])[0]
+    for sub in ("res", "htc", "log"):
+        # replace only the leading "res" (count=1) to avoid touching the case name
+        folder = modelpath + res_rel.replace("res", sub, 1)
+        shutil.rmtree(folder, ignore_errors=True)
