@@ -134,6 +134,22 @@ def eval_single_fast(
     time_plot = np.zeros((time), dtype=int)
     rew_plot = np.zeros((time), dtype=np.float32)
 
+    # Steady-state operating point (blade pitch / rotor RPM) is available when
+    # the env carries an OperatingPointLookup; the derate control signal is
+    # available on any derating env. Both are off for yaw-only envs.
+    op_mode = getattr(env, "op_lookup", None) is not None
+    log_derate = bool(getattr(env, "derate_action", False))
+    if op_mode:
+        pitch_a = np.zeros((time, n_turb), dtype=np.float32)
+        rpm_a = np.zeros((time, n_turb), dtype=np.float32)
+    if log_derate:
+        derate_a = np.zeros((time, n_turb), dtype=np.float32)
+
+    tracking = bool(getattr(env, "Track_power", False))
+    if tracking:
+        p_ref = np.zeros((time), dtype=np.float32)
+        track_err = np.zeros((time), dtype=np.float32)
+
     if baseline_comp:
         powerF_b = np.zeros((time), dtype=np.float32)
         powerT_b = np.zeros((time, n_turb), dtype=np.float32)
@@ -162,6 +178,17 @@ def eval_single_fast(
     time_plot[0] = env.fs.time
     # There is no reward at the first time step, so we just set it to zero.
     rew_plot[0] = 0.0
+
+    # reset()'s warm-up already ran _take_measurements, so these exist here.
+    if op_mode:
+        pitch_a[0] = env.current_pitch
+        rpm_a[0] = env.current_rpm
+    if log_derate:
+        derate_a[0] = env.current_derate
+
+    if tracking:
+        p_ref[0] = env.power_setpoint
+        track_err[0] = powerF_a[0] - p_ref[0]
 
     if baseline_comp:
         powerF_b[0] = env.fs_baseline.windTurbines.power().sum()
@@ -205,9 +232,53 @@ def eval_single_fast(
         ws_max = env.ws + 2
         ws_min = 3
 
-        # Define the x and y values for the flow field plot
+        # Derating / tracking panels: for a derate-only agent the yaw-trainer's
+        # right column (yaw + local wind speed) is meaningless (yaw is fixed).
+        # Auto-detect the mode from the env and swap in derating + per-turbine
+        # power; a yaw run (derate_mode=False) keeps every original panel.
+        derate_mode = (
+            bool(getattr(env, "derate_action", False))
+            and getattr(env, "current_derate", None) is not None
+        )
+        # A yaw+derate agent steers AND derates: keep the derate layout but add
+        # a yaw time-series panel in the spare bottom-right cell. Derate-only
+        # envs (yaw_action=False) leave that cell blank ("yaw fixed").
+        yaw_active = bool(getattr(env, "yaw_action", True))
+        show_yaw_panel = derate_mode and yaw_active
+        if derate_mode:
+            derate_deq = deque(maxlen=max_deque)
+            powerT_deq = deque(maxlen=max_deque)
+            derate_deq.append(np.asarray(env.current_derate).copy())
+            powerT_deq.append(powerT_a[0].copy())
+            powT_max = powerT_a[0].max() * 1.2
+        # Two extra right-column panels (blade pitch, rotor RPM) when the env
+        # can report its steady-state operating point. Yaw-only runs keep the
+        # original 3-row layout untouched.
+        op_panels = derate_mode and op_mode
+        if op_panels:
+            pitch_deq = deque(maxlen=max_deque)
+            rpm_deq = deque(maxlen=max_deque)
+            pitch_deq.append(pitch_a[0].copy())
+            rpm_deq.append(rpm_a[0].copy())
+            # Default panel ranges; grown on the fly (like pow_max) whenever
+            # the data leaves them. Exception: the pitch axis is HARD-capped
+            # at 15 deg — the table's feathered/parked points (pitch ~90) at
+            # deep derate + low waked ws would otherwise flatten the panel.
+            pitch_lo = min(0.0, float(pitch_a[0].min()) - 0.5)
+            pitch_hi = 15.0
+            rpm_lo = min(5.0, float(rpm_a[0].min()) - 0.2)
+            rpm_hi = max(8.0, float(rpm_a[0].max()) + 0.2)
+        if tracking:
+            pref_deq = deque(maxlen=max_deque)
+            pref_deq.append(p_ref[0])
+
+        # Flow-field extent. x spans the row + margins; y is padded +-2D so a
+        # single row sits in a ~3.7:1 rectangle that reads at true (equal) aspect
+        # (see below) instead of the old ~6x-stretched square. For multi-row
+        # farms this just pads 2D beyond the y-extent, so nothing is clipped.
+        D_view = float(np.atleast_1d(env.fs.windTurbines.diameter())[0])
         a = np.linspace(-200 + min(env.x_pos), 300 + max(env.x_pos), 200)
-        b = np.linspace(-200 + min(env.y_pos), 200 + max(env.y_pos), 200)
+        b = np.linspace(min(env.y_pos) - 2 * D_view, max(env.y_pos) + 2 * D_view, 200)
 
     # Run the simulation
     for i in range(0, total_steps):
@@ -224,6 +295,22 @@ def eval_single_fast(
 
         obs, reward, terminated, truncated, info = env.step(action)
 
+        # The eval loop assumes the env runs as an untruncated "sandbox": it
+        # never resets mid-run. A truncation here means the requested t_sim
+        # exceeded the env's horizon (time_max) -- and truncation triggers
+        # _cleanup_resources(), which frees the flow simulation, so every
+        # subsequent step would read freed/garbage state. Fail loudly instead
+        # of silently returning corrupt results.
+        if truncated:
+            raise RuntimeError(
+                f"Environment truncated during evaluation at step {i + 1} of "
+                f"{total_steps} (env.time_max={env.time_max}s, delay={env.delay}s, "
+                f"t_sim={t_sim}s). The eval loop cannot continue past truncation "
+                "because the flow simulation is cleaned up on the time limit. "
+                "Reduce t_sim or raise the env's time_max/max_time_steps so the "
+                "full evaluation fits within one episode."
+            )
+
         # Put the values in the arrays
         powerF_a[i * step_val + 1 : i * step_val + step_val + 1] = info["powers"].sum(
             axis=1
@@ -233,6 +320,21 @@ def eval_single_fast(
         ws_a[i * step_val + 1 : i * step_val + step_val + 1] = info["windspeeds"]
         time_plot[i * step_val + 1 : i * step_val + step_val + 1] = info["time_array"]
         rew_plot[i * step_val + 1 : i * step_val + step_val + 1] = reward
+
+        if op_mode:
+            pitch_a[i * step_val + 1 : i * step_val + step_val + 1] = info["pitches"]
+            rpm_a[i * step_val + 1 : i * step_val + step_val + 1] = info["rpms"]
+        if log_derate:
+            derate_a[i * step_val + 1 : i * step_val + step_val + 1] = info["derates"]
+
+        if tracking:
+            # The reference is per env step; the error is at sim resolution.
+            p_ref[i * step_val + 1 : i * step_val + step_val + 1] = info[
+                "Power reference"
+            ]
+            track_err[i * step_val + 1 : i * step_val + step_val + 1] = (
+                info["powers"].sum(axis=1) - info["Power reference"]
+            )
 
         if baseline_comp:
             powerF_b[i * step_val + 1 : i * step_val + step_val + 1] = info[
@@ -270,9 +372,25 @@ def eval_single_fast(
             pow_deq.append(powerF_a[end_idx])
             yaw_deq.append(yaw_a[end_idx])
             ws_deq.append(ws_a[end_idx])
+            if derate_mode:
+                derate_deq.append(np.asarray(env.current_derate).copy())
+                powerT_deq.append(powerT_a[end_idx].copy())
+            if op_panels:
+                pitch_deq.append(pitch_a[end_idx].copy())
+                rpm_deq.append(rpm_a[end_idx].copy())
+            if tracking:
+                pref_deq.append(p_ref[end_idx])
 
-            fig = plt.figure(figsize=(12, 7.5))
-            ax1 = plt.subplot2grid((3, 3), (0, 0), colspan=2, rowspan=3)
+            # Wide layout: the right-hand block is a 3x2 grid on a (3, 4)
+            # figure grid — left sub-column keeps the original stack, right
+            # sub-column adds pitch/RPM, and the spare bottom-right cell hosts
+            # the yaw panel for yaw+derate agents (blank for derate-only; the
+            # shared legend moved to a figure-level strip below the grid).
+            # Otherwise the original (3, 3) layout.
+            wide = op_panels or show_yaw_panel
+            grid = (3, 4) if wide else (3, 3)
+            fig = plt.figure(figsize=(15, 7.5) if wide else (12, 7.5))
+            ax1 = plt.subplot2grid(grid, (0, 0), colspan=2, rowspan=3)
 
             view = XYView(z=70, x=a, y=b, ax=fig.gca(), adaptive=False)
 
@@ -313,6 +431,7 @@ def eval_single_fast(
                         angle=90 - wd_ + yaw_,
                         ec=colors[t],
                         fc="None",
+                        lw=2.5,  # thicker rotor bar reads better at true aspect
                     )
                     ax1.add_artist(circle)
                     ax1.plot(x_, y_, ".", color=colors[t])
@@ -331,70 +450,175 @@ def eval_single_fast(
                         ]
                     )
 
+                    # Annotate each turbine with its live derating value.
+                    if derate_mode:
+                        dtext = ax1.annotate(
+                            f"{env.current_derate[ii]:.2f}",
+                            (x_ - r, y_ - r),
+                            fontsize=10,
+                            color="white",
+                        )
+                        dtext.set_path_effects(
+                            [
+                                path_effects.Stroke(linewidth=2, foreground="black"),
+                                path_effects.Normal(),
+                            ]
+                        )
+
             ax1.set_title("Flow field at {} s".format(env.fs.time))
-            plt.gca().xaxis.set_major_locator(plt.NullLocator())
-            plt.gca().yaxis.set_major_locator(plt.NullLocator())
+            # True aspect so wakes read as long horizontal streaks and rotors as
+            # correctly-proportioned cross-stream bars, instead of the old ~6x
+            # vertical smear. Keep the meter ticks the old NullLocator hid. A
+            # landscape row letterboxes to a band in the (square-ish) ax1 slot,
+            # which is expected for this framing.
+            ax1.set_aspect("equal")
+            ax1.set_xlabel("x [m]")
+            ax1.set_ylabel("y [m]")
 
             ax2 = plt.subplot2grid(
-                (3, 3),
+                grid,
                 (0, 2),
             )
             ax3 = plt.subplot2grid(
-                (3, 3),
+                grid,
                 (1, 2),
             )
             ax4 = plt.subplot2grid(
-                (3, 3),
+                grid,
                 (2, 2),
             )
+            if op_panels:
+                ax5 = plt.subplot2grid(grid, (0, 3))
+                ax6 = plt.subplot2grid(grid, (1, 3))
+                right_axes = [ax2, ax3, ax4, ax5, ax6]
+                # Lowest time-series axis of each sub-column gets the time axis
+                bottom_axes = [ax4, ax6]
+            else:
+                right_axes = [ax2, ax3, ax4]
+                bottom_axes = [ax4]
+            if show_yaw_panel:
+                # Yaw panel in the (2, 3) cell; it is now the lowest axis of
+                # the right sub-column, so the time label/ticks move to it.
+                ax7 = plt.subplot2grid(grid, (2, 3))
+                right_axes.append(ax7)
+                bottom_axes = [ax4, ax7]
 
-            # Plot the power in ax2
-            ax2.plot(time_deq, pow_deq, color="orange")
+            # Plot the power in ax2 (+ the tracking reference overlay).
+            ax2.plot(time_deq, pow_deq, color="orange", label="farm")
+            if tracking:
+                ax2.plot(time_deq, pref_deq, "k--", label="reference")
+                if not op_panels:
+                    ax2.legend(loc="upper left", bbox_to_anchor=(1, 1))
             ax2.set_title("Farm power [W]")
 
-            # Plot the yaws in ax3
-            ax3.plot(time_deq, yaw_deq, label=np.arange(n_turb))
-            ax3.set_title("Turbine yaws [deg]")
-            ax3.legend(
-                [f"T{i + 1}" for i in range(n_turb)],
-                loc="upper left",
-                bbox_to_anchor=(1, 1),
-            )
+            # Plot per-turbine derating (or yaws) in ax3
+            if derate_mode:
+                ax3.plot(time_deq, derate_deq, label=np.arange(n_turb))
+                ax3.set_title("Turbine derating [-]")
+            else:
+                ax3.plot(time_deq, yaw_deq, label=np.arange(n_turb))
+                ax3.set_title("Turbine yaws [deg]")
+            if not op_panels:
+                ax3.legend(
+                    [f"T{i + 1}" for i in range(n_turb)],
+                    loc="upper left",
+                    bbox_to_anchor=(1, 1),
+                )
 
-            # Plot the rotor windspeeds in ax4
-            ax4.plot(time_deq, ws_deq, label=np.arange(n_turb))
-            ax4.set_title("Local wind speed [m/s]")
-            ax4.set_xlabel("Time [s]")
+            # Plot per-turbine power (or rotor windspeeds) in ax4
+            if derate_mode:
+                ax4.plot(time_deq, powerT_deq, label=np.arange(n_turb))
+                ax4.set_title("Turbine power [W]")
+            else:
+                ax4.plot(time_deq, ws_deq, label=np.arange(n_turb))
+                ax4.set_title("Local wind speed [m/s]")
+
+            # Steady-state operating point in ax5/ax6 (surrogate table fidelity)
+            if op_panels:
+                ax5.plot(time_deq, pitch_deq, label=np.arange(n_turb))
+                ax5.set_title("Blade pitch [deg]")
+                ax6.plot(time_deq, rpm_deq, label=np.arange(n_turb))
+                ax6.set_title("Rotor speed [RPM]")
+
+            # Turbine yaws in the bottom-right cell (yaw+derate agents only)
+            if show_yaw_panel:
+                ax7.plot(time_deq, yaw_deq, label=np.arange(n_turb))
+                ax7.set_title("Turbine yaws [deg]")
+
+            # One shared legend as a horizontal figure-level strip below the
+            # right-hand grid (the old in-grid legend cell is now the yaw
+            # panel; per-axis outside legends would collide with the extra
+            # sub-column).
+            fig_legend = None
+            if op_panels:
+                farm_lines = list(ax2.get_lines())
+                turb_lines = list(ax3.get_lines())
+                fig_legend = fig.legend(
+                    farm_lines + turb_lines,
+                    [ln.get_label() for ln in farm_lines]
+                    + [f"T{i + 1}" for i in range(n_turb)],
+                    loc="upper center",
+                    bbox_to_anchor=(0.76, 0.02),
+                    ncol=len(farm_lines) + n_turb,
+                    frameon=False,
+                )
+
+            # Time axis label + ticks live on the bottom panel of each column
+            for ax in bottom_axes:
+                ax.set_xlabel("Time [s]")
 
             # Set the x limits for the plots
-            ax2.set_xlim(time_deq[0], time_deq[-1])
-            ax3.set_xlim(time_deq[0], time_deq[-1])
-            ax4.set_xlim(time_deq[0], time_deq[-1])
+            for ax in right_axes:
+                ax.set_xlim(time_deq[0], time_deq[-1])
 
             pow_max = max(pow_max, powerF_a[end_idx] * 1.2)
             pow_min = min(pow_min, powerF_a[end_idx] * 0.8)
-            yaw_max = max(yaw_max, max(yaw_a[end_idx]) * 1.2)
-            # This value can be negative, so we multiply 1.2, instead of 0.8
-            yaw_min = min(yaw_min, min(yaw_a[end_idx]) * 1.2)
-            ws_max = max(ws_max, max(ws_a[end_idx]) * 1.2)
-            ws_min = min(ws_min, min(ws_a[end_idx]) * 0.8)
+            if tracking:
+                # Keep the reference line inside the frame even when the agent
+                # tracks it poorly early on.
+                pow_max = max(pow_max, p_ref[end_idx] * 1.2)
+                pow_min = min(pow_min, p_ref[end_idx] * 0.8)
 
             # Set the y limits for the plots. If we go over/under the limits, the plot will adjust the limits.
             ax2.set_ylim(pow_min, pow_max)
-            ax3.set_ylim(yaw_min, yaw_max)
-            ax4.set_ylim(ws_min, ws_max)
+            if derate_mode:
+                # Fixed derate range [derate_min, derate_max] (+/- epsilon); the
+                # per-turbine power axis grows to a running maximum like ax2.
+                ax3.set_ylim(env.derate_min - 0.05, env.derate_max + 0.05)
+                powT_max = max(powT_max, powerT_a[end_idx].max() * 1.2)
+                ax4.set_ylim(0.0, powT_max)
+                if op_panels:
+                    pitch_lo = min(pitch_lo, float(pitch_a[end_idx].min()) - 0.5)
+                    rpm_lo = min(rpm_lo, float(rpm_a[end_idx].min()) - 0.2)
+                    rpm_hi = max(rpm_hi, float(rpm_a[end_idx].max()) + 0.2)
+                    ax5.set_ylim(pitch_lo, pitch_hi)
+                    ax6.set_ylim(rpm_lo, rpm_hi)
+                if show_yaw_panel:
+                    # Same running-limit rule as the yaw-only branch below.
+                    yaw_max = max(yaw_max, max(yaw_a[end_idx]) * 1.2)
+                    yaw_min = min(yaw_min, min(yaw_a[end_idx]) * 1.2)
+                    ax7.set_ylim(yaw_min, yaw_max)
+            else:
+                yaw_max = max(yaw_max, max(yaw_a[end_idx]) * 1.2)
+                # This value can be negative, so we multiply 1.2, instead of 0.8
+                yaw_min = min(yaw_min, min(yaw_a[end_idx]) * 1.2)
+                ws_max = max(ws_max, max(ws_a[end_idx]) * 1.2)
+                ws_min = min(ws_min, min(ws_a[end_idx]) * 0.8)
+                ax3.set_ylim(yaw_min, yaw_max)
+                ax4.set_ylim(ws_min, ws_max)
             # ax2.set_xticks([])
             # ax3.set_xticks([])
 
-            ax2.tick_params(axis="x", colors="white")
-            ax3.tick_params(axis="x", colors="white")
+            # Hide time ticks on everything but the bottom panel of each column
+            for ax in right_axes:
+                if ax in bottom_axes:
+                    # Set the number of ticks on the x-axis to 5
+                    ax.locator_params(axis="x", nbins=5)
+                else:
+                    ax.tick_params(axis="x", colors="white")
 
-            # Set the number of ticks on the x-axis to 5
-            ax4.locator_params(axis="x", nbins=5)
-
-            ax2.grid()
-            ax3.grid()
-            ax4.grid()
+            for ax in right_axes:
+                ax.grid()
 
             img_name = FOLDER + "img_{:05d}.png".format(i)
 
@@ -442,7 +666,13 @@ def eval_single_fast(
             plt.savefig(
                 img_name,
                 dpi=100,
-                bbox_extra_artists=(ax1, ax2, ax3, ax4),
+                # The figure-level legend hangs below the axes region, so it
+                # must be an extra artist or bbox_inches="tight" clips it.
+                bbox_extra_artists=tuple(
+                    [ax1]
+                    + right_axes
+                    + ([fig_legend] if fig_legend is not None else [])
+                ),
                 bbox_inches="tight",
             )
             plt.clf()
@@ -506,6 +736,75 @@ def eval_single_fast(
             rew_plot,
         ),
     }
+
+    # Add operating-point / derate variables if applicable
+    turb_dims = (
+        "time",
+        "turb",
+        "ws",
+        "wd",
+        "TI",
+        "turbbox",
+        "model_step",
+        "deterministic",
+    )
+    if op_mode:
+        pitch_a = pitch_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+        rpm_a = rpm_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+        data_vars.update(
+            {
+                "pitch_a": (turb_dims, pitch_a),
+                "rpm_a": (turb_dims, rpm_a),
+            }
+        )
+    if log_derate:
+        derate_a = derate_a.reshape(time, n_turb, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+        data_vars.update({"derate_a": (turb_dims, derate_a)})
+
+    # Add tracking variables if applicable
+    if tracking:
+        p_ref = p_ref.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+        track_err = track_err.reshape(time, n_ws, n_wd, n_TI, n_turbbox, 1, 1)
+        # Per-condition scalar (no time dim) so it merges across conditions
+        # in eval_multiple like any other data variable.
+        track_mae = np.full(
+            (n_ws, n_wd, n_TI, n_turbbox, 1, 1),
+            np.abs(track_err).mean(),
+            dtype=np.float32,
+        )
+
+        data_vars.update(
+            {
+                "power_ref": (
+                    (
+                        "time",
+                        "ws",
+                        "wd",
+                        "TI",
+                        "turbbox",
+                        "model_step",
+                        "deterministic",
+                    ),
+                    p_ref,
+                ),
+                "track_err": (
+                    (
+                        "time",
+                        "ws",
+                        "wd",
+                        "TI",
+                        "turbbox",
+                        "model_step",
+                        "deterministic",
+                    ),
+                    track_err,
+                ),
+                "track_mae": (
+                    ("ws", "wd", "TI", "turbbox", "model_step", "deterministic"),
+                    track_mae,
+                ),
+            }
+        )
 
     # Add baseline variables if applicable
     if baseline_comp:
