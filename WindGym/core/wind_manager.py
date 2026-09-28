@@ -77,6 +77,27 @@ class WindManager:
         # Random number generator (set by environment)
         self.np_random = None
 
+    def fix_conditions(self, ws=None, ti=None, wd=None, veer=None) -> None:
+        """Pin one or more quantities by collapsing their sampling range.
+
+        Each non-None argument sets ``<x>_min == <x>_max``. Sampling still
+        performs the uniform draw for a degenerate range (it returns the pinned
+        value), so the RNG stream of seeded evaluations is unchanged.
+        """
+        if ws is not None:
+            self.ws_min = ws
+            self.ws_max = ws
+        if ti is not None:
+            self.ti_min = ti
+            self.ti_max = ti
+        if wd is not None:
+            self.wd_min = wd
+            self.wd_max = wd
+        if veer is not None:
+            # Degenerate interval -> deterministic value, no RNG draw
+            self.veer_min = veer
+            self.veer_max = veer
+
     def sample_conditions(self) -> WindConditions:
         """
         Sample wind speed, direction, and turbulence intensity.
