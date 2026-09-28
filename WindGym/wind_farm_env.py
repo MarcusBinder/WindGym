@@ -38,7 +38,7 @@ from .core.derating import (
 from py_wake.wind_turbines import WindTurbines as WindTurbinesPW
 from collections import deque, defaultdict
 import yaml
-from .backend.hawc2_adapter import HAWC2WindTurbinesW
+from .backend.hawc2_adapter import HAWC2WindTurbinesW, HubWindFreeWindCoupling
 
 # For live plotting
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -502,6 +502,9 @@ class WindFarmEnv(gym.Env):
                 htc_lst=[self.HTC_path],
                 case_name=name_string,  # subfolder name in the htc, res and log folders
                 suppress_output=True,  # don't show hawc2 output in console
+                # Feed the DTU WE controller its hub wind speed (general
+                # variables 1-3); the dynamiks default leaves them at zero.
+                coupling=HubWindFreeWindCoupling(),
             )
             # Yaw sensor wiring is htc-specific (constraint naming + which
             # general-variable slot the servo DLL reads), so it is configurable.
