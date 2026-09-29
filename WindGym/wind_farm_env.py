@@ -153,7 +153,8 @@ class WindFarmEnv(gym.Env):
         interpolation="linear",  # Particle trajectory interpolation in the DWM solver: 'linear' (fast) or 'pchip' (cubic, original)
         lateral_cutoff=1.5,  # Skip wake deficit evaluation beyond this factor times the deficit profile half-width (r_max*R) from the meandered wake centerline. None disables (original behavior).
         tilt: Optional[float] = None,  # Fixed rotor tilt in deg for all turbines (positive deflects the wake upward in DWM). None -> use config `farm: tilt` (default 0). Needed for veer to create a yaw-sign asymmetry.
-        dwm_params: Optional[dict] = None,  # Override DWM params (see core.dwm_defaults.DWM_PARAM_SPEC: k1, k2, d_particle, viscosity_model, superposition, x_speed, r_max, n_r, dx, lateral_cutoff, mann_*). Used for domain randomization; per-episode overrides go through reset(options={"dwm_params": ...}).
+        dwm_params: Optional[dict] = None,  # Override DWM params (see core.dwm_defaults.DWM_PARAM_SPEC: k1, k2, d_particle, viscosity_model, superposition, x_speed, r_max, n_r, dx, lateral_cutoff, boundary_condition, deflection_c, meandering_d, mann_*). Used for domain randomization; per-episode overrides go through reset(options={"dwm_params": ...}).
+        mean_wind=None,  # Optional dynamiks MeanWind: a spatially varying mean wind (e.g. a wind-tunnel speed-up/shear field) for the agent AND baseline farm. Its ws is set to each episode's ws. None = uniform ws.
         **kwargs,
     ):
         """
@@ -253,6 +254,7 @@ class WindFarmEnv(gym.Env):
         # The step size for the yaw angles. How manny degress the yaw angles can change pr. step
         self.interpolation = interpolation
         self.lateral_cutoff = lateral_cutoff
+        self.mean_wind = mean_wind
         self.turbtype = turbtype
         self.yaw_step_sim = yaw_step_sim  # How many degrees the yaw angles can change pr. simulation step
 
@@ -1085,6 +1087,7 @@ class WindFarmEnv(gym.Env):
                 episode_time_budget_s=(
                     self.t_developed + self.steps_on_reset * self.delay + self.time_max
                 ),
+                mean_wind=self.mean_wind,
             )
 
             self.fs = self._build_dwm_fs(

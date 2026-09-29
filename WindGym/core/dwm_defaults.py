@@ -26,12 +26,13 @@ import numpy as np
 
 from dynamiks.dwm import DWMFlowSimulation
 from dynamiks.dwm.particle_deficit_profiles.ainslie import jDWMAinslieGenerator
-from dynamiks.dwm.particle_motion_models import HillVortexParticleMotion, XSpeed
+from dynamiks.dwm.particle_motion_models import CutOffFrq, HillVortexParticleMotion, XSpeed
 from dynamiks.dwm.projection_models import NoProjection
 # from dynamiks.dwm.superposition import rss_superposition
 # from dynamiks.utils.data_dumper import runningAverageSensor
 from dynamiks.wind_turbines import PyWakeWindTurbines
 # from dynamiks.wind_turbines.ti_model import RunningAverageSensorTIModel
+from jDWM import BoundaryCondition
 from jDWM.EddyViscosityModel import IEC, keck, larsen, madsen
 from jDWM.Solvers import implicit
 from py_wake.rotor_avg_models import CGIRotorAvg
@@ -40,6 +41,8 @@ from py_wake.superposition_models import LinearSum
 from dynamiks.dwm.superposition import MixedSum #MixedSum instead of rss
 from dynamiks.wind_turbines.ti_models import TISensor, MeanMethod
 from dynamiks.utils.geometry import get_xyz
+
+from .particle_motion import DEFLECTION_C, ScaledHillVortexParticleMotion
 
 
 # === DWM closure / particle setup ===========================================
@@ -114,6 +117,15 @@ X_SPEEDS: dict[str, XSpeed] = {
     "global": XSpeed.Global,
     "rotor": XSpeed.Rotor,
 }
+# Near-wake boundary condition of the Ainslie solver. "madsen" is
+# jDWMAinslieGenerator's own default, i.e. what the calibrated setup runs.
+BOUNDARY_CONDITIONS: dict[str, type] = {
+    "madsen": BoundaryCondition.madsen,
+    "iec": BoundaryCondition.IEC,
+    "keck": BoundaryCondition.keck,
+    "none": BoundaryCondition.none,
+    "rotor_area_mean": BoundaryCondition.rotor_area_mean,
+}
 
 
 def _lookup(registry: dict, value, name: str):
@@ -142,7 +154,8 @@ def _make_viscosity_model(viscosity_model, k1, k2):
 class DWMParamSpec:
     """Validation metadata for one ``dwm_params`` key.
 
-    ``kind`` is ``"float"``, ``"int"`` or ``"choice"``; ``group`` says which
+    ``kind`` is ``"float"``, ``"int"``, ``"choice"``, or ``"int3"`` /
+    ``"float3"`` (a 3-sequence, e.g. a Mann grid); ``group`` says which
     subsystem consumes the key (``"make_dwm"`` or ``"mann"``, the latter
     routed to ``TurbulenceManager.create_sites``).
     """
@@ -188,10 +201,28 @@ DWM_PARAM_SPEC: dict[str, DWMParamSpec] = {
                                    doc="Lateral wake-interaction cutoff in units of "
                                        "r_max*R; None = no cutoff. Overrides the env's "
                                        "constructor value for the episode."),
+    "boundary_condition": DWMParamSpec("choice", "madsen", "make_dwm",
+                                       choices=tuple(BOUNDARY_CONDITIONS),
+                                       doc="Ainslie near-wake boundary condition "
+                                           "(jDWM.BoundaryCondition)."),
+    "deflection_c": DWMParamSpec("float", DEFLECTION_C, "make_dwm",
+                                 doc="Hill-vortex self-induction coefficient: how hard "
+                                     "a yawed rotor deflects its own wake. dynamiks "
+                                     f"hardcodes {DEFLECTION_C}; see core.particle_motion."),
+    "meandering_d": DWMParamSpec("float", None, "make_dwm", nullable=True,
+                                 doc="Meandering low-pass filter CutOffFrq(d) on the "
+                                     "particle motion. None = no temporal filter."),
     "mann_L": DWMParamSpec("float", MANN_L, "mann", doc="Mann length scale [m]."),
     "mann_GAMMA": DWMParamSpec("float", MANN_GAMMA, "mann", doc="Mann anisotropy Γ."),
-    "mann_AE": DWMParamSpec("float", MANN_AE, "mann",
-                            doc="Mann αε. Required whenever any Mann key is active."),
+    "mann_AE": DWMParamSpec("float", MANN_AE, "mann", nullable=True,
+                            doc="Mann αε. Required whenever any Mann key is active. "
+                                "None = generate at the default αε and rescale the box "
+                                "to the episode's TI (scale_TI), as the non-DR path does."),
+    "mann_Nxyz": DWMParamSpec("int3", MANN_NXYZ, "mann",
+                              doc="Mann box grid points (nx, ny, nz)."),
+    "mann_dxyz": DWMParamSpec("float3", MANN_DXYZ, "mann",
+                              doc="Mann box grid spacing (dx, dy, dz) [m]. dy/dx sets "
+                                  "the inertial slope of the streamwise spectrum."),
 }
 
 
@@ -233,6 +264,14 @@ def validate_dwm_params(params: dict, where: str = "") -> None:
                     f"dwm_params[{key!r}]{where} must be one of {list(spec.choices)}, "
                     f"got {value!r}"
                 )
+        elif spec.kind in ("int3", "float3"):
+            if isinstance(value, (str, bytes)) or not hasattr(value, "__len__") or len(value) != 3:
+                raise ValueError(
+                    f"dwm_params[{key!r}]{where} must be a sequence of 3 numbers, got {value!r}"
+                )
+            element = DWMParamSpec(spec.kind[:-1], None, spec.group)
+            for i, v in enumerate(value):
+                _check_numeric(key, element, v, f"[{i}]{where}")
         else:
             _check_numeric(key, spec, value, where)
 
@@ -298,6 +337,9 @@ def make_dwm(
     r_max: float = AINSLIE_R_MAX,
     n_r: int = AINSLIE_N_R,
     dx: float = AINSLIE_DX,
+    boundary_condition: str = "madsen",
+    deflection_c: float = DEFLECTION_C,
+    meandering_d: float | None = None,
 ) -> DWMFlowSimulation:
     """Assemble a DWMFlowSimulation under the calibrated setup.
 
@@ -313,6 +355,10 @@ def make_dwm(
       resolved through ``VISCOSITY_MODELS`` / ``SUPERPOSITION_MODELS`` /
       ``X_SPEEDS``
     - ``r_max`` / ``n_r`` / ``dx``: Ainslie solver grid
+    - ``boundary_condition``: Ainslie near-wake boundary condition, resolved
+      through ``BOUNDARY_CONDITIONS``
+    - ``deflection_c``: wake-deflection strength (dynamiks hardcodes 0.4)
+    - ``meandering_d``: ``CutOffFrq(d)`` meandering filter; ``None`` = none
 
     See ``DWM_PARAM_SPEC`` for the per-key documentation.
     """
@@ -336,6 +382,7 @@ def make_dwm(
     n_particles = max(int(np.ceil(_desired / (d_particle * float(_D.min())))), 10)
 
     deficit_gen = jDWMAinslieGenerator(
+        boundaryConditionModel=_lookup(BOUNDARY_CONDITIONS, boundary_condition, "boundary_condition"),
         viscosity_model=_make_viscosity_model(viscosity_model, k1, k2),
         solver=implicit(),
         projectionModel=NoProjection(),
@@ -344,13 +391,19 @@ def make_dwm(
         dx=float(dx),
     )
 
-    particle_motion = HillVortexParticleMotion(
+    motion_kwargs = dict(
         x_speed=_lookup(X_SPEEDS, x_speed, "x_speed"),
-        temporal_filter=None,
+        temporal_filter=None if meandering_d is None else CutOffFrq(float(meandering_d)),
         spatial_filter=CGIRotorAvg(PARTICLE_SPATIAL_AVG_N),
         include_wakes=True,
         include_own_wake=False,
     )
+    # The stock class at dynamiks' own coefficient, so the default path is
+    # upstream's code rather than a copy of it.
+    if float(deflection_c) == DEFLECTION_C:
+        particle_motion = HillVortexParticleMotion(**motion_kwargs)
+    else:
+        particle_motion = ScaledHillVortexParticleMotion(c=deflection_c, **motion_kwargs)
 
     return DWMFlowSimulation(
         site=site,
