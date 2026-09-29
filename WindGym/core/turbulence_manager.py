@@ -37,6 +37,7 @@ class TurbulenceManager:
         turbulence_type: str,
         turbulence_box_path: Optional[Union[str, Path]] = None,
         max_turb_move: float = 2.0,
+        mann_params: Optional[dict] = None,
     ):
         """
         Initialize the turbulence manager.
@@ -47,10 +48,16 @@ class TurbulenceManager:
             turbulence_box_path: Path to turbulence box files (required for MannLoad)
             max_turb_move: Maximum distance turbines can move in one timestep (m)
                           Used to calculate wind direction change rate limits
+            mann_params: Optional overrides for the generated Mann box --
+                         any of alphaepsilon, L, Gamma, Nxyz, dxyz. The
+                         defaults are the IEC values for a utility-scale rotor
+                         (L=33.6 m, Gamma=3.9); a scaled model turbine needs
+                         its own, fitted to the measured spectrum.
         """
         self.turbulence_type = turbulence_type
         self.turbulence_box_path = turbulence_box_path
         self.max_turb_move = max_turb_move
+        self.mann_params = dict(mann_params or {})
 
         # Random number generator (set by environment)
         self.np_random = None
@@ -74,6 +81,7 @@ class TurbulenceManager:
         n_passthrough: int,
         burn_in_passthroughs: int,
         create_baseline: bool = False,
+        mean_wind=None,
     ) -> tuple:
         """
         Create turbulence fields and sites for agent and optionally baseline.
@@ -95,6 +103,12 @@ class TurbulenceManager:
             n_passthrough: Number of flow passthroughs for episode
             burn_in_passthroughs: Number of passthroughs for flow development
             create_baseline: Whether to create baseline site
+            mean_wind: Optional dynamiks MeanWind object giving a spatially
+                       varying mean wind (e.g. a wind-tunnel speed-up field).
+                       If None (default), the uniform `ws` is used exactly as
+                       before. The SAME object is given to the baseline site --
+                       an agent farm and a baseline farm in different inflows
+                       would make every reported gain meaningless.
 
         Returns:
             tuple: (site, site_baseline, t_developed, time_max, added_turbulence_model)
@@ -130,28 +144,37 @@ class TurbulenceManager:
 
         d_theta_lim = self.max_turb_move * 360 / (2 * np.pi * max_dist)
 
-        # Create agent site
-        site = MetmastSite(
-            ws=ws,
-            turbulenceField=tf_agent,
-            wd_lst=wd_list,
-            dt=dt_sim,
-            max_wd_step=d_theta_lim,
-            update_interval=dt_sim,
-        )
-
-        # Create baseline site if requested
-        site_baseline = None
-        if create_baseline:
-            tf_base = copy.deepcopy(tf_agent)
-            site_baseline = MetmastSite(
+        def _make_site(turbulence_field):
+            kwargs = dict(
                 ws=ws,
-                turbulenceField=tf_base,
+                turbulenceField=turbulence_field,
                 wd_lst=wd_list,
                 dt=dt_sim,
                 max_wd_step=d_theta_lim,
                 update_interval=dt_sim,
             )
+            if mean_wind is None:
+                return MetmastSite(**kwargs)
+            # The MeanWind object carries the SHAPE of the field; the episode's
+            # drawn `ws` is its amplitude. It is constructed once by the caller,
+            # so its own `ws` must be refreshed here or every episode silently
+            # runs at whatever speed it happened to be built with.
+            mean_wind.ws = ws
+            # MetmastSite.__init__ ends by overwriting add_mean_windspeed with
+            # its own uniform-wind method, so a MeanWind passed in is otherwise
+            # silently discarded. Restore it after construction.
+            site = MetmastSite(**kwargs)
+            site.add_mean_windspeed = mean_wind
+            return site
+
+        # Create agent site
+        site = _make_site(tf_agent)
+
+        # Create baseline site if requested -- same mean_wind, deliberately.
+        site_baseline = None
+        if create_baseline:
+            tf_base = copy.deepcopy(tf_agent)
+            site_baseline = _make_site(tf_base)
             tf_base = None
 
         # Clean up
@@ -213,10 +236,10 @@ class TurbulenceManager:
         """Generate new Mann turbulence box with random seed."""
         tf_seed = self.np_random.integers(0, 100000)
 
-        tf = MannTurbulenceField.generate(
+        kwargs = dict(
             alphaepsilon=0.1,  # turbulence dissipation parameter
-            L=33.6,  # length scale (m)
-            Gamma=3.9,  # anisotropy parameter
+            L=33.6,  # length scale (m) -- IEC, i.e. a utility-scale rotor
+            Gamma=3.9,  # anisotropy parameter -- likewise
             Nxyz=(4096, 512, 64),  # grid points (x, y, z)
             dxyz=(
                 rotor_diameter / 20,
@@ -225,6 +248,9 @@ class TurbulenceManager:
             ),  # grid spacing
             seed=tf_seed,
         )
+        kwargs.update(self.mann_params)
+        kwargs["seed"] = tf_seed  # never let a config pin the seed
+        tf = MannTurbulenceField.generate(**kwargs)
         tf.scale_TI(TI=ti, U=ws)
 
         added_turb_model = SynchronizedAutoScalingIsotropicMannTurbulence(

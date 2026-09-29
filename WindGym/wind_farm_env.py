@@ -78,6 +78,10 @@ class WindFarmEnv(gym.Env):
         yaw_scaling_max: float = 45,
         TurbBox="Default",
         turbtype="Random",
+        mean_wind=None,
+        mann_params=None,
+        particleDeficitGenerator=None,
+        particleMotionModel=None,
         backend: str = "dynamiks",
         config=None,
         Baseline_comp=False,
@@ -182,6 +186,20 @@ class WindFarmEnv(gym.Env):
         self.n_particles = None
         self.temporal_filter = CutOffFrqLio2021
         self.turbtype = turbtype
+        # Optional dynamiks MeanWind giving a spatially varying mean wind (a
+        # wind-tunnel speed-up field, terrain speed-up, ...). None = uniform,
+        # i.e. exactly the previous behaviour. Applied to the agent AND the
+        # baseline farm; see TurbulenceManager.create_sites.
+        self.mean_wind = mean_wind
+        # Overrides for the generated Mann box (alphaepsilon, L, Gamma, Nxyz,
+        # dxyz). None = the IEC defaults, i.e. the previous behaviour.
+        self.mann_params = mann_params
+        # DWM wake model objects. None (default) = the library defaults, i.e.
+        # the previous behaviour. A CALLABLE is invoked per reset so agent and
+        # baseline each get a fresh instance -- these carry solver state, and
+        # sharing one between the two farms silently couples them.
+        self._particleDeficitGenerator = particleDeficitGenerator
+        self._particleMotionModel = particleMotionModel
         self.yaw_step_sim = yaw_step_sim  # How many degrees the yaw angles can change pr. simulation step
 
         if yaw_step_env is None:
@@ -250,6 +268,7 @@ class WindFarmEnv(gym.Env):
         # Initialize the turbulence manager
         self.turbulence_manager = TurbulenceManager(
             turbulence_type=turbtype,
+            mann_params=mann_params,
             turbulence_box_path=TurbBox,
             max_turb_move=max_turb_move,
         )
@@ -686,6 +705,21 @@ class WindFarmEnv(gym.Env):
         wind_cond = self.wind_manager.sample_conditions()
         self.ws, self.wd, self.ti = wind_cond.unpack()
 
+
+    def _make_deficit_generator(self):
+        """Fresh deficit generator per farm. None -> the library default."""
+        g = self._particleDeficitGenerator
+        if g is None:
+            return jDWMAinslieGenerator()
+        return g() if callable(g) and not isinstance(g, jDWMAinslieGenerator) else g
+
+    def _make_motion_model(self):
+        """Fresh particle-motion model per farm. None -> the library default."""
+        m = self._particleMotionModel
+        if m is None:
+            return HillVortexParticleMotion(temporal_filter=self.temporal_filter)
+        return m() if callable(m) and not isinstance(m, HillVortexParticleMotion) else m
+
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
         """
         Reset the environment. This is called at the start of every episode.
@@ -769,19 +803,18 @@ class WindFarmEnv(gym.Env):
                 n_passthrough=self.n_passthrough,
                 burn_in_passthroughs=self.burn_in_passthroughs,
                 create_baseline=self.Baseline_comp,
+                mean_wind=self.mean_wind,
             )
 
             self.fs = DWMFlowSimulation(
                 site=self.site,
                 windTurbines=self.wts,
                 wind_direction=self.wd,
-                particleDeficitGenerator=jDWMAinslieGenerator(),
+                particleDeficitGenerator=self._make_deficit_generator(),
                 dt=self.dt,
                 n_particles=self.n_particles,
                 d_particle=self.d_particle,
-                particleMotionModel=HillVortexParticleMotion(
-                    temporal_filter=self.temporal_filter
-                ),
+                particleMotionModel=self._make_motion_model(),
                 addedTurbulenceModel=self.addedTurbulenceModel,
             )
             self.wd = self.fs._wind_direction  # Update to match wd_list first value
@@ -822,17 +855,18 @@ class WindFarmEnv(gym.Env):
         # 3b) Baseline flow sim (optional)
         if self.Baseline_comp:
             if self.backend == "dynamiks":
+                # SAME wake model as the agent farm, deliberately. A calibrated
+                # agent farm against an uncalibrated baseline makes every
+                # reported gain meaningless.
                 self.fs_baseline = DWMFlowSimulation(
                     site=self.site_base,
                     windTurbines=self.wts_baseline,
                     wind_direction=self.wd,
-                    particleDeficitGenerator=jDWMAinslieGenerator(),
+                    particleDeficitGenerator=self._make_deficit_generator(),
                     dt=self.dt,
                     n_particles=self.n_particles,
                     d_particle=self.d_particle,
-                    particleMotionModel=HillVortexParticleMotion(
-                        temporal_filter=self.temporal_filter
-                    ),
+                    particleMotionModel=self._make_motion_model(),
                     addedTurbulenceModel=self.addedTurbulenceModel,
                 )
             else:
