@@ -17,7 +17,10 @@ particles automatically and side-by-side layouts still carry wakes.
 from __future__ import annotations
 
 import inspect
+import math
 import warnings
+from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
@@ -29,9 +32,10 @@ from dynamiks.dwm.projection_models import NoProjection
 # from dynamiks.utils.data_dumper import runningAverageSensor
 from dynamiks.wind_turbines import PyWakeWindTurbines
 # from dynamiks.wind_turbines.ti_model import RunningAverageSensorTIModel
-from jDWM.EddyViscosityModel import keck
+from jDWM.EddyViscosityModel import IEC, keck, larsen, madsen
 from jDWM.Solvers import implicit
 from py_wake.rotor_avg_models import CGIRotorAvg
+from py_wake.superposition_models import LinearSum
 
 from dynamiks.dwm.superposition import MixedSum #MixedSum instead of rss
 from dynamiks.wind_turbines.ti_models import TISensor, MeanMethod
@@ -77,6 +81,160 @@ MANN_GAMMA = 3.9
 # only.
 MANN_NXYZ = (1024, 256, 128)
 MANN_DXYZ = (3.2, 3.2, 3.2)
+
+
+# === Model-structure registries ==============================================
+# Categorical ``dwm_params`` keys resolve through these tables (case-insensitive).
+@dataclass(frozen=True)
+class _ViscositySpec:
+    """How to build one jDWM eddy-viscosity model from ``(k1, k2)``.
+
+    ``k1_name`` is the model's own name for the ambient coefficient (``kamb``
+    for larsen, ``k1`` otherwise); ``pinned`` are WindGym's calibrated
+    coefficients, applied when the caller leaves ``k1``/``k2`` at ``None``.
+    Models without a pinned entry fall back to their jDWM defaults.
+    """
+
+    cls: type
+    k1_name: str
+    pinned: dict = field(default_factory=dict)
+
+
+VISCOSITY_MODELS: dict[str, _ViscositySpec] = {
+    "keck": _ViscositySpec(keck, "k1", {"k1": K1, "k2": K2}),
+    "madsen": _ViscositySpec(madsen, "k1"),
+    "larsen": _ViscositySpec(larsen, "kamb"),
+    "iec": _ViscositySpec(IEC, "k1"),
+}
+# PyWake's SquaredSum asserts on the signed v/w deficits DWM produces, so it
+# is deliberately not offered here.
+SUPERPOSITION_MODELS: dict[str, type] = {"mixed": MixedSum, "linear": LinearSum}
+X_SPEEDS: dict[str, XSpeed] = {
+    "particle": XSpeed.Particle,
+    "global": XSpeed.Global,
+    "rotor": XSpeed.Rotor,
+}
+
+
+def _lookup(registry: dict, value, name: str):
+    """Resolve a categorical ``dwm_params`` value; raise listing the choices."""
+    key = value.lower() if isinstance(value, str) else None
+    if key not in registry:
+        raise ValueError(
+            f"Unknown {name} {value!r}. Choices: {sorted(registry)}"
+        )
+    return registry[key]
+
+
+def _make_viscosity_model(viscosity_model, k1, k2):
+    """Instantiate the selected jDWM viscosity model at TI=1 (dynamiks rescales TI)."""
+    spec = _lookup(VISCOSITY_MODELS, viscosity_model, "viscosity_model")
+    kwargs = dict(spec.pinned)
+    if k1 is not None:
+        kwargs[spec.k1_name] = float(k1)
+    if k2 is not None:
+        kwargs["k2"] = float(k2)
+    return spec.cls(TI=1.0, **kwargs)
+
+
+# === dwm_params specification ================================================
+@dataclass(frozen=True)
+class DWMParamSpec:
+    """Validation metadata for one ``dwm_params`` key.
+
+    ``kind`` is ``"float"``, ``"int"`` or ``"choice"``; ``group`` says which
+    subsystem consumes the key (``"make_dwm"`` or ``"mann"``, the latter
+    routed to ``TurbulenceManager.create_sites``).
+    """
+
+    kind: str
+    default: Any
+    group: str
+    choices: tuple = ()
+    nullable: bool = False
+    doc: str = ""
+
+
+DWM_PARAM_SPEC: dict[str, DWMParamSpec] = {
+    "k1": DWMParamSpec("float", None, "make_dwm", nullable=True,
+                       doc="Ambient eddy-viscosity coefficient (larsen: kamb). "
+                           "None = the selected viscosity model's own value "
+                           f"(keck: calibrated {K1})."),
+    "k2": DWMParamSpec("float", None, "make_dwm", nullable=True,
+                       doc="Wake-shear eddy-viscosity coefficient. None = the "
+                           f"selected model's own value (keck: calibrated {K2})."),
+    "d_particle": DWMParamSpec("float", D_PARTICLE, "make_dwm",
+                               doc="Streamwise particle spacing [D]."),
+    "viscosity_model": DWMParamSpec("choice", "keck", "make_dwm",
+                                    choices=tuple(VISCOSITY_MODELS),
+                                    doc="jDWM eddy-viscosity closure."),
+    "superposition": DWMParamSpec("choice", "mixed", "make_dwm",
+                                  choices=tuple(SUPERPOSITION_MODELS),
+                                  doc="Wake deficit superposition (PyWake model)."),
+    "x_speed": DWMParamSpec("choice", "particle", "make_dwm",
+                            choices=tuple(X_SPEEDS),
+                            doc="Particle streamwise advection speed. global/rotor "
+                                "change the dynamics materially vs the calibrated "
+                                "particle setting."),
+    "r_max": DWMParamSpec("float", AINSLIE_R_MAX, "make_dwm",
+                          doc="Ainslie radial domain extent [R]. Also rescales the "
+                              "lateral_cutoff radius (cutoff = lateral_cutoff*r_max*R)."),
+    "n_r": DWMParamSpec("int", AINSLIE_N_R, "make_dwm",
+                        doc="Ainslie radial grid points. dynamiks warns when "
+                            "dr = r_max/(n_r-1) > 0.2 (implicit solver stability)."),
+    "dx": DWMParamSpec("float", AINSLIE_DX, "make_dwm",
+                       doc="Ainslie axial step [D]. dynamiks warns when dx < 25*dr**2."),
+    "lateral_cutoff": DWMParamSpec("float", None, "make_dwm", nullable=True,
+                                   doc="Lateral wake-interaction cutoff in units of "
+                                       "r_max*R; None = no cutoff. Overrides the env's "
+                                       "constructor value for the episode."),
+    "mann_L": DWMParamSpec("float", MANN_L, "mann", doc="Mann length scale [m]."),
+    "mann_GAMMA": DWMParamSpec("float", MANN_GAMMA, "mann", doc="Mann anisotropy Γ."),
+    "mann_AE": DWMParamSpec("float", MANN_AE, "mann",
+                            doc="Mann αε. Required whenever any Mann key is active."),
+}
+
+
+def _check_numeric(key: str, spec: DWMParamSpec, value, where: str) -> None:
+    if isinstance(value, (bool, str)):
+        raise ValueError(f"dwm_params[{key!r}]{where} must be a number, got {value!r}")
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"dwm_params[{key!r}]{where} must be a number, got {value!r}") from None
+    if not math.isfinite(f) or f <= 0:
+        raise ValueError(f"dwm_params[{key!r}]{where} must be finite and > 0, got {value!r}")
+    if spec.kind == "int" and f != int(f):
+        raise ValueError(f"dwm_params[{key!r}]{where} must be an integer, got {value!r}")
+
+
+def validate_dwm_params(params: dict, where: str = "") -> None:
+    """Raise ``ValueError`` unless every entry of ``params`` is a valid ``dwm_params`` key/value.
+
+    ``where`` is appended to the message (e.g. " in reset options") so the
+    caller is identifiable from the traceback. The "Unknown dwm_params keys"
+    prefix is relied on by existing tests.
+    """
+    bad = set(params) - set(DWM_PARAM_SPEC)
+    if bad:
+        raise ValueError(
+            f"Unknown dwm_params keys{where}: {sorted(bad)}. "
+            f"Allowed: {sorted(DWM_PARAM_SPEC)}"
+        )
+    for key, value in params.items():
+        spec = DWM_PARAM_SPEC[key]
+        if value is None:
+            if not spec.nullable:
+                raise ValueError(f"dwm_params[{key!r}]{where} may not be None")
+            continue
+        if spec.kind == "choice":
+            if not isinstance(value, str) or value.lower() not in spec.choices:
+                raise ValueError(
+                    f"dwm_params[{key!r}]{where} must be one of {list(spec.choices)}, "
+                    f"got {value!r}"
+                )
+        else:
+            _check_numeric(key, spec, value, where)
 
 
 def make_wts(x, y, windTurbine) -> PyWakeWindTurbines:
@@ -129,19 +287,34 @@ def make_dwm(
     wind_direction,
     dt,
     addedTurbulenceModel,
-    k1: float = K1,
-    k2: float = K2,
+    k1: float | None = None,
+    k2: float | None = None,
     d_particle: float = D_PARTICLE,
     interpolation: str = "pchip",
     lateral_cutoff=None,
+    viscosity_model: str = "keck",
+    superposition: str = "mixed",
+    x_speed: str = "particle",
+    r_max: float = AINSLIE_R_MAX,
+    n_r: int = AINSLIE_N_R,
+    dx: float = AINSLIE_DX,
 ) -> DWMFlowSimulation:
     """Assemble a DWMFlowSimulation under the calibrated setup.
 
     The caller drives it via ``fs.step()`` in a time loop.
 
-    The three closure knobs (``k1``, ``k2``, ``d_particle``) default to the
-    module constants, so existing call sites stay unchanged. Override them at
-    episode reset to do domain randomization.
+    Every keyword after ``addedTurbulenceModel`` defaults to the calibrated
+    setup, so existing call sites stay unchanged. Override them at episode
+    reset to do domain randomization or robustness evaluation:
+
+    - ``k1``/``k2`` (``None`` = the selected viscosity model's coefficients;
+      keck -> the calibrated ``K1``/``K2``), ``d_particle``
+    - ``viscosity_model`` / ``superposition`` / ``x_speed``: categorical,
+      resolved through ``VISCOSITY_MODELS`` / ``SUPERPOSITION_MODELS`` /
+      ``X_SPEEDS``
+    - ``r_max`` / ``n_r`` / ``dx``: Ainslie solver grid
+
+    See ``DWM_PARAM_SPEC`` for the per-key documentation.
     """
     # Particle count: dynamiks auto-computes ceil(farm_size_x*1.2/d_particle)
     # with a floor of 10 particles, which degenerates for layouts where all
@@ -163,16 +336,16 @@ def make_dwm(
     n_particles = max(int(np.ceil(_desired / (d_particle * float(_D.min())))), 10)
 
     deficit_gen = jDWMAinslieGenerator(
-        viscosity_model=keck(TI=1.0, dudz_abl=1.0, k1=k1, k2=k2),
+        viscosity_model=_make_viscosity_model(viscosity_model, k1, k2),
         solver=implicit(),
         projectionModel=NoProjection(),
-        r_max=AINSLIE_R_MAX,
-        n_r=AINSLIE_N_R,
-        dx=AINSLIE_DX,
+        r_max=float(r_max),
+        n_r=int(n_r),
+        dx=float(dx),
     )
 
     particle_motion = HillVortexParticleMotion(
-        x_speed=XSpeed.Particle,
+        x_speed=_lookup(X_SPEEDS, x_speed, "x_speed"),
         temporal_filter=None,
         spatial_filter=CGIRotorAvg(PARTICLE_SPATIAL_AVG_N),
         include_wakes=True,
@@ -187,7 +360,7 @@ def make_dwm(
         d_particle=d_particle,
         n_particles=n_particles,
         addedTurbulenceModel=addedTurbulenceModel,
-        superpositionModel=MixedSum(),
+        superpositionModel=_lookup(SUPERPOSITION_MODELS, superposition, "superposition")(),
         wind_direction=wind_direction,
         dt=dt,
         # Speedups, not part of the LES calibration (which ran pchip / no

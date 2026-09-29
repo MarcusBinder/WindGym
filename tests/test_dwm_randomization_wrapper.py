@@ -148,3 +148,11 @@ def test_last_theta_returns_a_copy():
     snapshot = w.last_theta
     snapshot["k1"] = 999.0  # try to corrupt internal state
     assert w.last_theta == {"k1": 0.05}
+
+
+def test_wrapper_passes_categorical_model_keys_through():
+    """Model-structure keys (e.g. viscosity_model) are forwarded untouched."""
+    env = _StubEnv()
+    wrapped = DWMRandomizationWrapper(env, sampler=_const_sampler({"viscosity_model": "madsen"}))
+    wrapped.reset()
+    assert env.last_options == {"dwm_params": {"viscosity_model": "madsen"}}

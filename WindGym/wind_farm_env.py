@@ -31,7 +31,13 @@ from .core.renderer import WindFarmRenderer
 from .core.baseline_manager import BaselineManager
 from .core.probe_manager import ProbeManager
 from .core.power_tracking import PowerTrackingManager
-from .core.dwm_defaults import make_wts, make_dwm, add_hawc2_yaw_sensor
+from .core.dwm_defaults import (
+    DWM_PARAM_SPEC,
+    make_wts,
+    make_dwm,
+    add_hawc2_yaw_sensor,
+    validate_dwm_params,
+)
 from .core.derating import (
     add_hawc2_derate_sensor,
     check_htc_supports_derating,
@@ -71,27 +77,28 @@ class WindFarmEnv(gym.Env):
     op_lookup = None
 
     # Allowed keys for `dwm_params` (constructor) and `options["dwm_params"]`
-    # (reset). Split so the reset path can partition closure overrides
-    # (forwarded to ``make_dwm``) from Mann-box overrides (forwarded to
-    # ``TurbulenceManager.create_sites``). Anything outside the union raises so
-    # DR typos don't silently no-op.
-    _CLOSURE_PARAM_KEYS = frozenset({"k1", "k2", "d_particle"})
-    _MANN_PARAM_KEYS    = frozenset({"mann_L", "mann_GAMMA", "mann_AE"})
+    # (reset), derived from ``dwm_defaults.DWM_PARAM_SPEC`` (the single source
+    # of truth). Split so the reset path can partition make_dwm overrides
+    # (closure coefficients, model choices, solver grid) from Mann-box
+    # overrides (forwarded to ``TurbulenceManager.create_sites``). Anything
+    # outside the union raises so DR typos don't silently no-op.
+    _CLOSURE_PARAM_KEYS = frozenset(
+        k for k, spec in DWM_PARAM_SPEC.items() if spec.group == "make_dwm"
+    )
+    _MANN_PARAM_KEYS = frozenset(
+        k for k, spec in DWM_PARAM_SPEC.items() if spec.group == "mann"
+    )
     _DWM_PARAM_KEYS     = _CLOSURE_PARAM_KEYS | _MANN_PARAM_KEYS
 
     @classmethod
     def _validate_dwm_keys(cls, params: dict, where: str = "") -> None:
-        """Raise ValueError if any key in ``params`` is outside ``_DWM_PARAM_KEYS``.
+        """Raise ValueError on unknown keys or invalid values in ``params``.
 
         ``where`` is appended to the message (e.g. " in reset options") so the
-        caller is identifiable from the traceback.
+        caller is identifiable from the traceback. Categorical keys must name
+        a registered choice; numeric keys must be finite and positive.
         """
-        bad = set(params) - cls._DWM_PARAM_KEYS
-        if bad:
-            raise ValueError(
-                f"Unknown dwm_params keys{where}: {sorted(bad)}. "
-                f"Allowed: {sorted(cls._DWM_PARAM_KEYS)}"
-            )
+        validate_dwm_params(params, where)
 
     def __init__(
         self,
@@ -146,7 +153,7 @@ class WindFarmEnv(gym.Env):
         interpolation="linear",  # Particle trajectory interpolation in the DWM solver: 'linear' (fast) or 'pchip' (cubic, original)
         lateral_cutoff=1.5,  # Skip wake deficit evaluation beyond this factor times the deficit profile half-width (r_max*R) from the meandered wake centerline. None disables (original behavior).
         tilt: Optional[float] = None,  # Fixed rotor tilt in deg for all turbines (positive deflects the wake upward in DWM). None -> use config `farm: tilt` (default 0). Needed for veer to create a yaw-sign asymmetry.
-        dwm_params: Optional[dict] = None,  # Override DWM closure params (k1, k2, d_particle). Used for domain randomization; per-episode overrides go through reset(options={"dwm_params": ...}).
+        dwm_params: Optional[dict] = None,  # Override DWM params (see core.dwm_defaults.DWM_PARAM_SPEC: k1, k2, d_particle, viscosity_model, superposition, x_speed, r_max, n_r, dx, lateral_cutoff, mann_*). Used for domain randomization; per-episode overrides go through reset(options={"dwm_params": ...}).
         **kwargs,
     ):
         """
@@ -459,6 +466,12 @@ class WindFarmEnv(gym.Env):
         # Note: init_render() will be called lazily when first needed (after reset creates self.fs)
 
     @property
+    def active_dwm_params(self) -> dict:
+        """The ``dwm_params`` in effect: constructor base merged with the
+        current episode's ``reset(options=)`` overrides (a copy)."""
+        return dict(self._active_dwm_params)
+
+    @property
     def TF_files(self) -> list:
         """MannLoad turbulence box files (the turbulence manager's list)."""
         return self.turbulence_manager.turbulence_files
@@ -721,17 +734,22 @@ class WindFarmEnv(gym.Env):
     def _build_dwm_fs(self, site, windTurbines, closure_overrides):
         """Construct the DWM flow simulation: dwm_defaults.make_dwm -- the
         closure the LES/SBI calibration was run against; closure_overrides
-        (k1, k2, d_particle) are the per-episode DR draws (empty dict =
-        calibrated nominal)."""
+        (every make_dwm-group key of ``DWM_PARAM_SPEC``: k1, k2, d_particle,
+        model choices, solver grid, lateral_cutoff) are the per-episode DR
+        draws (empty dict = calibrated nominal). A per-episode
+        ``lateral_cutoff`` overrides the constructor's value."""
+        kwargs = {
+            "interpolation": self.interpolation,
+            "lateral_cutoff": self.lateral_cutoff,
+        }
+        kwargs.update(closure_overrides)
         return make_dwm(
             site=site,
             windTurbines=windTurbines,
             wind_direction=self.wd,
             dt=self.dt,
             addedTurbulenceModel=self.addedTurbulenceModel,
-            interpolation=self.interpolation,
-            lateral_cutoff=self.lateral_cutoff,
-            **closure_overrides,
+            **kwargs,
         )
 
     def _get_info(self) -> dict[str, Any]:

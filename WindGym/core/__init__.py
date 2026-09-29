@@ -15,6 +15,14 @@ from .power_tracking import PowerTrackingManager
 from .mes_class import Mes, TurbMes, FarmMes
 from .wind_probe import WindProbe
 from .operating_point import OperatingPointLookup
+from .dwm_defaults import (
+    DWM_PARAM_SPEC,
+    DWMParamSpec,
+    SUPERPOSITION_MODELS,
+    VISCOSITY_MODELS,
+    X_SPEEDS,
+    validate_dwm_params,
+)
 from .measurement_manager import (
     MeasurementType,
     MeasurementSpec,
@@ -41,6 +49,12 @@ __all__ = [
     "FarmMes",
     "WindProbe",
     "OperatingPointLookup",
+    "DWM_PARAM_SPEC",
+    "DWMParamSpec",
+    "SUPERPOSITION_MODELS",
+    "VISCOSITY_MODELS",
+    "X_SPEEDS",
+    "validate_dwm_params",
     "MeasurementType",
     "MeasurementSpec",
     "NoiseModel",
