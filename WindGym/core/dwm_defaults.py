@@ -150,6 +150,19 @@ def _make_viscosity_model(viscosity_model, k1, k2):
 
 
 # === dwm_params specification ================================================
+# TODO: every physics value below should be overridable through dwm_params, as
+# the evaluation code expects (full flexibility, each key defaulting to the
+# current value). Still hardcoded:
+#   - make_wts: rotor-average kernel CGIRotorAvg(ROTOR_AVG_N), and the TI model
+#     TISensor(mean_method, T=600) (TI_RUNNING_AVG_S is defined but unused).
+#     Built at env construction, not per reset, so these need a
+#     constructor-only group.
+#   - make_dwm motion model: PARTICLE_SPATIAL_AVG_N (and None = no spatial
+#     filter), include_wakes, include_own_wake.
+#   - make_dwm deficit generator: solver (implicit), projectionModel
+#     (NoProjection), scale_with_freestream.
+#   - make_dwm: the 15 D downstream floor on n_particles.
+#   - TurbulenceManager._added_turb_model: the Branlard added-turbulence scaling.
 @dataclass(frozen=True)
 class DWMParamSpec:
     """Validation metadata for one ``dwm_params`` key.
