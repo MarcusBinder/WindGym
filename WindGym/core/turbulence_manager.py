@@ -157,6 +157,7 @@ class TurbulenceManager:
         veer_rate: float = 0.0,
         veer_ref_height: float = 0.0,
         episode_time_budget_s: Optional[float] = None,
+        mean_wind=None,
     ) -> tuple:
         """
         Create turbulence fields and sites for agent and optionally baseline.
@@ -181,7 +182,8 @@ class TurbulenceManager:
             create_baseline: Whether to create baseline site
             mann_overrides: Optional dict with per-episode Mann-box parameter
                 overrides drawn from a calibrated posterior. Recognized keys:
-                ``mann_L``, ``mann_GAMMA``, ``mann_AE``. Only honored by the
+                ``mann_L``, ``mann_GAMMA``, ``mann_AE``, ``mann_Nxyz``,
+                ``mann_dxyz``. Only honored by the
                 ``MannGenerate`` branch (other branches raise if non-empty —
                 this is defense-in-depth; ``WindFarmEnv.reset`` is the primary
                 guard).
@@ -196,6 +198,14 @@ class TurbulenceManager:
                 passes it because it overrides time_max after
                 _calculate_time_parameters. Default None falls back to
                 t_developed + time_max as computed here.
+            mean_wind: Optional dynamiks ``MeanWind`` giving a spatially
+                varying mean wind (e.g. a wind-tunnel speed-up and shear
+                field). Its ``ws`` is refreshed to the episode's ``ws``, which
+                is its amplitude. None (default) = MetmastSite's own uniform
+                mean wind. Given to the baseline site too: an agent and a
+                baseline farm in different inflows make every gain
+                meaningless. Replaces MetmastSite's wd_small/veer mean wind,
+                so it cannot be combined with veer.
 
         Returns:
             tuple: (site, site_baseline, t_developed, time_max, added_turbulence_model)
@@ -205,6 +215,11 @@ class TurbulenceManager:
             raise RuntimeError(
                 "np_random must be set before creating sites. "
                 "Call env.reset() to initialize the random generator."
+            )
+        if mean_wind is not None and (veer_rate or self.turbulence_type == "Precursor"):
+            raise ValueError(
+                "mean_wind replaces MetmastSite's mean wind, which is what "
+                "carries veer; it cannot be combined with veer or a Precursor box."
             )
 
         # Generate turbulence field
@@ -249,7 +264,7 @@ class TurbulenceManager:
             # time-varying wd_slow), so veer composes with a changing wind
             # direction. Replaces the old ConstantWindSpeedProfile site fork,
             # which could not express a time-varying wd.
-            return MetmastSite(
+            site = MetmastSite(
                 ws=ws,
                 turbulenceField=tf,
                 wd_lst=wd_list,
@@ -259,6 +274,16 @@ class TurbulenceManager:
                 veer_rate=veer_rate,
                 veer_ref_height=veer_ref_height,
             )
+            if mean_wind is not None:
+                # The MeanWind carries the field's SHAPE; the episode's drawn
+                # ws is its amplitude. It is built once by the caller, so
+                # refresh it or every episode runs at its construction speed.
+                mean_wind.ws = ws
+                # MetmastSite.__init__ ends by overwriting add_mean_windspeed
+                # with its own uniform method, silently discarding a MeanWind
+                # passed as ws. Restore it after construction.
+                site.add_mean_windspeed = mean_wind
+            return site
 
         # Create agent site
         site = _make_site(tf_agent)
@@ -386,6 +411,9 @@ class TurbulenceManager:
         are byte-identical to pre-change behaviour.
         """
         overrides = mann_overrides or {}
+        # mann_AE=None is the explicit opt-out: set the box's statistics
+        # (L, Γ, grid) but keep the legacy scale_TI to the episode's TI.
+        scale_to_ti = not overrides or overrides.get("mann_AE", MANN_AE) is None
         if overrides and "mann_AE" not in overrides:
             # Any override skips scale_TI below, making alphaepsilon
             # authoritative — a partial draw (e.g. only mann_L) would silently
@@ -394,7 +422,8 @@ class TurbulenceManager:
                 f"mann_overrides={sorted(overrides)} lacks 'mann_AE': with any "
                 "Mann override present scale_TI is skipped, so mann_AE must be "
                 "drawn too (sample all Mann keys jointly, as the Stage-7 "
-                "posterior does)."
+                "posterior does), or set mann_AE=None to rescale the box to "
+                "the episode's TI instead."
             )
 
         if self.box_seed is not None:
@@ -405,18 +434,19 @@ class TurbulenceManager:
 
         # LES-calibrated spec (dwm_defaults); overrides come from the
         # calibrated posterior and make alphaepsilon authoritative.
+        ae = overrides.get("mann_AE", MANN_AE)
         tf = MannTurbulenceField.generate(
-            alphaepsilon=float(overrides.get("mann_AE", MANN_AE)),
+            alphaepsilon=float(MANN_AE if ae is None else ae),
             L=float(overrides.get("mann_L", MANN_L)),
             Gamma=float(overrides.get("mann_GAMMA", MANN_GAMMA)),
-            Nxyz=MANN_NXYZ,
-            dxyz=MANN_DXYZ,
+            Nxyz=tuple(int(n) for n in overrides.get("mann_Nxyz", MANN_NXYZ)),
+            dxyz=tuple(float(d) for d in overrides.get("mann_dxyz", MANN_DXYZ)),
             seed=tf_seed,
         )
-        if not overrides:
-            # Nominal (non-DR) episodes: renormalise the raw box to the env's
-            # nominal ambient TI. With overrides, αε is authoritative — see
-            # docstring above.
+        if scale_to_ti:
+            # Nominal (non-DR) episodes, or mann_AE=None: renormalise the raw
+            # box to the env's nominal ambient TI. Otherwise αε is
+            # authoritative — see docstring above.
             tf.scale_TI(TI=ti, U=ws)
 
         return tf, self._added_turb_model()
