@@ -183,8 +183,24 @@ def test_recorder_dataset_variable_order_and_coords():
     assert all(ds[v].dtype == np.float32 for v in ds.data_vars)
     assert ds.ws.dtype == np.int64  # coords passed uncast
     assert ds.turbbox.dtype.kind == "U"
-    assert ds.time.dtype.kind == "i"
+    assert ds.time.dtype.kind == "f"  # sim time in seconds; dt_sim may be sub-second
     assert list(ds.coords) == ["ws", "wd", "turb", "time", "TI", "turbbox", "model_step", "deterministic"]
+
+
+def test_recorder_keeps_sub_second_sim_time():
+    """dt_sim < 1 s (the G1 runs at 0.125 s): the time coord must carry the
+    fractional sim time, or every second repeats step_val times and the
+    per-case datasets cannot be concatenated (duplicate index)."""
+    step_val = 4
+    rec = EpisodeRecorder(1 + 2 * step_val, 1, baseline=False, op_mode=False, log_derate=False, tracking=False)
+    for i in range(2):
+        t_arr = np.arange(1, step_val + 1) * 0.125 + i * 0.5
+        info = {"powers": np.zeros((step_val, 1)), "yaws": np.zeros((step_val, 1)),
+                "windspeeds": np.zeros((step_val, 1)), "time_array": t_arr}
+        rec.record_step(i, step_val, info, 0.0)
+    ds = rec.to_dataset(ws=5.5, wd=270.0, ti=0.06, turbbox="MannGenerate", model_step=0, deterministic=True)
+    np.testing.assert_array_equal(ds.time.values, np.arange(0, 9) * 0.125)
+    assert np.unique(ds.time.values).size == 9
 
 
 def test_recorder_minimal_has_only_core_variables():

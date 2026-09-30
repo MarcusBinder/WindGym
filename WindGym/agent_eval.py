@@ -116,10 +116,10 @@ def eval_single_fast(
     step_val = (
         env.sim_steps_per_env_step
     )  # This is the number of steps per environment step
-    total_steps = (
-        t_sim // env.dt_env + 1
-    )  # This is the total number of steps to simulate
-    time = total_steps * step_val + 1
+    # int(): dt_env may be a non-integer float (G1 tunnel env: 0.75 s), and
+    # t_sim // 0.75 is a float that EpisodeRecorder cannot size arrays with.
+    total_steps = int(t_sim // env.dt_env) + 1  # This is the total number of steps to simulate
+    time = int(total_steps * step_val + 1)
 
     n_turb = env.n_turb  # Number of turbines
 

@@ -119,12 +119,14 @@ X_SPEEDS: dict[str, XSpeed] = {
 }
 # Near-wake boundary condition of the Ainslie solver. "madsen" is
 # jDWMAinslieGenerator's own default, i.e. what the calibrated setup runs.
+# Entries must be BoundaryCondition *classes* (jDWMAinslieGenerator asserts
+# issubclass at construction); jDWM's ``rotor_area_mean`` is a helper function,
+# not a boundary condition, so it is deliberately not offered.
 BOUNDARY_CONDITIONS: dict[str, type] = {
     "madsen": BoundaryCondition.madsen,
     "iec": BoundaryCondition.IEC,
     "keck": BoundaryCondition.keck,
     "none": BoundaryCondition.none,
-    "rotor_area_mean": BoundaryCondition.rotor_area_mean,
 }
 
 

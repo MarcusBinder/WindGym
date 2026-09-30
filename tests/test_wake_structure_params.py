@@ -60,6 +60,18 @@ def test_boundary_condition_registry(monkeypatch, name):
     assert cap["deficit"]["boundaryConditionModel"] is BOUNDARY_CONDITIONS[name.lower()]
 
 
+@pytest.mark.parametrize("name", sorted(BOUNDARY_CONDITIONS))
+def test_boundary_condition_registry_entries_are_accepted_by_jdwm(name):
+    """Every registry entry must be a BoundaryCondition *class*: the spy test
+    above only checks the lookup, but jDWMAinslieGenerator asserts
+    issubclass(..., BoundaryCondition) at construction, so a helper function
+    in the registry would only fail at the first reset."""
+    from dynamiks.dwm.particle_deficit_profiles.ainslie import jDWMAinslieGenerator
+
+    gen = jDWMAinslieGenerator(boundaryConditionModel=BOUNDARY_CONDITIONS[name])
+    assert isinstance(gen.boundaryConditionModel, BoundaryCondition.BoundaryCondition)
+
+
 def test_meandering_d_builds_cutoff_filter(monkeypatch):
     cap = _spy_with_scaled(monkeypatch, meandering_d=4.0)
     f = cap["motion"]["temporal_filter"]

@@ -184,5 +184,32 @@ def test_coords_passed_uncast():
     ds = run_eval(make_b, dict(ws=8, ti=0.06, wd=270.0, t_sim=2, seed=2))
     assert ds.ws.dtype == np.int64
     assert ds.turbbox.dtype.kind == "U"
-    assert ds.time.dtype.kind == "i"
+    assert ds.time.dtype.kind == "f"  # sim seconds; dt_sim may be sub-second
     assert ds.powerF_a.dtype == np.float32
+
+
+def test_sub_second_dt_env_sizes_recorder():
+    """dt_env=0.75, dt_sim=0.125 (the G1 tunnel env): total_steps was a float
+    (t_sim // 0.75 + 1), so EpisodeRecorder(np.zeros(float)) raised; and the
+    time coord must be unique (float sim seconds)."""
+    x, y = _row(V80(), 2)
+    env = FarmEval(
+        turbine=V80(),
+        x_pos=x,
+        y_pos=y,
+        config=get_fast_pywake_config(),
+        turbtype="None",
+        Baseline_comp=False,
+        dt_sim=0.125,
+        dt_env=0.75,
+        n_passthrough=0.5,
+        burn_in_passthroughs=0.05,
+        fill_window=1,
+        reset_init=False,
+    )
+    model = RandomModel(env.action_space.shape)
+    ds = AgentEvalFast(env, model, 1, deterministic=True, ws=8.0, ti=0.07, wd=270.0, t_sim=3, seed=1)
+    ds = ds.load() if hasattr(ds, "load") else ds
+    assert ds.time.dtype.kind == "f"
+    assert np.unique(ds.time.values).size == ds.time.size
+    assert ds.time.size == 5 * 6 + 1  # (3 // 0.75 + 1) env steps of 6 sim steps, plus t=0

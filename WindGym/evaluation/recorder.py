@@ -44,7 +44,9 @@ class EpisodeRecorder:
         self.powerT_a = np.zeros((time, n_turb), dtype=np.float32)
         self.yaw_a = np.zeros((time, n_turb), dtype=np.float32)
         self.ws_a = np.zeros((time, n_turb), dtype=np.float32)
-        self.time_plot = np.zeros((time), dtype=int)
+        # float: dt_sim may be sub-second (G1: 0.125 s); an int array would
+        # repeat each second step_val times and break concatenation on time.
+        self.time_plot = np.zeros((time), dtype=np.float64)
         self.rew_plot = np.zeros((time), dtype=np.float32)
 
         # Steady-state operating point (blade pitch / rotor RPM) is available when
