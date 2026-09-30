@@ -205,7 +205,10 @@ class TurbulenceManager:
                 mean wind. Given to the baseline site too: an agent and a
                 baseline farm in different inflows make every gain
                 meaningless. Replaces MetmastSite's wd_small/veer mean wind,
-                so it cannot be combined with veer.
+                so it cannot be combined with veer, and the fast wd
+                fluctuation (wd_small) is dropped. The field is evaluated in
+                the wind-aligned frame (x downstream, y lateral), so it
+                assumes the episode's wd is constant.
 
         Returns:
             tuple: (site, site_baseline, t_developed, time_max, added_turbulence_model)

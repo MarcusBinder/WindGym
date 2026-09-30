@@ -225,14 +225,28 @@ DWM_PARAM_SPEC: dict[str, DWMParamSpec] = {
                                      "a yawed rotor deflects its own wake. dynamiks "
                                      f"hardcodes {DEFLECTION_C}; see core.particle_motion."),
     "meandering_d": DWMParamSpec("float", None, "make_dwm", nullable=True,
-                                 doc="Meandering low-pass filter CutOffFrq(d) on the "
-                                     "particle motion. None = no temporal filter."),
+                                 doc="Meandering low-pass filter CutOffFrq(d): cut-off "
+                                     "fc = U/(d*D), so d is in rotor diameters and scales "
+                                     "with the turbine. None (calibrated) = no temporal "
+                                     "filter; 4 is dynamiks' own default (Lio 2021), "
+                                     "fitted with x_speed=global. NOTE: under the "
+                                     "calibrated x_speed='particle' the same filter also "
+                                     "low-passes the streamwise particle speed (dynamiks "
+                                     "only resets u for global/rotor), so it changes wake "
+                                     "advection, not just lateral meandering. For pure "
+                                     "meandering damping pair it with x_speed='global' "
+                                     "or re-fit the closure with it on."),
     "mann_L": DWMParamSpec("float", MANN_L, "mann", doc="Mann length scale [m]."),
     "mann_GAMMA": DWMParamSpec("float", MANN_GAMMA, "mann", doc="Mann anisotropy Γ."),
     "mann_AE": DWMParamSpec("float", MANN_AE, "mann", nullable=True,
-                            doc="Mann αε. Required whenever any Mann key is active. "
-                                "None = generate at the default αε and rescale the box "
-                                "to the episode's TI (scale_TI), as the non-DR path does."),
+                            doc="Mann αε. Required whenever any Mann key is active. A "
+                                "number makes αε authoritative: σ_u is then fixed, so the "
+                                "box's TI drifts with the episode's ws (a 5-6 m/s band is "
+                                "a 20% TI swing). None = generate at the default αε and "
+                                "rescale the box to the episode's TI per reset "
+                                "(scale_TI(TI, U=ws)), as the non-DR path does; this is "
+                                "the right choice when the ambient TI is held fixed while "
+                                "ws varies (a wind tunnel), and it needs no fitted αε."),
     "mann_Nxyz": DWMParamSpec("int3", MANN_NXYZ, "mann",
                               doc="Mann box grid points (nx, ny, nz)."),
     "mann_dxyz": DWMParamSpec("float3", MANN_DXYZ, "mann",

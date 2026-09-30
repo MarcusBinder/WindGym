@@ -153,8 +153,8 @@ class WindFarmEnv(gym.Env):
         interpolation="linear",  # Particle trajectory interpolation in the DWM solver: 'linear' (fast) or 'pchip' (cubic, original)
         lateral_cutoff=1.5,  # Skip wake deficit evaluation beyond this factor times the deficit profile half-width (r_max*R) from the meandered wake centerline. None disables (original behavior).
         tilt: Optional[float] = None,  # Fixed rotor tilt in deg for all turbines (positive deflects the wake upward in DWM). None -> use config `farm: tilt` (default 0). Needed for veer to create a yaw-sign asymmetry.
-        dwm_params: Optional[dict] = None,  # Override DWM params (see core.dwm_defaults.DWM_PARAM_SPEC: k1, k2, d_particle, viscosity_model, superposition, x_speed, r_max, n_r, dx, lateral_cutoff, boundary_condition, deflection_c, meandering_d, mann_*). Used for domain randomization; per-episode overrides go through reset(options={"dwm_params": ...}).
-        mean_wind=None,  # Optional dynamiks MeanWind: a spatially varying mean wind (e.g. a wind-tunnel speed-up/shear field) for the agent AND baseline farm. Its ws is set to each episode's ws. None = uniform ws.
+        dwm_params: Optional[dict] = None,  # Override DWM params (see core.dwm_defaults.DWM_PARAM_SPEC: k1, k2, d_particle, viscosity_model, superposition, x_speed, r_max, n_r, dx, lateral_cutoff, boundary_condition, deflection_c, meandering_d, mann_L, mann_GAMMA, mann_AE (None = rescale box to TI), mann_Nxyz, mann_dxyz). Used for domain randomization; per-episode overrides go through reset(options={"dwm_params": ...}).
+        mean_wind=None,  # Optional dynamiks MeanWind: a spatially varying mean wind (e.g. a wind-tunnel speed-up/shear field) for the agent AND baseline farm. Its ws is refreshed to each episode's ws at reset. It REPLACES MetmastSite's mean wind, so wd_small (the fast wd fluctuation) and veer are dropped; the field is evaluated in the wind-aligned frame (x downstream, y lateral), so it assumes the episode's wd is constant (fine for wd_min == wd_max == 270 or one wd per episode). None = uniform ws.
         **kwargs,
     ):
         """
@@ -838,22 +838,31 @@ class WindFarmEnv(gym.Env):
 
         Domain-randomization hook: pass
         ``options={"dwm_params": {"k1": ..., "mann_L": ..., ...}}`` to override
-        DWM parameters for this episode only. Two parameter groups are
-        supported:
+        DWM parameters for this episode only (any key of
+        ``core.dwm_defaults.DWM_PARAM_SPEC``, merged over the constructor's
+        ``dwm_params``). Two parameter groups are supported:
 
-        * **Closure** (``k1``, ``k2``, ``d_particle``) — forwarded to
-          ``make_dwm``. Honored under any ``turbtype``.
-        * **Mann box** (``mann_L``, ``mann_GAMMA``, ``mann_AE``) — forwarded to
-          ``TurbulenceManager.create_sites`` and used by ``MannGenerate`` to
-          rebuild the box per reset. **Only honored under
-          ``turbtype="MannGenerate"``** — under other turbtypes the box is not
-          regenerated from these statistics and the env raises rather than
-          silently dropping them.
+        * **make_dwm** (closure ``k1``, ``k2``, ``d_particle``; model choices
+          ``viscosity_model``, ``superposition``, ``x_speed``,
+          ``boundary_condition``; solver grid ``r_max``, ``n_r``, ``dx``,
+          ``lateral_cutoff``; wake structure ``deflection_c``,
+          ``meandering_d``) — forwarded to ``make_dwm``. Honored under any
+          ``turbtype``.
+        * **Mann box** (``mann_L``, ``mann_GAMMA``, ``mann_AE``, ``mann_Nxyz``,
+          ``mann_dxyz``) — forwarded to ``TurbulenceManager.create_sites`` and
+          used by ``MannGenerate`` to rebuild the box per reset. **Only
+          honored under ``turbtype="MannGenerate"``** — under other turbtypes
+          the box is not regenerated from these statistics and the env raises
+          rather than silently dropping them.
 
-        Under DR with any Mann key set, ``self.ti`` (sampled by
-        ``wind_manager``) is no longer authoritative for the box's ambient TI —
-        ``mann_AE`` is. ``self.ti`` is kept as a nominal value for observations
-        and normalization.
+        The constructor's ``mean_wind`` is not a ``dwm_params`` key: it is
+        built once and only its ``ws`` is refreshed per reset.
+
+        Under DR with any Mann key set and a numeric ``mann_AE``, ``self.ti``
+        (sampled by ``wind_manager``) is no longer authoritative for the box's
+        ambient TI — ``mann_AE`` is; ``self.ti`` is kept as a nominal value for
+        observations and normalization. With ``mann_AE=None`` the box is
+        rescaled to ``self.ti`` at the episode's ``ws`` every reset.
         """
         # Episode-level override of DWM params (domain randomization).
         # Done before any heavy work so a typo fails fast.
